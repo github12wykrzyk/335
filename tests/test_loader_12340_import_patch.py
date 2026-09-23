@@ -17,6 +17,7 @@ def target_fixture():
     struct.pack_into("<III", data, opt + 32, 0x1000, 0x200, 0x2000)
     struct.pack_into("<I", data, opt + 60, 0x200)
     struct.pack_into("<I", data, 0x200 + 12, 0x10a0)  # original DLL name RVA
+    struct.pack_into("<I", data, 0x260, 0x80000001)  # actual 12340 imports EpochConnection ordinal #1
     data[0x2a0:0x2b4] = b"EpochConnection.dll\0"
     return bytes(data)
 
