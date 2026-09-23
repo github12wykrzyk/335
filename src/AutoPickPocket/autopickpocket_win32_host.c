@@ -27,6 +27,8 @@ static int g_initialized;
 static HMODULE g_self;
 static UINT g_message;
 static unsigned g_bind_attempted;
+static DWORD g_last_bind_ms;
+static unsigned g_desired_enable;
 static unsigned g_pulse_running;
 static int valid_memory(const void *p,SIZE_T length) {
     MEMORY_BASIC_INFORMATION m;
@@ -308,6 +310,12 @@ PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
      */
     g_game_thread=GetCurrentThreadId();
     g_initialized=1;
+    /* Policy world_token executes Lua: check the pinned client and call ABI
+     * first, not only inside pp12340_bind after world_token is invoked. */
+    if (verify_hash(NULL,PP12340_CLIENT_SHA256)!=1 ||
+        verify_abi(NULL,PP12340_CAST_GUID_VA,PP12340_POSITION_VA)!=1) {
+        g_initialized=0;g_game_thread=0;return 0;
+    }
     memset(&h,0,sizeof(h));
     h.verify_exe_sha256=verify_hash;
     h.verify_cast_abi=verify_abi;
@@ -353,8 +361,9 @@ PP335_EXPORT int __stdcall PP335_CommandOnGameThread(const char *arguments) {
 typedef const Pp335Policy *(__stdcall *pp_verified_policy_fn)(void);
 static pp_verified_policy_fn verified_policy(void) {
     if (!g_self) return NULL;
-    return (pp_verified_policy_fn)GetProcAddress(g_self,
-                                                 "PP335_VerifiedPolicyV1");
+    { FARPROC proc=GetProcAddress(g_self,"PP335_VerifiedPolicyV1");
+      if (!proc)proc=GetProcAddress(g_self,"_PP335_VerifiedPolicyV1@0");
+      return (pp_verified_policy_fn)proc; }
 }
 PP335_EXPORT UINT WINAPI W335_MessageId(void) {
     if (!verified_policy()) return 0u;
@@ -368,21 +377,30 @@ static void pp_message(UINT message, WPARAM command) {
         !current_thread_owns_game_window() || g_pulse_running) return;
     g_pulse_running=1u;
     if (command==0u) {
+        g_desired_enable=0u;
         if (g_initialized) PP335_EnableOnGameThread(0);
     } else if (command==1u || command==2u) {
-        if (!g_initialized && !g_bind_attempted) {
+        if (command==1u) {
+            g_desired_enable=1u;
+            if (g_initialized) PP335_EnableOnGameThread(1);
+        }
+        /* The loader first hooks WoW at login; player GUID/world may not
+         * exist yet. Retry slow, and enable ONCE after successful bind. */
+        if (!g_initialized && (!g_bind_attempted ||
+            (uint32_t)(GetTickCount()-g_last_bind_ms)>=1000u)) {
             g_bind_attempted=1u;
+            g_last_bind_ms=GetTickCount();
             provider=verified_policy();
             policy=provider ? provider() : NULL;
-            if (policy &&
-                policy->spell_usable && policy->begin_attempt &&
-                policy->cast_result && policy->world_token)
-                (void)PP335_BindOnGameThread(policy);
+            if (policy && policy->spell_usable && policy->begin_attempt &&
+                policy->cast_result && policy->world_token &&
+                PP335_BindOnGameThread(policy) && g_desired_enable)
+                PP335_EnableOnGameThread(1);
         }
-        if (g_initialized) {
-            if (command==1u) PP335_EnableOnGameThread(1);
-            else PP335_TickOnGameThread((uint32_t)GetTickCount());
-        }
+        /* Do not call PP335_EnableOnGameThread on each tick: pp_enable
+         * intentionally clears active attempts and would lose all results. */
+        if (g_initialized && command==2u)
+            PP335_TickOnGameThread((uint32_t)GetTickCount());
     }
     g_pulse_running=0u;
 }

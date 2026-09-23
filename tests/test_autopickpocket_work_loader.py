@@ -31,6 +31,8 @@ class WorkLoaderBridgeTests(unittest.TestCase):
         self.assertIn('"PP335_VerifiedPolicyV1"', HOST)
         self.assertIn("if (!verified_policy()) return 0u;", HOST)
         self.assertNotIn("PP335_VerifiedPolicyV1(void)", HOST)
+        self.assertIn("_PP335_VerifiedPolicyV1@0", HOST)
+        self.assertIn("Do not call PP335_EnableOnGameThread on each tick", HOST)
         self.assertIn("PP335_BindOnGameThread(policy)", HOST)
         self.assertNotIn("LoadLibraryExW", HOST)
 

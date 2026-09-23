@@ -50,7 +50,7 @@ jobs:
             'if errorlevel 1 exit /b 1',
             'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\AutoLoot335.dll src\AutoLoot\autoloot_core.c src\AutoLoot\autoloot_12340_adapter.c src\AutoLoot\autoloot_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib',
             'if errorlevel 1 exit /b 1',
-            'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\AutoPickPocket335.dll src\AutoPickPocket\autopickpocket_core.c src\AutoPickPocket\autopickpocket_12340_adapter.c src\AutoPickPocket\autopickpocket_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib',
+            'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\AutoPickPocket335.dll src\AutoPickPocket\autopickpocket_core.c src\AutoPickPocket\autopickpocket_12340_adapter.c src\AutoPickPocket\autopickpocket_win32_host.c src\AutoPickPocket\autopickpocket_game_policies.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib',
             'if errorlevel 1 exit /b 1',
             'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\Wow335Loader.dll src\Loader12340\Wow335Loader.c /link /MACHINE:X86 /Brepro /DEF:src\Loader12340\Wow335Loader.def Advapi32.lib User32.lib',
             'if errorlevel 1 exit /b 1',
@@ -77,7 +77,7 @@ jobs:
               files[name]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'size':p.stat().st_size,'pe':'PE32 x86'}
           for filename, symbols in (
               ('autoloot_exports.txt',('AL335_ConfigurePeer','AL335_PeerStatus','AL335_HookProc','AL335_CallWndProc')),
-              ('pp_exports.txt',('PP335_BindOnGameThread','PP335_TickOnGameThread','PP335_CommandOnGameThread','W335_MessageId','W335_HookProc','W335_CallWndProc')),
+              ('pp_exports.txt',('PP335_BindOnGameThread','PP335_TickOnGameThread','PP335_CommandOnGameThread','W335_MessageId','W335_HookProc','W335_CallWndProc','PP335_VerifiedPolicyV1')),
               ('loader_exports.txt',('Wow335LoaderAnchor',))):
               exports=(d/filename).read_text(errors='replace')
               for symbol in symbols:

@@ -174,3 +174,19 @@ for classification and cannot admit an unsupported creature type. This does
 NOT assert that every undead/humanoid NPC is pickpocketable or hostile; failed
 server casts remain bounded by GUID attempt limits. Spell usability, world
 lifecycle and authoritative cast-result policies still block game activation.
+
+## Isolated native spell readiness and exact-GUID result observer (2026-09-23)
+
+`autopickpocket_game_policies.c` uses two statically audited pinned-12340
+Lua bridge functions from the game window thread. It checks Rogue class,
+learned spell 921, stealth, spell usability and cooldown, and registers a
+silent combat-log/loot event observer. Before each cast it arms the selected
+NPC GUID and unique attempt nonce. A server spellcast ACK alone is NEVER
+success: the observer also requires LOOT_OPENED and a matching native loot
+source GUID. The localized no-pockets error is only recognized after the
+server ACK for the same GUID/nonce. Unknown errors and late results stay
+pending, then use bounded retries. Auto-loot may close the window too fast
+to observe the loot GUID; this conservatively under-reports success rather
+than reporting unrelated loot as a successful PP. Static audit and x86
+compilation are not an in-game validation. The module is not registered
+on work or main and must not be installed manually.
