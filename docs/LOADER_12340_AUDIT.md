@@ -48,3 +48,19 @@ Raport uzyskany na **dokładnym**, przypiętym klientcie 12340 w `Build 335 star
 - `AddressOfEntryPoint=0x1000` (RVA), `ImageBase=0x400000`, `SizeOfImage=0xA01000`, `FileAlignment=0x200`, `SectionAlignment=0x1000`. `PointerToSymbolTable=0`; katalog `BoundImport=0`; katalog relokacji bazowych=0. Przy zmianie surowych offsetów aktualizacji wymagają `PointerToRawData` sekcji, ewentualne wskaźniki relokacji/numerów linii, wskaźniki debugowania, COFF oraz **Security file offset**. Same RVA importów, zasobów, TLS i IAT nie są file offsetami; nie przesuwa się ich automatycznie razem z raw sekcjami.
 
 Dopóki nie potwierdzono funkcji dodatkowych danych nagłówka i spójności Security/overlay oraz zgodności nowej kopii PE z loaderem Windows x86, **nie publikować ani nie podmieniać EXE**. Brak integracji z updaterem i `FINAL_PACKAGE: PASS`.
+
+### Potwierdzenie równoważności pozostałości i audyt certyfikatu
+
+Na commit `dbe22ff1d264c4f3bd2d7a883b8a69886a831488` odczytano dokładny plik SHA256 `2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d` w `Build 335 work candidate`, run `35857988531`: **44 testy PASS**, audyt klienta PASS, `CANDIDATE_READINESS: EXE_ONLY` (bez aktywnych DLL i bez paczki gry).
+
+Porównanie bajtów nagłówków wykonane na danych pliku:
+- `.data`: 32 bajty pól nagłówka (`0x260–0x27F`) są równe polom aktywnego nagłówka `0x1A0–0x1BF`; pole nazwy tej kopii zostało przysłonięte przez siedem formalnie zadeklarowanych nagłówków.
+- `.zdata`: całość 40 bajtów pod `0x280` jest identyczna z formalnym nagłówkiem `0x1C0`.
+- `.tls`: całość 40 bajtów pod `0x2A8` jest identyczna z formalnym nagłówkiem `0x1E8`.
+- `.rsrc`: całość 40 bajtów pod `0x2D0` jest identyczna z formalnym nagłówkiem `0x210`.
+
+Wynik wskazuje na *pozostałość skopiowanej tablicy sekcji* w nagłówku, jednak brak gwarancji, że istniejący patch klienta nie odczytuje jej przez adres bezpośredni. Nie usuwaj ani nie nadpisuj tych bajtów przed osobnym testem uruchomieniowym.
+
+Wskaźnik katalogu `Security` w nagłówku = **file offset** `0x757C00`, `Size=4760`. Pod tym adresem jest początek sekcji `.detour`: pierwsze 8 bajtów `4000000044747200` interpretuje się jako nieprawidłowy nagłówek `WIN_CERTIFICATE` (revision `0x7444`, type `0x0072`). Faktyczny overlay zaczyna się pod `0x75B000`: pierwsze 8 bajtów `9812000000020200` daje długość 4760, revision `0x0200`, type `0x0002` (PKCS#7 SignedData). **Różnica `0x3400` jest równa raw-size sekcji `.detour`.** Prawdopodobny scenariusz: wcześniejsza modyfikacja dodała `.detour` przed certyfikatem, lecz nie zaktualizowała Security directory. Ważność podpisu i kompletna struktura PKCS#7 nie zostały zweryfikowane, więc nie przypisuj statusu „podpisany i ważny”.
+
+Praktyczne ograniczenia: (1) dodanie sekcji do kopii EXE nie może niszczyć pozostałości nagłówków bez oceny zależności, (2) przy wstawieniu surowych danych przed sekcjami lub overlay korekty wymagają wszystkie raw-file pointers, w tym Security i debug; (3) nawet po poprawieniu lokalizacji certyfikatu zmiana bajtów pliku unieważnia oryginalny podpis Authenticode — nie traktuj certyfikatu z historycznego EXE jako podpisu nowej binarki; (4) przed testem startup-loadera trzeba zachować działanie już istniejących `EpochConnection.dll`, TLS callbacków i importu z `.detour`. **Na tym etapie nie wykonano patchowania klienta ani weryfikacji w grze.**
