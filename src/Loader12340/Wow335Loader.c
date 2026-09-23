@@ -42,9 +42,24 @@ static DWORD WINAPI load_modules(LPVOID unused) {
     FILE *f;
     (void)unused;
     if (swprintf_s(path, MAX_PATH, L"%ls\\dlls.txt", g_root) < 0) return 1;
+    /* The updater owns the verified module order. If no manifest exists yet,
+       bootstrap an EMPTY list, never enumerate arbitrary DLLs from the game folder. */
+    if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) {
+        DWORD last = GetLastError();
+        if (last != ERROR_FILE_NOT_FOUND) {
+            log_event(NULL, L"MANIFEST_STAT_FAILED", last); return 1;
+        }
+        HANDLE empty = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
+                                   CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (empty == INVALID_HANDLE_VALUE) {
+            log_event(NULL, L"MANIFEST_CREATE_FAILED", GetLastError()); return 1;
+        }
+        CloseHandle(empty);
+        log_event(NULL, L"MANIFEST_CREATED_EMPTY", 0);
+    }
     if (_wfopen_s(&f, path, L"rt, ccs=UTF-8") != 0 || !f) {
-        log_event(NULL, L"NO_MANIFEST", GetLastError());
-        return 0; /* no active modules: unmodified game launch */
+        log_event(NULL, L"MANIFEST_OPEN_FAILED", GetLastError());
+        return 1;
     }
     while (fgetws(line, sizeof(line) / sizeof(line[0]), f)) {
         size_t n = wcslen(line);

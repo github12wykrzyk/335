@@ -6,8 +6,11 @@ on:
       - work
       - main
       - 'feature/autoloot-12340'
+      - 'feature/loader-12340'
     paths:
       - 'tools/updater/**'
+      - 'tools/verify_epoch_test_pair.py'
+      - '.github/workflows/loader_12340_preview.yml'
       - 'src/AutoLoot/diagnostics/**'
       - 'runtime/client_exe_target.json'
       - 'Wow.exe'
@@ -99,7 +102,8 @@ jobs:
             tools\updater\UpdaterMaintenanceFeature.cs `
             tools\updater\UpdaterIssueReportFeature.cs `
             tools\updater\UpdaterAutoLootDiagFeature.cs `
-            tools\updater\UpdaterAutoLootNativePreviewFeature.cs
+            tools\updater\UpdaterAutoLootNativePreviewFeature.cs `
+            tools\updater\UpdaterEpochLoaderFeature.cs
           if ($LASTEXITCODE -ne 0) { throw "updater csc failed with exit code $LASTEXITCODE" }
 
       - name: Verify updater PE32 x86 and hashes

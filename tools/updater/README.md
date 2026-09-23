@@ -115,3 +115,34 @@ Natywny eksperyment nie jest jeszcze zaakceptowany jako aktywna
 paczka DLL. Nie uruchamiaj go podczas zwykłego lootu z innym
 modułem ingerującym w interakcje. W razie problemów zamknij grę;
 sam launcher kończy się i odłącza hook po zamknięciu gry.
+
+## 0.3.8-335-epoch-test — isolated EpochConnection startup loader
+
+Branch `feature/loader-12340` only. A dedicated Windows 2022 CI job compiles the
+actual Wow335Loader.dll as PE32 x86 and patches an isolated copy of the exact
+160768-byte EpochConnection.dll from this repository. It checks original and
+new export ordinals, import descriptors, TLS, relocations, section contents,
+extra section and SHA256, and publishes the four-file TEST pair ONLY if checks pass.
+This is a static-gated TEST artifact, not FINAL_PACKAGE: PASS and not proof that
+the original network tunnel behaves correctly at runtime.
+
+The updater's **Epoch Loader TEST** button obtains the latest successful exact-HEAD
+artifact from `github12wykrzyk/335`, confirms its four-file allowlist,
+manifest, SHA256 and the exact local Wow.exe and original EpochConnection.dll,
+then backs up EpochConnection.dll and installs the two verified DLLs. Existing
+unmanaged Wow335Loader.dll or nonempty dlls.txt block installation; no unknown
+game files are overwritten. The adjacent **Przywróć Epoch DLL** button verifies
+installed byte hashes, restores the exact original and removes managed test files.
+Normal TEST(work) and STABLE(main) package channels are unchanged.
+
+The updater owns the approved dlls.txt order and currently creates an **empty**
+list because `runtime/current.json` declares no validated game modules.
+Wow335Loader.dll also creates the empty file if it is absent at startup; it never
+searches the game directory or loads unregistered DLLs automatically.
+The UI **Aktywne DLL / kolejność** reports the current empty set; enabling
+game-feature DLLs requires their own exact-SHA registry, dependency/order gate
+and a later compatible uploader workflow. The user must not hand-edit dlls.txt.
+
+When installed, the normal **Uruchom grę** button verifies every managed DLL
+and the exact Wow.exe hash before launching. If any bytes differ, it refuses to
+start under this TEST state. This experiment never modifies Wow.exe or main/work.

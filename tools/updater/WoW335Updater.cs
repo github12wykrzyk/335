@@ -765,6 +765,11 @@ namespace WoW335Updater
                         .ToArray();
                     exe = candidates.FirstOrDefault();
                 }
+                if (EpochInstalled(root) != null)
+                {
+                    EpochValidateLaunch(root);
+                    exe = Path.Combine(root, "Wow.exe");
+                }
                 if (exe == null) throw new InvalidOperationException("Nie znalazłem WoW*.exe w wybranym katalogu.");
                 Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = root, UseShellExecute = true });
                 Log("Uruchomiono: " + Path.GetFileName(exe));
