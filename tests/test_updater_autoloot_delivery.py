@@ -15,7 +15,7 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
         source = (ROOT / "tools/updater/UpdaterAutoLootDiagFeature.cs").read_text(encoding="utf-8")
         report = (ROOT / "tools/updater/UpdaterIssueReportFeature.cs").read_text(encoding="utf-8")
         version = (ROOT / "tools/updater/UpdaterSafety.cs").read_text(encoding="utf-8")
-        self.assertIn('Version = "0.3.4-335"', version)
+        self.assertIn('Version = "0.3.5-335"', version)
         self.assertIn('UpdaterArtifactPrefix + liveHead', maintenance)
         self.assertIn('GetString(meta, "git_sha"), liveHead', maintenance)
         self.assertIn('GetString(meta, "channel"), branch', maintenance)
@@ -31,6 +31,8 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
         self.assertIn('RejectLink(', source)
         self.assertIn('autoloot_diag_backups', source)
         self.assertIn('AUTOLOOT_DIAG_MANAGED_V1', source)
+        self.assertIn('CollectLogFile(picker.FileName)', report)
+        self.assertIn('ExplainMissingLog(root)', report)
         self.assertIn('onlyAutoLoot', report)
         self.assertIn('Issues: Read and write', report)
         for name in ('WoW335AutoLootDiag.lua', 'WoW335AutoLootDiag.toc'):

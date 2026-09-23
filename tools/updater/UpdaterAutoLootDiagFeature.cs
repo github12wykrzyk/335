@@ -167,28 +167,30 @@ namespace WoW335Updater
         // Never send the raw SavedVariables file, account-directory names or
         // arbitrary addon data. Only fixed event types with bounded text.
         private static readonly Regex Entry = new Regex(
-            "^\\s*\\\"((?:\\\\.|[^\\\"\\\\])*)\\\",?\\s*$",
+            @"^\s*(?:\[\s*(?:\d+|""\d+"")\s*\]\s*=\s*)?""((?:\\.|[^""\\])*)""\s*,?\s*$",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex EntriesStart = new Regex(
+            @"^\s*(?:\[\s*""entries""\s*\]|entries)\s*=\s*\{",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex Event = new Regex(
-            "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} " +
-            "(?:LOGIN|LOOT_OPENED|LOOT_SLOT_CLEARED|LOOT_CLOSED|LOOT_CALL_FAILED|" +
-            "DRAIN|UI_ERROR|LOGOUT|ENABLE|DISABLE|LOG_CLEARED)\\b",
+            @"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} " +
+            @"(?:LOGIN|LOOT_OPENED|LOOT_SLOT_CLEARED|LOOT_CLOSED|LOOT_CALL_FAILED|" +
+            @"DRAIN|UI_ERROR|LOGOUT|ENABLE|DISABLE|LOG_CLEARED)\b",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         private static IEnumerable<string> ReadSavedEntries(string path)
         {
             var info = new FileInfo(path);
             if (info.Length < 1 || info.Length > MaxLuaBytes) yield break;
-            bool inEntries = false;
+            var inEntries = false;
             foreach (var line in File.ReadLines(path, Encoding.UTF8))
             {
                 if (!inEntries)
                 {
-                    if (Regex.IsMatch(line, "^\\s*\\[\\\"entries\\\"\\]\\s*=\\s*\\{"))
-                        inEntries = true;
+                    if (EntriesStart.IsMatch(line)) inEntries = true;
                     continue;
                 }
-                if (Regex.IsMatch(line, "^\\s*\\},?\\s*$")) yield break;
+                if (Regex.IsMatch(line, @"^\s*\},?\s*$")) yield break;
                 var match = Entry.Match(line);
                 if (!match.Success) continue;
                 var value = match.Groups[1].Value;
@@ -208,34 +210,101 @@ namespace WoW335Updater
             return sha;
         }
 
-        internal static string CollectLog(string root)
+        internal static string[] FindSavedVariableFiles(string root)
         {
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return "";
-            var account = Path.Combine(Path.GetFullPath(root), "WTF", "Account");
-            if (!Directory.Exists(account)) return "";
-            var sb = new StringBuilder();
-            var found = 0;
-            foreach (var dir in Directory.GetDirectories(account).Take(32))
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return new string[0];
+            var accountRoot = Path.Combine(Path.GetFullPath(root), "WTF", "Account");
+            if (!Directory.Exists(accountRoot)) return new string[0];
+            RejectLink(accountRoot);
+            var found = new List<string>();
+            foreach (var dir in Directory.GetDirectories(accountRoot).Take(64))
             {
                 RejectLink(dir);
                 var saved = Path.Combine(dir, "SavedVariables");
                 if (!Directory.Exists(saved)) continue;
                 RejectLink(saved);
                 foreach (var filename in new[] { "WoW335AutoLootDiag.lua",
-                                                 "WoW335AutoLootDiagLog.lua" })
+                                                  "WoW335AutoLootDiag.lua.bak",
+                                                  "WoW335AutoLootDiagLog.lua",
+                                                  "WoW335AutoLootDiagLog.lua.bak" })
                 {
-                    var path = Path.Combine(saved, filename);
-                    if (!File.Exists(path)) continue;
-                    RejectLink(path);
-                    foreach (var entry in ReadSavedEntries(path))
-                    {
-                        if (sb.Length + entry.Length + 1 > MaxReportChars) return sb.ToString();
-                        sb.AppendLine(entry);
-                        ++found;
-                        if (found >= MaxEntries) return sb.ToString();
-                    }
+                    var file = Path.Combine(saved, filename);
+                    if (!File.Exists(file)) continue;
+                    RejectLink(file);
+                    found.Add(file);
                 }
             }
+            return found.OrderByDescending(File.GetLastWriteTimeUtc).Take(64).ToArray();
+        }
+
+        private static bool IsSavedVariableName(string file)
+        {
+            var name = Path.GetFileName(file);
+            return new[] { "WoW335AutoLootDiag.lua", "WoW335AutoLootDiag.lua.bak",
+                           "WoW335AutoLootDiagLog.lua", "WoW335AutoLootDiagLog.lua.bak" }
+                .Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static string CollectLogFile(string file)
+        {
+            if (string.IsNullOrWhiteSpace(file) || !File.Exists(file) ||
+                !IsSavedVariableName(file))
+                throw new InvalidOperationException(
+                    "Wskaż plik WoW335AutoLootDiag.lua lub jego kopię .lua.bak.");
+            RejectLink(file);
+            var sb = new StringBuilder();
+            foreach (var entry in ReadSavedEntries(file))
+            {
+                if (sb.Length + entry.Length + 1 > MaxReportChars) break;
+                sb.AppendLine(entry);
+                if (sb.Length >= MaxReportChars) break;
+            }
+            return sb.ToString();
+        }
+
+        internal static string CollectLog(string root)
+        {
+            var sb = new StringBuilder();
+            var found = 0;
+            foreach (var path in FindSavedVariableFiles(root))
+            {
+                foreach (var entry in ReadSavedEntries(path))
+                {
+                    if (sb.Length + entry.Length + 1 > MaxReportChars) return sb.ToString();
+                    sb.AppendLine(entry);
+                    if (++found >= MaxEntries) return sb.ToString();
+                }
+            }
+            return sb.ToString();
+        }
+
+        internal static string ExplainMissingLog(string root)
+        {
+            var full = Path.GetFullPath(root);
+            var expected = Path.Combine(full, "WTF", "Account");
+            var addon = Path.Combine(full, "Interface", "AddOns", AddonName);
+            var files = FindSavedVariableFiles(root);
+            var sb = new StringBuilder();
+            sb.AppendLine("Updater nie znalazł zdarzeń AutoLoot DIAG w wybranym katalogu gry.");
+            sb.AppendLine("Dodatek: " + (File.Exists(Path.Combine(addon, TocName)) &&
+                                            File.Exists(Path.Combine(addon, ScriptName))
+                ? "pliki dodatku są obecne" : "BRAK plików dodatku; kliknij «Instaluj test AutoLoot»"));
+            if (!Directory.Exists(expected))
+                sb.AppendLine("Brak katalogu WTF\\Account w wybranej lokalizacji: " + expected);
+            else if (files.Length == 0)
+                sb.AppendLine("Brak WoW335AutoLootDiag.lua w: " +
+                    Path.Combine(expected, "<konto>", "SavedVariables"));
+            else
+            {
+                sb.AppendLine("Znaleziono " + files.Length + " plik(i), ale nie odczytano poprawnych wpisów.");
+                foreach (var file in files.Take(4))
+                    sb.AppendLine("Lokalny plik: " + file +
+                        " (" + new FileInfo(file).Length + " B, " +
+                        File.GetLastWriteTime(file).ToString("yyyy-MM-dd HH:mm:ss") + ")");
+                sb.AppendLine("Możliwy inny format tabeli lub dodatek nie zapisał zdarzeń.");
+            }
+            sb.AppendLine("W grze sprawdź /al335 status oraz /al335 log, potem /reload i zamknij WoW.");
+            sb.AppendLine("Możesz też wskazać konkretny lokalny plik .lua / .lua.bak.");
             return sb.ToString();
         }
 

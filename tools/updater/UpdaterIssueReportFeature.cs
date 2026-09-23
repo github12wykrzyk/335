@@ -95,8 +95,41 @@ namespace WoW335Updater
                         autoLootLog = AutoLootDiagSupport.SanitizeLog(
                             AutoLootDiagSupport.CollectLog(root));
                         if (string.IsNullOrWhiteSpace(autoLootLog))
-                            throw new InvalidOperationException(
-                                "Brak zapisanych zdarzeń AutoLoot DIAG. W grze: /al335 on, otwórz ręcznie zwłoki, wykonaj /reload i zamknij grę.");
+                        {
+                            var detail = AutoLootDiagSupport.ExplainMissingLog(root);
+                            Log("AutoLoot DIAG: brak rozpoznanych zdarzeń; szczegóły i ścieżki pokazano tylko lokalnie.");
+                            var choose = MessageBox.Show(form,
+                                detail + "\n\nWskazać zapisany plik AutoLoot DIAG z dysku?",
+                                "WoW335 — lokalizacja logu AutoLoot", MessageBoxButtons.YesNo,
+                                MessageBoxIcon.Information);
+                            if (choose != DialogResult.Yes)
+                            {
+                                finalStatus = "Nie odnaleziono logu AutoLoot; sprawdź instalację i lokalizację.";
+                                return;
+                            }
+                            using (var picker = new OpenFileDialog())
+                            {
+                                picker.Title = "Wskaż zapisany log WoW335AutoLootDiag.lua";
+                                picker.Filter = "Zapis AutoLoot (*.lua;*.lua.bak)|*.lua;*.lua.bak|Wszystkie pliki (*.*)|*.*";
+                                var accountRoot = Path.Combine(root, "WTF", "Account");
+                                picker.InitialDirectory = Directory.Exists(accountRoot) ? accountRoot : root;
+                                picker.FileName = "WoW335AutoLootDiag.lua";
+                                picker.CheckFileExists = true;
+                                picker.Multiselect = false;
+                                if (picker.ShowDialog(form) != DialogResult.OK)
+                                {
+                                    finalStatus = "Wskazywanie pliku AutoLoot anulowane.";
+                                    return;
+                                }
+                                autoLootLog = AutoLootDiagSupport.SanitizeLog(
+                                    AutoLootDiagSupport.CollectLogFile(picker.FileName));
+                                if (string.IsNullOrWhiteSpace(autoLootLog))
+                                    throw new InvalidOperationException(
+                                        "Wybrany plik nie zawiera poprawnych zdarzeń AutoLoot. " +
+                                        "W grze sprawdź /al335 log i zapisz sesję przez /reload.");
+                                Log("AutoLoot DIAG: odczytano zdarzenia ze wskazanego pliku; surowe dane nie będą wysłane.");
+                            }
+                        }
                         if (!ConfirmAutoLootReport(autoLootLog))
                         {
                             finalStatus = "Wysyłanie logu AutoLoot anulowane.";

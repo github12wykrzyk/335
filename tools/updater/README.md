@@ -60,3 +60,23 @@ udany i odpowiadać aktualnemu HEAD wybranego kanału; wymagane są
 zgodne SHA artefaktu i `updater_build.json` (git_sha, channel,
 SHA256 updatera i bootstrapa). Brak gotowego workflow nie uruchamia
 instalacji starszej wersji updatera.
+
+## 0.3.5-335 — odnajdywanie SavedVariables AutoLoot
+
+Przycisk **Wyślij log AutoLoot** najpierw skanuje lokalizację
+`<KATALOG_GRY>/WTF/Account/<konto>/SavedVariables/WoW335AutoLootDiag.lua`
+oraz pliki `.lua.bak`; parser czyta zarówno tablice Lua z kolejnymi
+wierszami tekstu, jak i indeksowane `[1] = "zdarzenie"` /
+`["1"] = "zdarzenie"`. Jeśli w wybranej instalacji gry nie ma
+rozpoznanych zdarzeń, updater pokazuje lokalną diagnozę (czy folder
+dodatku i WTF istnieją; nazwy i daty znalezionych plików) i oferuje
+wskazanie konkretnego zapisanego pliku. Wybór odbywa się w updaterze,
+bez kopiowania/edycji pliku; upload wysyła jedynie dozwolone,
+sanityzowane linie zdarzeń, po podglądzie i zatwierdzeniu. Lokalna
+ścieżka do konta NIE jest logowana do ogólnego raportu GitHub.
+
+Aby WoW utworzył SavedVariables, **uruchom zainstalowany dodatek**,
+sprawdź w czacie `/al335 status`, włącz go przez `/al335 on`,
+otwórz ręcznie zwłoki i użyj `/reload` lub wyloguj się. Jeśli
+grę uruchamiasz z innej instalacji niż wybrany katalog updatera,
+zapis będzie w katalogu `WTF` tamtej instalacji.

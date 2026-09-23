@@ -32,9 +32,13 @@ if ($sha -ne $ExpectedSha) { throw "Embedded addon source SHA differs from build
 $type = $assembly.GetType('WoW335Updater.AutoLootDiagSupport', $true)
 $flags = [Reflection.BindingFlags]::NonPublic -bor [Reflection.BindingFlags]::Static
 $collect = $type.GetMethod('CollectLog', $flags)
+$collectFile = $type.GetMethod('CollectLogFile', $flags)
+$lookup = $type.GetMethod('FindSavedVariableFiles', $flags)
+$explain = $type.GetMethod('ExplainMissingLog', $flags)
 $sanitize = $type.GetMethod('SanitizeLog', $flags)
 $install = $type.GetMethod('Install', $flags)
-if ($null -eq $collect -or $null -eq $sanitize -or $null -eq $install) {
+if ($null -eq $collect -or $null -eq $collectFile -or $null -eq $lookup -or
+    $null -eq $explain -or $null -eq $sanitize -or $null -eq $install) {
     throw "Updater diagnostic integration missing methods"
 }
 $folder = Join-Path $env:RUNNER_TEMP ('wow335-al-test-' + [guid]::NewGuid().ToString('N'))
@@ -44,10 +48,10 @@ $savedFile = Join-Path $save 'WoW335AutoLootDiag.lua'
 $fixture = @'
 WoW335AutoLootDiagLog = {
     ["entries"] = {
-        "2026-09-23 10:00:00 LOOT_OPENED num=2",
-        "2026-09-23 10:00:01 UI_ERROR contact@example.com 192.168.1.2",
+        [1] = "2026-09-23 10:00:00 LOOT_OPENED num=2",
+        ["2"] = "2026-09-23 10:00:01 UI_ERROR contact@example.com 192.168.1.2",
         "2026-09-23 10:00:02 LOOT_CLOSED attempts=1",
-        "IGNORED_SECRET password=NEVER_INCLUDE_ME",
+        [4] = "IGNORED_SECRET password=NEVER_INCLUDE_ME",
     },
     ["client"] = "REALM_PRIVATE",
 }
@@ -59,6 +63,36 @@ try {
     $events = [string]$collect.Invoke($null, $single)
     if ($events -notmatch 'LOOT_OPENED' -or $events -notmatch 'LOOT_CLOSED') { throw "Failed to collect expected diagnostic lines" }
     if ($events -match 'DO_NOT_UPLOAD_ME|NEVER_INCLUDE_ME|REALM_PRIVATE') { throw "Raw account or SavedVariables data leaked" }
+    if ($events -notmatch 'UI_ERROR') { throw "Numbered Blizzard SavedVariables entries were not recognized" }
+    $backup = $savedFile + '.bak'
+    [IO.File]::Copy($savedFile, $backup)
+    [IO.File]::Delete($savedFile)
+    $single[0] = [string]$folder
+    $backupEvents = [string]$collect.Invoke($null, $single)
+    if ($backupEvents -notmatch 'LOOT_OPENED|UI_ERROR|LOOT_CLOSED') {
+        throw "Updater failed to read WoW .lua.bak SavedVariables copy"
+    }
+    $single[0] = [string]$backup
+    $chosenEvents = [string]$collectFile.Invoke($null, $single)
+    if ($chosenEvents -notmatch 'LOOT_OPENED' -or $chosenEvents -match 'NEVER_INCLUDE_ME') {
+        throw "Manually selected backup did not extract whitelisted event data"
+    }
+    $wrong = Join-Path $save 'unrelated.lua'
+    [IO.File]::Copy($backup, $wrong)
+    $single[0] = [string]$wrong
+    $wrongRejected = $false
+    try { $collectFile.Invoke($null, $single) | Out-Null }
+    catch { $wrongRejected = $_.Exception.ToString().Contains('WoW335AutoLootDiag.lua') }
+    if (-not $wrongRejected) { throw "Arbitrary SavedVariables upload source was accepted" }
+    $single[0] = [string]$folder
+    $files = @($lookup.Invoke($null, $single))
+    if ($files.Count -lt 1) { throw "Updater did not locate the saved addon backup" }
+    $diagnosis = [string]$explain.Invoke($null, $single)
+    if ($diagnosis -notmatch 'Lokalny plik') {
+        throw "Missing-event diagnosis did not report located SavedVariables"
+    }
+    [IO.File]::Move($backup, $savedFile)
+
     $single[0] = [string]$events
     $safe = [string]$sanitize.Invoke($null, $single)
     if ($safe -notmatch '<EMAIL>' -or $safe -notmatch '<IP>' -or $safe -match 'contact@example.com|192.168.1.2') {
