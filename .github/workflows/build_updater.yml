@@ -7,22 +7,6 @@ on:
       - main
       - 'feature/autoloot-12340'
       - 'feature/loader-12340'
-    paths:
-      - 'tools/updater/**'
-      - 'tests/test_updater_autoloot_delivery.py'
-      - 'tests/test_updater_epoch_loader.py'
-      - 'tests/test_loader_preflight.py'
-      - 'tests/test_loader_module_lock.py'
-      - 'tests/test_updater_native_preview.py'
-      - 'tools/verify_epoch_test_pair.py'
-      - 'src/Loader12340/**'
-      - 'runtime/epoch_loader_interop.json'
-      - 'runtime/ai_experiments.json'
-      - '.github/workflows/loader_12340_preview.yml'
-      - 'src/AutoLoot/diagnostics/**'
-      - 'runtime/client_exe_target.json'
-      - 'Wow.exe'
-      - '.github/workflows/build_updater.yml'
   workflow_dispatch:
 
 permissions:
