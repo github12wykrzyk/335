@@ -100,33 +100,47 @@ static int pp_can_cast(void *ctx) {
 }
 static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
-    uint32_t manager=0u,obj=0u,next=0u;
+    uint32_t manager=0u,obj=0u,next=0u,player_obj=0u,target_obj=0u;
+    uint32_t type=0u,desc=0u,health=0u;
+    PpGuid player_guid;
+    float me[3],target[3],dx,dy,dz,d2;
     unsigned i;
-    if ((guid.lo|guid.hi)==0u || !mgr(a,&manager) ||
+    if ((guid.lo|guid.hi)==0u || !attempt_id || !mgr(a,&manager) ||
+        !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID,&player_guid.lo) ||
+        !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID+4u,&player_guid.hi) ||
+        (player_guid.lo|player_guid.hi)==0u ||
+        same(player_guid,guid) ||
         !read32(a,(uintptr_t)manager+PP_MGR_FIRST,&obj)) return 0;
-    /* GUID may have despawned between scan and cast: require it to still be
-     * a valid, living, eligible NPC. Never fall back to player's target.
-     */
+    /* Resolve both GUIDs on the game thread; either can appear first in
+     * the list. Do not cast using a player position cached by the scan. */
     for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
         PpGuid current;
-        uint32_t type=0u,desc=0u,health=0u;
         if (!guid_at(a,obj,&current)) return 0;
-        if (same(current,guid)) {
-            if (!read32(a,(uintptr_t)obj+PP_OBJ_TYPE,&type) ||
-                type!=PP12340_UNIT_TYPE ||
-                !read32(a,(uintptr_t)obj+PP_OBJ_DESCRIPTOR,&desc) ||
-                !ptr_ok(desc) ||
-                !read32(a,(uintptr_t)desc+4u*PP_UNIT_HEALTH_FIELD,&health) ||
-                health==0u ||
-                a->host.eligible_npc(a->host.ctx,obj,guid)!=1 ||
-                pp_can_cast(a)!=1) return 0;
-            return a->host.cast_guid(a->host.ctx,PP12340_CAST_GUID_VA,
-                                      PP12340_SPELL_ID,guid,attempt_id)==1;
-        }
-        if (!read32(a,(uintptr_t)obj+PP_OBJ_NEXT,&next) || next==obj) break;
+        if (same(current,player_guid)) player_obj=obj;
+        if (same(current,guid)) target_obj=obj;
+        if (player_obj && target_obj) break;
+        if (!read32(a,(uintptr_t)obj+PP_OBJ_NEXT,&next) || next==obj)
+            break;
         obj=next;
     }
-    return 0;
+    if (!player_obj || !target_obj ||
+        !read32(a,(uintptr_t)target_obj+PP_OBJ_TYPE,&type) ||
+        type!=PP12340_UNIT_TYPE ||
+        !read32(a,(uintptr_t)target_obj+PP_OBJ_DESCRIPTOR,&desc) ||
+        !ptr_ok(desc) ||
+        !read32(a,(uintptr_t)desc+4u*PP_UNIT_HEALTH_FIELD,&health) ||
+        health==0u ||
+        a->host.eligible_npc(a->host.ctx,target_obj,guid)!=1 ||
+        a->host.position(a->host.ctx,player_obj,me)!=1 ||
+        a->host.position(a->host.ctx,target_obj,target)!=1) return 0;
+    /* Movement can invalidate the earlier scan. Reject nonfinite range
+     * as well as targets that have left the validated cast radius. */
+    dx=target[0]-me[0];dy=target[1]-me[1];dz=target[2]-me[2];
+    d2=dx*dx+dy*dy+dz*dz;
+    if (!(d2>=0.0f && d2<=PP12340_REACH*PP12340_REACH && d2<FLT_MAX) ||
+        pp_can_cast(a)!=1) return 0;
+    return a->host.cast_guid(a->host.ctx,PP12340_CAST_GUID_VA,
+                              PP12340_SPELL_ID,guid,attempt_id)==1;
 }
 static PpResult pp_result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;

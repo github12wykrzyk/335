@@ -100,3 +100,12 @@ a playable test package. Do not put it manually into the client or dlls.txt.
 Standalone PP action never calls AutoLoot, LootSlot, or closes loot windows.
 Diagnostic events are bounded JSONL under .wow335_debug/AutoPickPocket.jsonl
 and sent by the existing reporter once installed in a future verified stack.
+
+## Cast-time position guard
+
+Immediately before the cast, the adapter re-resolves the player and target
+GUIDs from the object manager and rechecks target health, type, native position,
+policy eligibility and the 5-yard 3D distance. A moving player or despawned
+NPC can invalidate a preceding scan. Failure uses existing bounded retry and
+backoff. This safety guard does not supply the still-missing authoritative
+NPC/spell/result policies, game-thread loader or in-game validation.

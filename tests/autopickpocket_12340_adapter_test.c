@@ -15,6 +15,7 @@ typedef struct {
     PpResult result;
     unsigned casts,cast_spell,callbacks;
     uint32_t last_attempt,expected_result_attempt;
+    unsigned player_pos_calls,move_player_after_scan;
     PpGuid last_guid;
 } Mock;
 static int digest(void *p,const char *expected){
@@ -54,8 +55,11 @@ static int read32(void *p,uintptr_t addr,uint32_t *out){
     return 1;
 }
 static int pos(void *p,uintptr_t obj,float out[3]){
-    (void)p;out[1]=0;out[2]=0;
-    if(obj==PLAYER)out[0]=0;
+    Mock *m=(Mock*)p;out[1]=0;out[2]=0;
+    if(obj==PLAYER) {
+        ++m->player_pos_calls;
+        out[0]=m->move_player_after_scan && m->player_pos_calls>1u ? 12.0f : 0.0f;
+    }
     else if(obj==NPC_A)out[0]=3;
     else if(obj==NPC_B)out[0]=2;
     else return 0;
@@ -145,6 +149,18 @@ static int test_silent_commands(void){
     m.thread=1u;CHECK(!pp12340_command(&a,"") && !a.engine.enabled);
     return 0;
 }
+static int test_moving_player_rechecked_before_cast(void){
+    Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+    CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+    m.move_player_after_scan=1u;
+    pp12340_tick(&a,0);
+    CHECK(m.player_pos_calls>=2u && m.casts==0u && a.engine.retries==1u);
+    /* Rejected GUID is backoff-limited; another eligible GUID can proceed. */
+    m.move_player_after_scan=0u;
+    pp12340_tick(&a,100);
+    CHECK(m.casts==1u && m.last_guid.lo==111u);
+    return 0;
+}
 static int test_fail_closed_filter(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
     CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
@@ -156,7 +172,8 @@ static int test_fail_closed_filter(void){
 }
 int main(void){
     if(test_bind_guard()||test_scan_cast_history_world()||
-       test_attempt_correlation()||test_silent_commands()||test_fail_closed_filter())return 1;
+       test_attempt_correlation()||test_silent_commands()||
+       test_moving_player_rechecked_before_cast()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");
     return 0;
 }
