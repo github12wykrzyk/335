@@ -25,10 +25,11 @@ class SpellAndResultTests(unittest.TestCase):
                       'PP_RESULT_PENDING','PP_RESULT_EMPTY',
                       'PP_RESULT_RETRYABLE','elapsed>=80u'):
             self.assertIn(value,POLICY)
-        self.assertLess(POLICY.index('!strcmp(empty,want)'),
-                        POLICY.index('return PP_RESULT_SUCCESS;'))
-        self.assertLess(POLICY.index('!strcmp(fail,want)'),
-                        POLICY.index('return PP_RESULT_SUCCESS;'))
+        main_policy=POLICY[POLICY.index('static PpResult cast_result('):]
+        self.assertLess(main_policy.index('!strcmp(empty,want)'),
+                        main_policy.index('return PP_RESULT_SUCCESS;'))
+        self.assertLess(main_policy.index('!strcmp(fail,want)'),
+                        main_policy.index('return PP_RESULT_SUCCESS;'))
         self.assertIn('string.upper(dst)==_G.W335PP_G',POLICY)
         self.assertIn('GetTime()-_G.W335PP_T<=1.5',POLICY)
         self.assertIn('W335PP_RANGE',POLICY)
