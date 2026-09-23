@@ -34,6 +34,9 @@ static unsigned g_pulse_running;
 static uint32_t g_last_pulse_ms,g_pulse_delta_ms;
 static uint32_t g_last_cast_ms,g_last_result_ms,g_inflight_attempt;
 static uint8_t g_packet_cast_count;
+static unsigned g_native_failover,g_packet_unanswered;
+static uint32_t g_packet_nonce,g_packet_started_ms;
+static PpGuid g_packet_guid;
 static int valid_memory(const void *p,SIZE_T length) {
     MEMORY_BASIC_INFORMATION m;
     uintptr_t at=(uintptr_t)p;
@@ -274,52 +277,82 @@ static int usable(void *ctx,uint32_t spell_id) {
 }
 static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target,uint32_t attempt_id) {
     typedef void (__cdecl *send_fn)(Pp335OutboundDataStore *);
+    typedef void (__cdecl *native_fn)(uint32_t,uint32_t,uint32_t,uint32_t,uint32_t);
     Pp335OutboundDataStore packet;
     uint8_t bytes[PP335_CAST_PACKET_CAP];
-    size_t count;
-    int submitted=0;
+    size_t count=0u;
+    int submitted=0,using_native=(int)g_native_failover;
     (void)ctx;
-    /* The 12340 adapter has already re-resolved GUID, validated creature
-     * type, current 3-D range and stealth. Never switch the user's target.
-     * A pre-existing cast must finish before a second GUID is submitted. */
     if(!is_game_thread() || va!=PP12340_CAST_GUID_VA ||
        spell!=PP335_PICK_POCKET_SPELL || (target.lo|target.hi)==0u ||
        !attempt_id || !g_policy.begin_attempt || !g_policy.end_attempt ||
-       !g_policy.spell_usable || !packet_sender_abi() ||
-       !packet_session_ready() ||
-       g_policy.spell_usable(g_policy.context,spell)!=1)
-        return 0;
-    count=pp335_build_cast_packet(bytes,sizeof(bytes),
-                                 ++g_packet_cast_count,target.lo,target.hi);
-    if(count<15u || count>sizeof(bytes))return 0;
-    memset(&packet,0,sizeof(packet));
-    packet.vtable=PP335_CDATASTORE_VTABLE;
-    packet.buffer=bytes;
-    packet.alloc=(uint32_t)sizeof(bytes);
-    packet.size=(uint32_t)count;
-    /* Native sender's CDataStore layout has been audited on this exact EXE:
-     * [vtable, buffer, base, alloc, size, read]. The spell cast call
-     * pushes &store and the cdecl wrapper cleans the one stack argument.
-     * Its transport consumes the store synchronously before return.
-     * A packet dispatch is not a confirmed server result. */
-    if(g_policy.begin_attempt(g_policy.context,target,attempt_id)!=1)
-        return 0;
-    __try {
-        ((send_fn)PP335_SEND_VA)(&packet);
-        submitted=1;
-    }__except(EXCEPTION_EXECUTE_HANDLER){submitted=0;}
-    if(!submitted)
-        g_policy.end_attempt(g_policy.context,target,attempt_id);
+       !g_policy.spell_usable ||
+       g_policy.spell_usable(g_policy.context,spell)!=1)return 0;
+    if(!using_native){
+        if(!packet_sender_abi() || !packet_session_ready())return 0;
+        count=pp335_build_cast_packet(bytes,sizeof(bytes),
+                  ++g_packet_cast_count,target.lo,target.hi);
+        if(count<15u || count>sizeof(bytes))return 0;
+        memset(&packet,0,sizeof(packet));
+        packet.vtable=PP335_CDATASTORE_VTABLE;
+        packet.buffer=bytes;
+        packet.alloc=(uint32_t)sizeof(bytes);
+        packet.size=(uint32_t)count;
+    }
+    if(g_policy.begin_attempt(g_policy.context,target,attempt_id)!=1)return 0;
+    if(using_native){
+        /* Audited five-argument GUID cast: never submit both paths. */
+        __try{
+            ((native_fn)va)(spell,0u,target.lo,target.hi,0u);
+            submitted=1;
+        }__except(EXCEPTION_EXECUTE_HANDLER){submitted=0;}
+        if(submitted && g_policy.after_cast_submitted)
+            g_policy.after_cast_submitted(g_policy.context,target,attempt_id);
+    }else{
+        __try{
+            ((send_fn)PP335_SEND_VA)(&packet);
+            submitted=1;
+        }__except(EXCEPTION_EXECUTE_HANDLER){submitted=0;}
+        if(submitted){
+            g_packet_nonce=attempt_id;
+            g_packet_guid=target;
+            g_packet_started_ms=(uint32_t)GetTickCount();
+        }
+    }
+    if(!submitted)g_policy.end_attempt(g_policy.context,target,attempt_id);
     return submitted;
 }
+static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id);
 static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
+    PpResult outcome;
     (void)ctx;
     if(!is_game_thread() || !g_policy.cast_result)return PP_RESULT_PENDING;
-    return g_policy.cast_result(g_policy.context,guid,attempt_id);
+    outcome=g_policy.cast_result(g_policy.context,guid,attempt_id);
+    if(g_packet_nonce==attempt_id &&
+       g_packet_guid.lo==guid.lo && g_packet_guid.hi==guid.hi &&
+       outcome!=PP_RESULT_PENDING){
+        g_packet_nonce=0u;
+        g_packet_unanswered=0u;
+    }
+    return outcome;
 }
 static void end_attempt(void *ctx,PpGuid guid,uint32_t attempt_id) {
     (void)ctx;
-    if(is_game_thread() && g_policy.end_attempt)
+    if(!is_game_thread())return;
+    /* Only submitted and timed-out exact GUID+nonce may trigger failover. */
+    if(!g_native_failover && g_packet_nonce==attempt_id &&
+       g_packet_guid.lo==guid.lo && g_packet_guid.hi==guid.hi){
+        if((uint32_t)(GetTickCount()-g_packet_started_ms)>=
+           PP_RESULT_TIMEOUT_MS-80u){
+            if(++g_packet_unanswered>=2u){
+                g_native_failover=1u;
+                g_packet_unanswered=2u;
+                event(NULL,PP_EVENT_PACKET_FALLBACK,guid,attempt_id);
+            }
+        }
+        g_packet_nonce=0u;
+    }
+    if(g_policy.end_attempt)
         g_policy.end_attempt(g_policy.context,guid,attempt_id);
 }
 static uint64_t world_token(void *ctx) {
@@ -346,7 +379,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
         g_inflight_attempt=attempt_id;
     } else if((kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
                kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
-               kind==PP_EVENT_INELIGIBLE) &&
+               (kind==PP_EVENT_INELIGIBLE || kind==PP_EVENT_MONEY_SUCCESS)) &&
               g_inflight_attempt && attempt_id==g_inflight_attempt){
         result_wait=(uint32_t)(now-g_last_cast_ms);
         g_last_result_ms=now;
@@ -373,6 +406,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     switch(kind) {
     case PP_EVENT_CAST: reason="cast_submitted";break;
     case PP_EVENT_SUCCESS: reason="verified_result";break;
+    case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_signal";break;
+    case PP_EVENT_PACKET_FALLBACK: reason="packet_no_ack_native_fallback";break;
     case PP_EVENT_EMPTY: reason="no_pockets";break;
     case PP_EVENT_RETRY: reason="temporary_failure";break;
     case PP_EVENT_TIMEOUT: reason="result_timeout";break;
