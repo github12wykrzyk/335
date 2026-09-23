@@ -13,12 +13,15 @@ class SpellAndResultTests(unittest.TestCase):
     def test_results_require_nonce_server_and_exact_loot_guid(self):
         for value in ("SPELL_CAST_SUCCESS","COMBAT_LOG_EVENT_UNFILTERED",
                       "LOOT_OPENED","nonce!=current_attempt",
-                      "!same(guid,current_target)","read_u32(LOOT_SOURCE,&source.lo)",
+                      "!same(guid,current_target)","read_u32(LOOT_SOURCE,&source.lo)", "loot_attempt==nonce",
+                      "same(captured_loot_guid,guid)",
                       "same(source,guid)","PP_RESULT_PENDING","PP_RESULT_EMPTY",
                       "PP_RESULT_RETRYABLE"):
             self.assertIn(value,POLICY)
-        self.assertLess(POLICY.index("read_u32(LOOT_SOURCE,&source.lo)"),
+        self.assertLess(POLICY.index("loot_attempt==nonce"),
                         POLICY.index("return PP_RESULT_SUCCESS;"))
+        self.assertIn("FrameScript_RegisterFunction",POLICY)
+        self.assertIn("PP335_LootOpened",POLICY)
     def test_pinned_bridge_compiled_and_no_per_tick_reenable(self):
         self.assertIn("0x00819210u",POLICY)
         self.assertIn("0x00818010u",POLICY)

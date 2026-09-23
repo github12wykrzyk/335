@@ -190,3 +190,9 @@ to observe the loot GUID; this conservatively under-reports success rather
 than reporting unrelated loot as a successful PP. Static audit and x86
 compilation are not an in-game validation. The module is not registered
 on work or main and must not be installed manually.
+
+The LOOT_OPENED Lua event now invokes a native FrameScript_RegisterFunction
+callback, capturing the exact loot-source GUID synchronously (with nonce,
+thread and Lua-state guards). This removes the previous delayed polling race
+when the game's own AutoLoot closes the loot window. If the callback cannot
+verify source GUID, the attempt remains PENDING; no false success is emitted.
