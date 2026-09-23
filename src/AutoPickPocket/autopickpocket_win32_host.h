@@ -28,6 +28,10 @@ typedef struct {
     PpResult (*cast_result)(void *,PpGuid target,uint32_t attempt_id);
     /* Explicit game-thread release of a timed-out/refused exact attempt. */
     void (*end_attempt)(void *,PpGuid target,uint32_t attempt_id);
+    /* Called immediately after the verified native 921 cast returns.
+     * It may clear the selected target only when its GUID still equals the
+     * submitted GUID and this exact nonce is still armed. */
+    void (*after_cast_submitted)(void *,PpGuid target,uint32_t attempt_id);
     uint64_t (*world_token)(void *);
 } Pp335Policy;
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy);

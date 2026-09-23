@@ -238,6 +238,10 @@ static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target,uint32_
     __try {
         ((cast_fn)va)(spell,0u,target.lo,target.hi,0u);
     }__except(EXCEPTION_EXECUTE_HANDLER){return 0;}
+    /* Release the game's auto-selected target at the earliest safe point.
+     * Never clear a different target manually chosen by the player. */
+    if (g_policy.after_cast_submitted)
+        g_policy.after_cast_submitted(g_policy.context,target,attempt_id);
     return 1;
 }
 static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {

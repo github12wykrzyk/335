@@ -64,9 +64,21 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn("if (g_initialized && command==2u)",HOST)
         self.assertNotIn("LootSlot(",POLICY)
         for source in (POLICY,HOST):
-            for forbidden in ("ClearTarget(", "TargetUnit(", "UnitGUID('target')",
-                              "on_success", "release_completed_target"):
+            for forbidden in ("TargetUnit(", "on_success", "release_completed_target"):
                 self.assertNotIn(forbidden,source)
+        self.assertNotIn("ClearTarget(",HOST)
+        self.assertIn("policy.after_cast_submitted=after_cast_submitted",POLICY)
+        self.assertIn("g_policy.after_cast_submitted(g_policy.context,target,attempt_id)",HOST)
+        self.assertIn("void (*after_cast_submitted)",(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.h").read_text())
+        self.assertIn("nonce!=current_attempt",POLICY)
+        self.assertIn("same(guid,current_target))return;",POLICY)
+        self.assertIn("_G.W335PP_N=='%lu'",POLICY)
+        self.assertIn("_G.W335PP_G=='0X%08lX%08lX'",POLICY)
+        self.assertIn("string.upper(t)==_G.W335PP_G",POLICY)
+        self.assertIn("if t and ClearTarget and string.upper(t)==_G.W335PP_G then ClearTarget() end",POLICY)
+        self.assertEqual(POLICY.count("ClearTarget()"),2)
+        self.assertLess(HOST.index("((cast_fn)va)(spell,0u,target.lo,target.hi,0u);"),
+                        HOST.index("g_policy.after_cast_submitted(g_policy.context,target,attempt_id)"))
         for metric in ("scan_ms","scan_candidates","queue_depth","queue_age_ms",
                        "pulse_gap_ms","cast_gap_ms","result_wait_ms","next_wait_ms"):
             self.assertIn(metric,HOST)

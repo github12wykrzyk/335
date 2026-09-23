@@ -79,7 +79,7 @@ static int same(PpGuid a,PpGuid b){
 }
 static int observer(void){
     char flag[8];
-    return run("if not _G.W335PP_F then local f=CreateFrame('Frame');if f then f:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED');f:RegisterEvent('LOOT_OPENED');f:RegisterEvent('UI_ERROR_MESSAGE');f:SetScript('OnEvent',function(self,ev,...) local n=_G.W335PP_N;if not n or n=='0' then return end;if ev=='COMBAT_LOG_EVENT_UNFILTERED' then local _,kind,src,_,_,dst,_,_,id=...;if _G.W335PP_T and GetTime()-_G.W335PP_T<=1.5 and src and dst and UnitGUID('player') and string.upper(src)==string.upper(UnitGUID('player')) and id==921 and string.upper(dst)==_G.W335PP_G then if kind=='SPELL_CAST_SUCCESS' then _G.W335PP_S=n elseif kind=='SPELL_CAST_FAILED' then _G.W335PP_FAIL=n end end elseif ev=='LOOT_OPENED' then if _G.W335PP_T and GetTime()-_G.W335PP_T<=1.5 then _G.W335PP_O=n end elseif ev=='UI_ERROR_MESSAGE' and _G.W335PP_T and GetTime()-_G.W335PP_T<=1.5 then local msg=select(1,...);if SPELL_FAILED_TARGET_NO_POCKETS and msg==SPELL_FAILED_TARGET_NO_POCKETS then _G.W335PP_E=n elseif (SPELL_FAILED_OUT_OF_RANGE and msg==SPELL_FAILED_OUT_OF_RANGE) or (ERR_OUT_OF_RANGE and msg==ERR_OUT_OF_RANGE) then _G.W335PP_RANGE=n end end end);_G.W335PP_F=f;_G.W335PP_INIT='1' end end") && value("W335PP_INIT",flag,sizeof(flag)) &&
+    return run("if not _G.W335PP_F then local f=CreateFrame('Frame');if f then f:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED');f:RegisterEvent('LOOT_OPENED');f:RegisterEvent('UI_ERROR_MESSAGE');f:SetScript('OnEvent',function(self,ev,...) local n=_G.W335PP_N;if not n or n=='0' then return end;if ev=='COMBAT_LOG_EVENT_UNFILTERED' then local _,kind,src,_,_,dst,_,_,id=...;if _G.W335PP_T and GetTime()-_G.W335PP_T<=1.5 and src and dst and UnitGUID('player') and string.upper(src)==string.upper(UnitGUID('player')) and id==921 and string.upper(dst)==_G.W335PP_G then if kind=='SPELL_CAST_SUCCESS' then _G.W335PP_S=n;local t=UnitGUID and UnitGUID('target');if t and ClearTarget and string.upper(t)==_G.W335PP_G then ClearTarget() end elseif kind=='SPELL_CAST_FAILED' then _G.W335PP_FAIL=n end end elseif ev=='LOOT_OPENED' then if _G.W335PP_T and GetTime()-_G.W335PP_T<=1.5 then _G.W335PP_O=n end elseif ev=='UI_ERROR_MESSAGE' and _G.W335PP_T and GetTime()-_G.W335PP_T<=1.5 then local msg=select(1,...);if SPELL_FAILED_TARGET_NO_POCKETS and msg==SPELL_FAILED_TARGET_NO_POCKETS then _G.W335PP_E=n elseif (SPELL_FAILED_OUT_OF_RANGE and msg==SPELL_FAILED_OUT_OF_RANGE) or (ERR_OUT_OF_RANGE and msg==ERR_OUT_OF_RANGE) then _G.W335PP_RANGE=n end end end);_G.W335PP_F=f;_G.W335PP_INIT='1' end end") && value("W335PP_INIT",flag,sizeof(flag)) &&
            !strcmp(flag,"1");
 }
 static void clear(void){
@@ -170,6 +170,24 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
     }
     return PP_RESULT_PENDING;
 }
+/* This callback runs synchronously on the same game/UI thread immediately
+ * after native GUID casting returns; it cannot acknowledge spell success.
+ * Guard BOTH nonce and current selected GUID. Failure to read Lua state
+ * leaves target alone. Event fallback handles a later spell success. */
+static void after_cast_submitted(void *ctx,PpGuid guid,uint32_t nonce){
+    char script[320];
+    int n;
+    (void)ctx;
+    if(!is_owner() || !active || !nonce || nonce!=current_attempt ||
+       !same(guid,current_target))return;
+    n=sprintf_s(script,sizeof(script),
+      "if _G.W335PP_N=='%lu' and _G.W335PP_G=='0X%08lX%08lX' "
+      "then local t=UnitGUID and UnitGUID('target');"
+      "if t and ClearTarget and string.upper(t)==_G.W335PP_G "
+      "then ClearTarget() end end",
+      (unsigned long)nonce,(unsigned long)guid.hi,(unsigned long)guid.lo);
+    if(n>0 && n<(int)sizeof(script)) (void)run(script);
+}
 /* Do not cancel a newer cast or another GUID on delayed callbacks. */
 static void end_attempt(void *ctx,PpGuid guid,uint32_t nonce){
     (void)ctx;
@@ -182,6 +200,7 @@ PP335_EXPORT const Pp335Policy *__stdcall PP335_VerifiedPolicyV1(void){
     policy.spell_usable=spell_usable;
     policy.begin_attempt=begin_attempt;
     policy.cast_result=cast_result;
+    policy.after_cast_submitted=after_cast_submitted;
     policy.end_attempt=end_attempt;
     policy.world_token=world_token;
     return &policy;

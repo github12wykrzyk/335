@@ -2,7 +2,7 @@
 
 Development branch: `feature/autopickpocket-12340`. Canonical universal updater and external game-thread loader are inherited from current `work`. Do NOT install the retired `src/Loader12340/Wow335Loader.dll` or a second updater.
 
-Native `AutoPickPocket335.dll` exports `W335_MessageId`, `W335_HookProc` and `W335_CallWndProc` and is loaded by the same `src/Loader/loader_win32.c` manifest chain as AutoLoot. It has independent stealth, known/usable spell 921, cooldown, native undead/humanoid type (6/7), GUID cast, world token and correlated result policies. No target switching or clearing, movement hooks, extra auto-loot or chat messages. Logs go to `.wow335_debug/AutoPickPocket.jsonl`.
+Native `AutoPickPocket335.dll` exports `W335_MessageId`, `W335_HookProc` and `W335_CallWndProc` and is loaded by the same `src/Loader/loader_win32.c` manifest chain as AutoLoot. It has independent stealth, known/usable spell 921, cooldown, native undead/humanoid type (6/7), GUID cast, world token and correlated result policies. No target switching, movement hooks, extra auto-loot or chat messages. Version 1.0.7 conditionally clears only the PP-cast GUID when it is still selected. Logs go to `.wow335_debug/AutoPickPocket.jsonl`.
 
 The one-time `activate_autopickpocket.yml` gate on the feature branch builds a genuine native PE32 x86 PP DLL with the pinned MSVC toolchain, audits exports and exact client ABI, registers the exact binary and module ownership, and validates the full active AutoLoot+PP rebuild before publishing a new branch commit. Only the normal candidate workflow on that registered commit may publish the game package with `FINAL_PACKAGE: PASS`. The universal updater itself is still built only from `work`; select the AutoPickPocket feature branch in its game-branch selector to install the two-DLL candidate.
 
@@ -16,11 +16,12 @@ The registered DLL must be refreshed with a genuine MSVC PE32 x86 rebuild and th
 
 ## Target-independent GUID queue (1.0.4 TEST)
 
-AutoPickPocket never calls `ClearTarget`, `TargetUnit`, or queries the
-player's currently selected target. No target is selected or released.
-The user's target is independent of automatic GUID-based Pick Pocket.
-The Lua event observer records only nonce-scoped spell and loot results;
-it does not act upon targets, movement, loot or chat.
+Historical 1.0.4 behavior: no target selection or clearing. This changed
+in 1.0.7: the GUID cast remains target-independent, but the game-thread
+post-cast callback conditionally clears a still-selected matching GUID.
+A different manually selected GUID is preserved. The Lua event observer
+still records nonce-scoped spell/loot results and may also clear an exact
+matching target on the corresponding spell-success event.
 
 The core stores a bounded 64-NPC snapshot of nearby GUIDs. Once a GUID
 is submitted it is consumed from the snapshot and subsequent eligible
@@ -56,10 +57,10 @@ result for the active attempt. This reduces borderline attempts without moving
 the character; server range/latency can still reject a moving or obstructed
 NPC. Failures back off the rejected GUID while other eligible NPCs continue.
 
-On an exact-GUID server `SPELL_CAST_SUCCESS` event the Lua observer only
-records the result. The core's independent GUID/nonce confirmation retains
-an 80 ms error-grace interval; a cast ACK does not guarantee that gold or
-items reached inventory. The user-selected target is never changed.
+On an exact-GUID server `SPELL_CAST_SUCCESS` event the Lua observer records
+the result and conditionally clears only the PP GUID if still selected.
+The core's independent GUID/nonce confirmation retains an 80 ms error-grace
+interval; a cast ACK does not guarantee that gold or items reached inventory.
 No movement, position spoofing, forced NPC target selection or AutoLoot changes.
 Confirm actual cast cadence, target release, false positives and CPU stability
 in-game before considering any wider deployment.
@@ -87,7 +88,7 @@ another GUID. Do not speed up by assuming cast submission means success.
 This removes local scanning/queue stalls; it cannot remove server GCD,
 spell cooldown, packet latency or the requirement to be physically within
 Pick Pocket range while Sprinting. No movement spoofing, target
-selection/clearing, mouseover emulation, additional launcher, AutoLoot
+selection, mouseover emulation, additional launcher, AutoLoot
 modifications, or in-game chat messages. The first in-game test should
 compare `scan_ms`, `pulse_gap_ms`, `cast_gap_ms`,
 `result_wait_ms`, `next_wait_ms`, and `not_castable` events during
@@ -109,6 +110,24 @@ never a newer attempt or other NPC. Both guards also share the same
 `PP_RESULT_TIMEOUT_MS` bound. Before immediately casting a different
 GUID in the same pulse, the previous local observer arm is released.
 This does not treat an unconfirmed spell as a success, force cooldown,
-change target/movement, or modify AutoLoot; the server still controls
+force target selection/movement, or modify AutoLoot; the server still controls
 real spell availability. Validation requires a new exact x86 binary,
 finalized TEST candidate and a user's in-game report.
+
+## 1.0.7 TEST: immediate exact-GUID target clear
+
+The native GUID cast is unchanged. Immediately **after** the verified
+12340 native spell-921 call returns on the game/UI thread, the policy
+executes one Lua conditional: it clears the current target only when
+both the active attempt nonce and the full currently selected target GUID
+still match the PP attempt. If another target is selected, the callback
+leaves it alone. On a later exact-GUID `SPELL_CAST_SUCCESS` event, the
+existing Lua observer rechecks the selected GUID and applies the same
+conditional clear, covering clients that update the visible target after
+the native call returns. No unconditional ClearTarget, forced target
+selection, spoof movement, chat output, extra loot or new native Lua
+callback registrations. Clearing after *submission* does not imply
+confirmed PP success; the established GUID/nonce result and timeout
+handling remains unchanged. This is a TEST-only user-requested UI
+behavior change; verify that loot and GUID cast correctness remain intact
+in the installed exact-SHA package.
