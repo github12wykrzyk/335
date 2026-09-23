@@ -230,9 +230,23 @@ jobs:
           Write-Host "CURRENT_HEAD: PASS $actual"
 
       - name: Upload updater
+        if: github.ref_name == 'work' || github.ref_name == 'main'
         uses: actions/upload-artifact@v4
         with:
           name: WoW335Updater-${{ github.sha }}
+          path: |
+            dist/WoW335Updater.exe
+            dist/WoW335UpdaterBootstrap.exe
+            dist/updater_build.json
+            dist/README_UPDATER.md
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload isolated feature preview (never auto-installed)
+        if: github.ref_name != 'work' && github.ref_name != 'main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoW335Updater-EXPERIMENT-${{ github.sha }}
           path: |
             dist/WoW335Updater.exe
             dist/WoW335UpdaterBootstrap.exe

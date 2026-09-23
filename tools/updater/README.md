@@ -177,3 +177,16 @@ w grze bez rzeczywistego testu.
 Oddzielny przycisk historycznego natywnego podglądu AutoLoot blokuje się,
 gdy w instalacji są jakiekolwiek zarejestrowane DLL, żeby nie tworzyć
 równoległej sesji hooków. `main` i aktywna binarka AutoLoot nie są zmieniane.
+
+## Jeden kanał aktualizacji — kanoniczny work/main
+
+TEST updatera zawsze pobiera wyłącznie `WoW335Updater-<aktualny HEAD work>`; STABLE
+wyłącznie aktualny HEAD `main`. Buildy updaterów w `feature/*` mogą publikować
+wyłącznie artefakty `WoW335Updater-EXPERIMENT-*`, których zwykły self-update
+nie pobiera. Wyjątkiem jest istniejący, jednorazowy most zgodności
+`feature/loader-12340` dla użytkowników v0.3.18 Epoch: most odtwarza oryginalny
+EpochConnection.dll z własnego zweryfikowanego backupu, usuwa tylko zarządzany
+loader Epoch, sprawdza dokładnie ten sam aktualny SHA paczki gry i updatera
+`work`, a następnie przekazuje sterowanie kanonicznemu updaterowi. Nie wykonuj
+równocześnie dwóch niezależnych hooków gry. Jedynie `work` jest źródłem prawdy
+dla kolejnych iteracji aktywnego zestawu DLL.
