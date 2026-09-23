@@ -87,36 +87,7 @@ jobs:
           $payload = @{ content = [Convert]::ToBase64String($data); encoding = 'base64' } | ConvertTo-Json -Compress
           $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
           $response = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/${{ github.repository }}/git/blobs" -Headers $headers -Body $payload -ContentType 'application/json'
-          if ($response.sha -notmatch '^[0-9a-f]{40}        shell: python
-        run: |
-          import json,hashlib,os
-          from pathlib import Path
-          names=['AutoLoot335_Host_UNREGISTERED.dll','AutoLoot335_Launcher_PREVIEW.exe']
-          entries={}
-          for name in names:
-              data=(Path('dist')/name).read_bytes()
-              entries[name]={'sha256':hashlib.sha256(data).hexdigest(),'size':len(data)}
-          meta={'schema_version':1,'kind':'NATIVE_AUTOLOOT_PREVIEW_NOT_GAME_PACKAGE',
-                'branch':'feature/autoloot-12340','git_sha':'${{ github.sha }}',
-                'target_build':12340,'arch':'x86',
-                'client_exe_sha256':'2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d',
-                'files':entries,'final_package':'NOT_RUN','in_game_verified':False}
-          assert meta['git_sha']==os.getenv('GITHUB_SHA')
-          Path('dist/native_preview_build.json').write_text(json.dumps(meta,indent=2)+'\n',encoding='utf-8')
-          print('AUTOLOOT_NATIVE_PREVIEW_META: PASS',meta['git_sha'])
-      - name: Test portable AutoLoot controller and native-adapter fake-client integration
-        run: python -m unittest discover -s tests -p "test_autoloot*.py" -v
-      - name: Preserve build evidence (NOT a distributable game package)
-        uses: actions/upload-artifact@v4
-        with:
-          name: AutoLoot12340-native-preview-TESTONLY-${{ github.sha }}
-          path: |
-            dist/autoloot_abi.json
-            dist/native_preview_build.json
-            dist/AutoLoot335_Host_UNREGISTERED.dll
-            dist/AutoLoot335_Launcher_PREVIEW.exe
-          if-no-files-found: error
-) { throw 'Blob write did not return Git SHA' }
+          if ($response.sha -notmatch '^[0-9a-f]{40}$') { throw 'Blob write did not return Git SHA' }
           Write-Host "NORMAL_AUTOLOOT_DLL_BLOB_SHA: $($response.sha)"
           Write-Host "NORMAL_AUTOLOOT_DLL_SHA256: $digest"
           Write-Host "NORMAL_AUTOLOOT_DLL_SIZE: $($data.Length)"
