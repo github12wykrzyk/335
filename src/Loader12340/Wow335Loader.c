@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <stdint.h>
+#pragma comment(lib, "User32.lib")
 
 #define WOW_MAX_MODULES 64
 #define WOW_MAX_NAME 120
