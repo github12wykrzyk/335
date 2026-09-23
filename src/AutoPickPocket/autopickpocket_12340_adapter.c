@@ -34,6 +34,37 @@ static int mgr(Pp12340Adapter *a,uint32_t *out) {
         return 0;
     return ptr_ok(*out);
 }
+/* Avoid an O(N) player-search on every 40 ms loader pulse. A cached
+ * address is usable only while the object manager AND current player's
+ * exact GUID still match. Every dereference goes through guarded read32. */
+static int locate_player(Pp12340Adapter *a,uint32_t manager,
+                         PpGuid local_guid,uint32_t *player){
+    uint32_t obj=0u,next=0u;
+    PpGuid found;
+    unsigned i;
+    if(a->cached_manager==manager && ptr_ok(a->cached_player_obj) &&
+       guid_at(a,a->cached_player_obj,&found) &&
+       same(found,local_guid)){
+        *player=a->cached_player_obj;
+        return 1;
+    }
+    a->cached_manager=0u;
+    a->cached_player_obj=0u;
+    if(!read32(a,(uintptr_t)manager+PP_MGR_FIRST,&obj))return 0;
+    for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i){
+        if(!guid_at(a,obj,&found))return 0;
+        if(same(found,local_guid)){
+            a->cached_manager=manager;
+            a->cached_player_obj=obj;
+            *player=obj;
+            return 1;
+        }
+        if(!read32(a,(uintptr_t)obj+PP_OBJ_NEXT,&next) || next==obj)
+            return 0;
+        obj=next;
+    }
+    return 0;
+}
 static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
     uint32_t manager=0u,obj=0u,player_obj=0u,next=0u,desc=0u;
@@ -44,17 +75,8 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
     if (!out || !cap || !mgr(a,&manager) ||
         !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID,&player_guid.lo) ||
         !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID+4u,&player_guid.hi) ||
-        !read32(a,(uintptr_t)manager+PP_MGR_FIRST,&obj)) return 0u;
-    /* First pass locates local player, then second pass scans NPCs. The
-     * manager's list can change; every address read must be host-guarded.
-     */
-    for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
-        if (!guid_at(a,obj,&guid)) return 0u;
-        if (same(player_guid,guid)) { player_obj=obj;break; }
-        if (!read32(a,(uintptr_t)obj+PP_OBJ_NEXT,&next) || next==obj) return 0u;
-        obj=next;
-    }
-    if (!player_obj || a->host.position(a->host.ctx,player_obj,me)!=1 ||
+        !locate_player(a,manager,player_guid,&player_obj) ||
+        a->host.position(a->host.ctx,player_obj,me)!=1 ||
         !read32(a,(uintptr_t)manager+PP_MGR_FIRST,&obj)) return 0u;
     for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
         uint32_t type=0u,health=0u;
@@ -111,17 +133,15 @@ static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
     if ((guid.lo|guid.hi)==0u || !attempt_id || !mgr(a,&manager) ||
         !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID,&player_guid.lo) ||
         !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID+4u,&player_guid.hi) ||
-        (player_guid.lo|player_guid.hi)==0u ||
-        same(player_guid,guid) ||
+        (player_guid.lo|player_guid.hi)==0u || same(player_guid,guid) ||
+        !locate_player(a,manager,player_guid,&player_obj) ||
         !read32(a,(uintptr_t)manager+PP_MGR_FIRST,&obj)) return 0;
-    /* Resolve both GUIDs on the game thread; either can appear first in
-     * the list. Do not cast using a player position cached by the scan. */
+    /* Resolve the target's GUID afresh; re-read both positions just before
+     * casting. Never act on a stale range sample from the earlier scan. */
     for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
         PpGuid current;
         if (!guid_at(a,obj,&current)) return 0;
-        if (same(current,player_guid)) player_obj=obj;
-        if (same(current,guid)) target_obj=obj;
-        if (player_obj && target_obj) break;
+        if (same(current,guid)) {target_obj=obj;break;}
         if (!read32(a,(uintptr_t)obj+PP_OBJ_NEXT,&next) || next==obj)
             break;
         obj=next;
@@ -191,8 +211,10 @@ void pp12340_enable(Pp12340Adapter *a,int enable) {
         pp_enable(&a->engine,enable);
 }
 void pp12340_reset(Pp12340Adapter *a) {
-    if (a && a->bound && a->host.thread_id(a->host.ctx)==a->owner_thread)
+    if (a && a->bound && a->host.thread_id(a->host.ctx)==a->owner_thread) {
+        a->cached_manager=0u;a->cached_player_obj=0u;
         pp_reset(&a->engine);
+    }
 }
 static void pp_status(Pp12340Adapter *a,PpEvent status) {
     PpGuid none={0u,0u};
@@ -234,11 +256,13 @@ void pp12340_tick(Pp12340Adapter *a,uint32_t now_ms) {
             pp_status(a,PP_EVENT_WORLD_PAUSED);
         }
         a->current_world=0u;
+        a->cached_manager=0u;a->cached_player_obj=0u;
         return;
     }
     if (world!=a->current_world) {
         pp_reset(&a->engine);
         a->current_world=world;
+        a->cached_manager=0u;a->cached_player_obj=0u;
         pp_status(a,PP_EVENT_WORLD_RESET);
     }
     pp_tick(&a->engine,now_ms);

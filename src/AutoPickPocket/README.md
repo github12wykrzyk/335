@@ -28,3 +28,29 @@ adapter first rejects distant units by range and only invokes the expensive
 native creature-type/eligibility policy for nearby NPCs. The actual cadence
 remains limited by game-thread pulses, stealth, skill cooldown and server
 result delivery; no changes to AutoLoot or the loader are required.
+
+## Rapid scan and server-range resilience (next TEST candidate)
+
+The currently shared `work` loader pulses feature DLLs about every 40 ms; lowering a
+module-only timer cannot exceed this external scheduling bound. The PP core now
+accepts a new scan every 20 ms (thus on each delivered loader pulse) and
+immediately examines a different GUID on a result, range rejection or timeout.
+A guarded, manager+GUID-validated player pointer cache avoids rescanning the
+entire object list merely to locate the player on every pulse. NPCs are still
+classified and range-checked again before casting, and the cache is discarded
+when the world changes, is unavailable or the module is explicitly reset.
+
+The candidate uses a conservative 4.0-yard **geometric** reach instead of 5.0
+and recognizes the game's `SPELL_FAILED_OUT_OF_RANGE` /`ERR_OUT_OF_RANGE`
+result for the active attempt. This reduces borderline attempts without moving
+the character; server range/latency can still reject a moving or obstructed
+NPC. Failures back off the rejected GUID while other eligible NPCs continue.
+
+On an exact-GUID server `SPELL_CAST_SUCCESS` event the Lua observer releases
+only the still-selected completed target immediately, without waiting for the
+periodic native result poll. The core's independent GUID/nonce confirmation
+retains an 80 ms error-grace interval; a cast ACK is not a guarantee that gold
+or items reached inventory. Other manually selected targets remain intact.
+No movement, position spoofing, forced NPC target selection or AutoLoot changes.
+Confirm actual cast cadence, target release, false positives and CPU stability
+in-game before considering any wider deployment.

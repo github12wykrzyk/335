@@ -172,8 +172,9 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             failure(engine,engine->active,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
             ++engine->retries;
             engine->active_valid=0u;
-            if (engine->probe_mode) engine->enabled=0u;
-            return;
+            if (engine->probe_mode) {engine->enabled=0u;return;}
+            engine->scan_started=0u;
+            goto scan_next;
         case PP_RESULT_PENDING: break;
         default: return; /* unknown result fails closed */
         }
@@ -181,8 +182,10 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         failure(engine,engine->active,now,PP_TIMEOUT_DELAY_MS,PP_EVENT_TIMEOUT);
         ++engine->timeouts;
         engine->active_valid=0u;
-        if (engine->probe_mode) engine->enabled=0u;
-        return;
+        if (engine->probe_mode) {engine->enabled=0u;return;}
+        /* A timed-out NPC must not stall independent eligible GUIDs. */
+        engine->scan_started=0u;
+        goto scan_next;
     }
 scan_next:
     if (engine->probe_mode) return;
@@ -234,5 +237,7 @@ scan_next:
     } else {
         failure(engine,best.guid,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
         ++engine->retries;
+        /* Do not override the native-cast-per-pulse bound after an
+         * ambiguous rejected submission. Try another GUID next pulse. */
     }
 }

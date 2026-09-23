@@ -23,7 +23,7 @@ class SpellAndResultTests(unittest.TestCase):
                       'nonce!=current_attempt','!same(guid,current_target)',
                       'read_u32(LOOT_SOURCE,&source.lo)','same(source,guid)',
                       'PP_RESULT_PENDING','PP_RESULT_EMPTY',
-                      'PP_RESULT_RETRYABLE','elapsed>=300u'):
+                      'PP_RESULT_RETRYABLE','elapsed>=80u'):
             self.assertIn(value,POLICY)
         self.assertLess(POLICY.index('!strcmp(empty,want)'),
                         POLICY.index('return PP_RESULT_SUCCESS;'))
@@ -31,6 +31,10 @@ class SpellAndResultTests(unittest.TestCase):
                         POLICY.index('return PP_RESULT_SUCCESS;'))
         self.assertIn('string.upper(dst)==_G.W335PP_G',POLICY)
         self.assertIn('GetTime()-_G.W335PP_T<=1.5',POLICY)
+        self.assertIn('W335PP_RANGE',POLICY)
+        self.assertIn('SPELL_FAILED_OUT_OF_RANGE',POLICY)
+        self.assertIn('ERR_OUT_OF_RANGE',POLICY)
+        self.assertIn('!strcmp(range,want)',POLICY)
     def test_pinned_bridge_compiled_and_no_per_tick_reenable(self):
         self.assertIn("0x00819210u",POLICY)
         self.assertIn("0x00818010u",POLICY)
@@ -43,6 +47,9 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn("policy.on_success=release_completed_target",POLICY)
         self.assertIn("string.upper(UnitGUID('target'))=='0X",POLICY)
         self.assertIn("then ClearTarget() end",POLICY)
+        self.assertIn("ClearTarget();_G.W335PP_DONE=n",POLICY)
+        self.assertIn("_G.W335PP_DONE~=n",POLICY)
+        self.assertIn("elapsed>=80u",POLICY)
         self.assertIn("kind==PP_EVENT_SUCCESS",HOST)
         self.assertNotIn("ClearTarget()",HOST)
 if __name__=="__main__":

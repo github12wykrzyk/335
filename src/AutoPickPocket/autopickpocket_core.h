@@ -10,7 +10,7 @@ extern "C" {
 #endif
 #define PP_SCAN_CAP 64u
 #define PP_HISTORY_CAP 256u
-#define PP_SCAN_INTERVAL_MS 50u
+#define PP_SCAN_INTERVAL_MS 20u
 #define PP_RESULT_TIMEOUT_MS 1500u
 #define PP_RETRY_DELAY_MS 800u
 #define PP_TIMEOUT_DELAY_MS 3000u

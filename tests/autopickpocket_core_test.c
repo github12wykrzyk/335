@@ -131,4 +131,16 @@ static int test_next_target_rescan_no_extra_tick(void){
  pp_tick(&e,12u);CHECK(s.cast_n==2 && s.events[PP_EVENT_EMPTY]==1);
  return 0;
 }
-int main(void){if(test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+static int test_failed_or_timedout_npc_does_not_block_next_guid(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,10u);CHECK(s.cast_n==1 && s.casted[0].lo==102u);
+ s.result=PP_RESULT_RETRYABLE;
+ pp_tick(&e,11u);CHECK(e.retries==1u && s.cast_n==2 &&
+                       s.casted[1].lo==101u);
+ pp_reset(&e);s.result=PP_RESULT_PENDING;
+ pp_tick(&e,100u);CHECK(s.cast_n==3 && s.casted[2].lo==102u);
+ pp_tick(&e,1600u);CHECK(e.timeouts==1u && s.cast_n==4 &&
+                         s.casted[3].lo==101u);
+ return 0;
+}
+int main(void){if(test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

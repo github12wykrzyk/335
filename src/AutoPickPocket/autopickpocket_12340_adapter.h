@@ -13,7 +13,7 @@ extern "C" {
 #define PP12340_POSITION_VA ((uintptr_t)0x006E6F10u)
 #define PP12340_SPELL_ID 921u
 #define PP12340_UNIT_TYPE 3u
-#define PP12340_REACH 5.0f
+#define PP12340_REACH 4.0f
 /* Signed and guarded native callbacks run exclusively in the WoW game thread.
  * This interface does not install hooks or access the AutoLoot UI.
  * No callback may infer cast success from mere submission.
@@ -43,6 +43,7 @@ typedef struct {
     Pp12340Host host;
     uint32_t owner_thread;
     uint64_t current_world;
+    uint32_t cached_manager,cached_player_obj;
     unsigned bound;
 } Pp12340Adapter;
 int pp12340_bind(Pp12340Adapter *a, const Pp12340Host *host);
