@@ -9,13 +9,13 @@ local cooldown = 0
 local cleared = {}
 local maxAttempts = 3
 local scanInterval = 0.25
-local messagePrefix = "|cff59c9db[AL335 DIAG]|r "
 local recorded = {}
 local maxEntries = 120
 
-local function Print(s)
-    DEFAULT_CHAT_FRAME:AddMessage(messagePrefix .. tostring(s))
-end
+-- Intentionally silent in game: keep diagnostic events in SavedVariables for
+-- the updater report, but never post AutoLoot diagnostics to the chat frame.
+-- Slash commands remain available without producing chat messages.
+local function Print(_) end
 
 local function Record(event, detail)
     local when = date("%Y-%m-%d %H:%M:%S")

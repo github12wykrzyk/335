@@ -15,12 +15,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Identify source-only AutoPickPocket experiment
-        id: pp_route
-        shell: pwsh
-        run: |
-          python tools/autopickpocket_experiment.py route --output "$env:GITHUB_OUTPUT"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify repository, runtime and tests
         shell: pwsh
         run: |
@@ -32,23 +26,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest discover -s tests -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build isolated AutoPickPocket core with MSVC x86 (NOT a game DLL)
-        if: steps.pp_route.outputs.core_only == 'true'
-        shell: pwsh
-        run: |
-          python tools/autopickpocket_experiment.py build --report dist/pp_core_experiment.json
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Upload isolated native adapter and attestation (NO GAME PACKAGE)
-        if: steps.pp_route.outputs.core_only == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: AutoPickPocket-ADAPTER-ISOLATED-${{ github.sha }}
-          path: |
-            dist/pp_core_experiment.json
-            dist/pp_core_experiment/AutoPickPocket335_ADAPTER_ISOLATED.dll
-          if-no-files-found: error
       - name: Audit uploaded 3.3.5 client EXE (Windows PE32 x86)
-        if: steps.pp_route.outputs.core_only != 'true'
         shell: pwsh
         run: |
           python tools/verify_client_exe.py --exe Wow.exe --require-target --report dist/client_exe_audit.json
@@ -65,27 +43,18 @@ jobs:
           Write-Host "Client EXE: PE32 x86 verified; file version: $fileVersion; product version: $productVersion; 12340 resource matches: $is12340"
           if (-not $is12340) { Write-Warning "3.3.5.12340 cannot be confirmed from available version resource; game packaging will remain blocked." }
       - name: Determine whether an actual game candidate can be built
-        if: steps.pp_route.outputs.core_only != 'true'
         id: readiness
         shell: pwsh
         run: |
           python tools/candidate_readiness.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Block AutoLoot-only package on AutoPickPocket feature branch
-        if: github.ref_name == 'feature/autopickpocket-12340' && steps.pp_route.outputs.core_only != 'true' && steps.readiness.outputs.ready == 'true'
+      - name: Require feature experiment to include its actual game DLLs
         shell: pwsh
         run: |
-          python tools/autopickpocket_delivery.py --report dist/autopickpocket_delivery.json
+          python tools/ai_experiments.py verify-scope
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Upload AutoPickPocket blocker report on full candidate rejection
-        if: always() && github.ref_name == 'feature/autopickpocket-12340' && steps.pp_route.outputs.core_only != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: AutoPickPocket-CANDIDATE-STATUS-${{ github.sha }}
-          path: dist/autopickpocket_delivery.json
-          if-no-files-found: warn
       - name: Build all registered game DLLs (only when runtime is ready)
-        if: steps.pp_route.outputs.core_only != 'true' && steps.readiness.outputs.ready == 'true'
+        if: steps.readiness.outputs.ready == 'true'
         shell: pwsh
         run: |
           if (-not (Test-Path tools/build_active.py)) { throw 'NO_ACTIVE_BUILDER: provide a verified Windows x86 builder for the active 12340 modules.' }
@@ -101,15 +70,25 @@ jobs:
           python tools/verify_current.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package and strictly verify runnable client (only with DLLs)
-        if: steps.pp_route.outputs.core_only != 'true' && steps.readiness.outputs.ready == 'true'
+        if: steps.readiness.outputs.ready == 'true'
         shell: pwsh
         run: |
           python tools/package_candidate.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --native-build-report dist/native_build.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/verify_candidate_package.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Reject outdated branch HEAD before publishing artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $remote = git ls-remote --exit-code origin "refs/heads/$env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0 -or -not $remote) { throw 'Unable to verify current remote branch HEAD' }
+          $actual = (($remote -split '\s+')[0]).Trim()
+          if ($actual -ne $env:GITHUB_SHA) {
+            throw "STALE_HEAD: $env:GITHUB_REF_NAME is now $actual, this run checked out $env:GITHUB_SHA"
+          }
+          Write-Host "CURRENT_HEAD: PASS $actual"
       - name: Upload EXE audit and package readiness report
-        if: steps.pp_route.outputs.core_only != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: WoW335-EXE-AUDIT-${{ github.sha }}
@@ -118,7 +97,7 @@ jobs:
             dist/candidate_readiness.json
           if-no-files-found: error
       - name: Upload runnable package only after FINAL_PACKAGE PASS
-        if: steps.pp_route.outputs.core_only != 'true' && steps.readiness.outputs.ready == 'true'
+        if: steps.readiness.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: WoW335-WORK-CANDIDATE-${{ github.sha }}

@@ -4,22 +4,11 @@ on:
   push:
     branches:
       - work
-      - main
-      - 'feature/autoloot-12340'
-      - 'feature/autopickpocket-12340'
-    paths:
-      - 'tools/updater/**'
-      - 'src/AutoLoot/autoloot_win32_launcher.c'
-      - 'runtime/current.json'
-      - 'runtime/AutoLoot335.dll'
-      - 'src/AutoLoot/diagnostics/**'
-      - 'runtime/client_exe_target.json'
-      - 'Wow.exe'
-      - '.github/workflows/build_updater.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: build-wow335-updater-${{ github.ref }}
@@ -27,14 +16,24 @@ concurrency:
 
 jobs:
   build-updater:
+    if: github.ref_name == 'work'
     runs-on: windows-2022
     steps:
       - name: Checkout current tree
         uses: actions/checkout@v5
 
-      - name: Verify current repository state
+      - name: Verify repository, runtime, module contracts and unit tests
         shell: pwsh
-        run: python tools/verify_current.py
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_module_registry.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify pinned EXE identity embedded in updater
         shell: pwsh
@@ -54,7 +53,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           [IO.File]::WriteAllText('dist/autoloot_diag_sha.txt', '${{ github.sha }}', [Text.Encoding]::ASCII)
 
-      - name: Compile embedded x86 game-thread launcher for registered AutoLoot
+      - name: Compile embedded x86 manifest-driven game-thread loader
         shell: cmd
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
@@ -62,7 +61,7 @@ jobs:
           call "%VSINSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x86
           if errorlevel 1 exit /b 1
           if not exist dist mkdir dist
-          cl /nologo /W4 /WX /O2 /TC /DAL_NORMAL_RUNTIME /Fe:dist\AutoLoot335_Launcher.exe src\AutoLoot\autoloot_win32_launcher.c /link /MACHINE:X86 /Brepro User32.lib /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup
+          cl /nologo /W4 /WX /O2 /TC /Fe:dist\WoW335RuntimeLoader.exe src\Loader\loader_win32.c /link /MACHINE:X86 /Brepro User32.lib /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup
           if errorlevel 1 exit /b 1
 
       - name: Compile WinForms updater and bootstrap x86
@@ -104,7 +103,7 @@ jobs:
             /resource:src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.lua,AutoLootDiag.WoW335AutoLootDiag.lua `
             /resource:src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.toc,AutoLootDiag.WoW335AutoLootDiag.toc `
             /resource:dist\autoloot_diag_sha.txt,AutoLootDiag.SourceCommit.txt `
-            /resource:dist\AutoLoot335_Launcher.exe,AutoLootRuntime.Launcher.exe `
+            /resource:dist\WoW335RuntimeLoader.exe,WoW335Runtime.Loader.exe `
             tools\updater\WoW335Updater.cs `
             tools\updater\Updater335Dashboard.cs `
             tools\updater\Updater335GitHubMonitor.cs `
@@ -145,13 +144,13 @@ jobs:
               raise SystemExit('UpdaterBuildInfo.Version not found')
           updater_version = match.group(1)
 
-          launcher = Path('dist/AutoLoot335_Launcher.exe')
+          launcher = Path('dist/WoW335RuntimeLoader.exe')
           loader_data, loader_machine = inspect(launcher)
           if struct.unpack_from('<H', loader_data, struct.unpack_from('<I', loader_data, 0x3C)[0] + 24)[0] != 0x10B:
-              raise SystemExit('AutoLoot registered loader must be PE32 x86')
-          if 'AutoLoot335.dll'.encode('utf-16le') not in loader_data:
-              raise SystemExit('AutoLoot registered loader does not reference normal DLL')
-          print('Embedded native AutoLoot launcher PE32 x86: PASS', hashlib.sha256(loader_data).hexdigest())
+              raise SystemExit('Universal runtime loader must be PE32 x86')
+          if 'dlls.txt'.encode('utf-16le') not in loader_data or b'W335_MessageId' not in loader_data:
+              raise SystemExit('Universal loader lacks manifest or module ABI')
+          print('Embedded universal runtime loader PE32 x86: PASS', hashlib.sha256(loader_data).hexdigest())
 
           updater = Path('dist/WoW335Updater.exe')
           bootstrap = Path('dist/WoW335UpdaterBootstrap.exe')
@@ -190,10 +189,10 @@ jobs:
           print(json.dumps(meta, indent=2))
           '@ | python -
 
-      - name: Verify embedded native-loader PE32 and manifest launch gates
+      - name: Verify universal loader PE32 and manifest launch gates
         shell: pwsh
         run: |
-          & "$env:windir\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File tools\updater\tests\AutoLootRuntimeSmoke.ps1 -UpdaterExe dist\WoW335Updater.exe -LoaderExe dist\AutoLoot335_Launcher.exe
+          & "$env:windir\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File tools\updater\tests\AutoLootRuntimeSmoke.ps1 -UpdaterExe dist\WoW335Updater.exe -LoaderExe dist\WoW335RuntimeLoader.exe
           if ($LASTEXITCODE -ne 0) { throw "Native AutoLoot embedded loader verification failed" }
 
       - name: Verify exact-SHA addon resources, SavedVariables parser and installation fail-closed
@@ -206,7 +205,19 @@ jobs:
         shell: pwsh
         run: Copy-Item tools\updater\README.md dist\README_UPDATER.md
 
-      - name: Upload updater
+      - name: Reject outdated branch HEAD before uploading updater
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $remote = git ls-remote --exit-code origin "refs/heads/$env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0 -or -not $remote) { throw 'Unable to verify current remote branch HEAD' }
+          $actual = (($remote -split '\s+')[0]).Trim()
+          if ($actual -ne $env:GITHUB_SHA) {
+            throw "STALE_HEAD: $env:GITHUB_REF_NAME is now $actual, this run checked out $env:GITHUB_SHA"
+          }
+          Write-Host "CURRENT_HEAD: PASS $actual"
+
+      - name: Upload the only canonical updater for all game branches
         uses: actions/upload-artifact@v4
         with:
           name: WoW335Updater-${{ github.sha }}
@@ -217,3 +228,23 @@ jobs:
             dist/README_UPDATER.md
           if-no-files-found: error
           compression-level: 0
+
+
+      - name: Delete obsolete updater artifacts across branches
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const keep = 'WoW335Updater-${{ github.sha }}';
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              ...context.repo, per_page: 100
+            });
+            let removed = 0;
+            for (const artifact of artifacts) {
+              if (!artifact.name.startsWith('WoW335Updater-') || artifact.name === keep) continue;
+              await github.rest.actions.deleteArtifact({
+                ...context.repo, artifact_id: artifact.id
+              });
+              core.info('Removed obsolete updater: ' + artifact.name + ' / ' + artifact.id);
+              removed++;
+            }
+            core.info('UPDATER_ARTIFACT_PRUNE: PASS; kept ' + keep + '; removed ' + removed);

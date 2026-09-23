@@ -106,6 +106,7 @@ namespace WoW335Updater
                     ValidateGameAndToken();
                     SetBusy(true, "Weryfikacja zainstalowanej paczki...");
                     var root = Path.GetFullPath(gameDir.Text.Trim());
+                    UpdaterSafety.RequireNoLegacyEpoch(root);
                     var installed = ReadInstalledState(root);
                     if (installed == null)
                         throw new InvalidOperationException("Brak .wow335_updater/installed.json. Najpierw wykonaj aktualizację updaterem.");
@@ -343,7 +344,8 @@ namespace WoW335Updater
 
             private async Task<RemoteUpdaterBuild> DownloadLatestUpdaterAsync()
             {
-                var branch = channel != null && channel.SelectedIndex == 1 ? "main" : "work";
+                // Self-update always uses the only canonical updater, independent of game branch.
+                var branch = "work";
                 using (var client = CreateClient())
                 {
                     var runs = AsArray(GetValue(AsDictionary(json.DeserializeObject(await GetStringAsync(client, ApiRoot + "/actions/runs?branch=" + branch + "&per_page=50"))), "workflow_runs"));
@@ -658,7 +660,7 @@ namespace WoW335Updater
             private Dictionary<string, object> SanitizeInstalled(Dictionary<string, object> installed)
             {
                 var safe = new Dictionary<string, object>();
-                var keys = new[] { "schema_version", "updater_version", "channel", "run_id", "head_sha", "artifact_name", "installed_utc", "managed_files", "exe_name", "last_verified_utc", "last_repair_utc", "integrity_status" };
+                var keys = new[] { "schema_version", "updater_version", "channel", "branch", "run_id", "head_sha", "artifact_name", "installed_utc", "managed_files", "exe_name", "last_verified_utc", "last_repair_utc", "integrity_status" };
                 foreach (var key in keys)
                 {
                     if (installed.ContainsKey(key)) safe[key] = installed[key];

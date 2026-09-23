@@ -1,4 +1,4 @@
-name: Register verified x86 AutoLoot on work
+name: Register verified x86 TEST modules on work
 on:
   push:
     branches: [work]
@@ -7,6 +7,11 @@ on:
       - 'src/AutoLoot/autoloot_12340_adapter.c'
       - 'src/AutoLoot/autoloot_win32_host.c'
       - 'tools/publish_autoloot_runtime.py'
+      - 'tools/register_active_runtime.py'
+      - 'tools/build_active.py'
+      - 'tools/native_toolchain.py'
+      - 'runtime/module_registry.json'
+      - 'src/**'
       - '.github/workflows/publish_autoloot_runtime.yml'
 permissions:
   contents: write
@@ -18,29 +23,37 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Skip legacy bootstrap once runtime is registered
+      - name: Permit only isolated AutoLoot TEST registration or repair
         id: eligibility
         shell: pwsh
         run: |
           $runtime = Get-Content runtime/current.json -Raw | ConvertFrom-Json
           if ($runtime.state -eq 'empty' -and @($runtime.files).Count -eq 0) {
-            "eligible=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            Write-Host 'BOOTSTRAP: eligible, no active runtime'
+            "mode=bootstrap" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } elseif ($runtime.state -eq 'test-candidate' -and
+                    @($runtime.files | Where-Object { $_.kind -eq 'exe' }).Count -eq 1 -and
+                    @($runtime.files | Where-Object { $_.kind -eq 'dll' }).Count -ge 1) {
+            "mode=registered" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           } else {
-            "eligible=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            Write-Host 'BOOTSTRAP: SKIPPED, active registered runtime uses build_work_candidate.yml; no mutation'
+            throw 'Refuse native registration outside declared TEST runtime'
           }
-      - if: steps.eligibility.outputs.eligible == 'true'
-        run: python tools/verify_client_exe.py --exe Wow.exe --require-target
-      - if: steps.eligibility.outputs.eligible == 'true'
+      - run: python tools/verify_client_exe.py --exe Wow.exe --require-target
+      - if: steps.eligibility.outputs.mode == 'bootstrap'
         run: python tools/publish_autoloot_runtime.py
+      - if: steps.eligibility.outputs.mode == 'registered'
+        run: python tools/register_active_runtime.py
       - name: Dispatch final exact-SHA verification after generated runtime commit
-        if: steps.eligibility.outputs.eligible == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $head = (git rev-parse HEAD).Trim()
+          if ($head -eq '${{ github.sha }}') {
+            Write-Host 'Native bytes already match; dispatching updater at the same exact work SHA'
+            gh api -X POST "repos/$env:GITHUB_REPOSITORY/actions/workflows/build_updater.yml/dispatches" -f ref=work
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to dispatch exact-SHA updater' }
+            exit 0
+          }
           git fetch origin work
           if ((git rev-parse FETCH_HEAD).Trim() -ne $head) { throw "work moved after runtime commit" }
           foreach ($workflow in @('verify.yml', 'build_work_candidate.yml', 'build_updater.yml')) {

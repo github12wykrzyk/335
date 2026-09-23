@@ -4,7 +4,7 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 POLICY=(ROOT/"src/AutoPickPocket/autopickpocket_game_policies.c").read_text()
 HOST=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.c").read_text()
-WF=(ROOT/".github/workflows/build_shared_loader.yml").read_text()
+WF=(ROOT/".github/workflows/activate_autopickpocket.yml").read_text()
 class SpellAndResultTests(unittest.TestCase):
     def test_readiness_checks_all_conditions(self):
         for value in ("IsSpellKnown(921)","IsStealthed()","IsUsableSpell(name)",
@@ -25,7 +25,8 @@ class SpellAndResultTests(unittest.TestCase):
     def test_pinned_bridge_compiled_and_no_per_tick_reenable(self):
         self.assertIn("0x00819210u",POLICY)
         self.assertIn("0x00818010u",POLICY)
-        self.assertIn("autopickpocket_game_policies.c /link",WF)
+        self.assertIn("tools/register_autopickpocket.py",WF)
+        self.assertIn("autopickpocket_game_policies.c", (ROOT/"tools/register_autopickpocket.py").read_text())
         self.assertIn("PP335_VerifiedPolicyV1",WF)
         self.assertIn("verify_hash(NULL,PP12340_CLIENT_SHA256)",HOST)
         self.assertIn("if (g_initialized && command==2u)",HOST)

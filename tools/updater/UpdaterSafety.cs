@@ -7,12 +7,26 @@ namespace WoW335Updater
 {
     internal static class UpdaterBuildInfo
     {
-        public const string Version = "0.3.9-335";
+        public const string Version = "0.3.12-335";
         public const string PinnedClientSha256 = "2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d";
     }
 
     internal static class UpdaterSafety
     {
+        // A legacy Epoch startup-import hook must never run concurrently with
+        // the canonical work message-hook runtime. Only the signed bridge can
+        // restore its original DLL and remove its own managed loader.
+        public static void RequireNoLegacyEpoch(string root)
+        {
+            var epoch = Path.Combine(root, ".wow335_updater", "epoch_test");
+            if (File.Exists(Path.Combine(epoch, "installed.json")) ||
+                File.Exists(Path.Combine(epoch, "modules.lock")) ||
+                File.Exists(Path.Combine(root, "Wow335Loader.dll")))
+                throw new InvalidOperationException(
+                    "Wykryto stary loader Epoch. Zaktualizuj dotychczasowy updater Epoch, " +
+                    "aby automatycznie przywrocil oryginalny EpochConnection.dll przed instalacja TEST/work.");
+        }
+
         public static Dictionary<string, object> RequireLatestSuccessfulRun(object[] runs, string workflowName, string branch)
         {
             Dictionary<string, object> chosen = null;

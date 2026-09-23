@@ -37,8 +37,9 @@ $lookup = $type.GetMethod('FindSavedVariableFiles', $flags)
 $explain = $type.GetMethod('ExplainMissingLog', $flags)
 $sanitize = $type.GetMethod('SanitizeLog', $flags)
 $install = $type.GetMethod('Install', $flags)
+$refresh = $type.GetMethod('RefreshManagedIfPresent', $flags)
 if ($null -eq $collect -or $null -eq $collectFile -or $null -eq $lookup -or
-    $null -eq $explain -or $null -eq $sanitize -or $null -eq $install) {
+    $null -eq $explain -or $null -eq $sanitize -or $null -eq $install -or $null -eq $refresh) {
     throw "Updater diagnostic integration missing methods"
 }
 $folder = Join-Path $env:RUNNER_TEMP ('wow335-al-test-' + [guid]::NewGuid().ToString('N'))
@@ -134,6 +135,7 @@ try {
     }
     $scriptText = [IO.File]::ReadAllText($scriptPath)
     if (-not $scriptText.Contains('local enabled = false')) { throw "Addon not disabled by default" }
+    if ($scriptText.Contains('DEFAULT_CHAT_FRAME:AddMessage')) { throw "AutoLoot diagnostic still posts to in-game chat" }
     $sourceScript = (Resolve-Path 'src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.lua').Path
     if ([IO.File]::ReadAllText($sourceScript) -ne $scriptText) { throw "Installer wrote different script bytes" }
     $idempotent = [string]$install.Invoke($null, $triple)
@@ -162,7 +164,28 @@ try {
     if ([IO.File]::ReadAllText((Join-Path $backups[0].FullName 'unrelated.txt')) -ne 'do not discard') {
         throw "Existing user content lost during replacement"
     }
-    Write-Host "AUTOLOOT_UPDATER_SMOKE: PASS x86 resources, exact SHA, log whitelist/privacy, wrong EXE rejection, addon install and backup/restore"
+    # An untouched, updater-owned older version is silently refreshed, with backup.
+    # A user-modified version is never overwritten without explicit permission.
+    $pair = New-Object 'object[]' 2
+    $pair[0] = [string]$folder
+    $pair[1] = $assembly
+    $markerPath = Join-Path $addonDir '.wow335_diag_managed.txt'
+    [IO.File]::AppendAllText($scriptPath, [Environment]::NewLine + "DEFAULT_CHAT_FRAME:AddMessage('old chatter')")
+    $markerLines = [IO.File]::ReadAllLines($markerPath)
+    $markerLines[2] = (Get-FileHash -LiteralPath $scriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllLines($markerPath, $markerLines)
+    $beforeRefresh = @(Get-ChildItem -LiteralPath $backupRoot -Directory).Count
+    $refresh.Invoke($null, $pair) | Out-Null
+    if ([IO.File]::ReadAllText($scriptPath).Contains('old chatter') -or
+        @(Get-ChildItem -LiteralPath $backupRoot -Directory).Count -ne ($beforeRefresh + 1)) {
+        throw "Previously managed chatty addon was not refreshed with backup"
+    }
+    [IO.File]::AppendAllText($scriptPath, [Environment]::NewLine + '-- user change')
+    $unownedResult = $refresh.Invoke($null, $pair)
+    if ($null -ne $unownedResult -or -not [IO.File]::ReadAllText($scriptPath).Contains('-- user change')) {
+        throw "A user-modified addon was silently overwritten"
+    }
+    Write-Host "AUTOLOOT_UPDATER_SMOKE: PASS x86 resources, silent chat, exact SHA, log whitelist/privacy, wrong EXE rejection, managed refresh and backup/restore"
 } finally {
     if (Test-Path $folder) { Remove-Item -LiteralPath $folder -Recurse -Force }
 }

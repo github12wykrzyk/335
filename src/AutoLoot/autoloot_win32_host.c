@@ -26,33 +26,6 @@ static AlGuid g_last_owned;
 static unsigned g_init_attempted;
 static DWORD g_last_drive_ms;
 static unsigned g_driving;
-/* Loader configures its peer before hook installation. All callbacks run
- * through the existing AutoLoot hooks on the same verified game thread. */
-typedef int (__stdcall *al_peer_bind_fn)(const void *);
-typedef void (__stdcall *al_peer_tick_fn)(uint32_t);
-typedef void (__stdcall *al_peer_enable_fn)(int);
-static struct {
-    const void *policy;
-    al_peer_bind_fn bind;
-    al_peer_tick_fn tick;
-    al_peer_enable_fn enable;
-    volatile LONG status; /* 0=absent, 1=configured, 2=bound, -1=failed */
-    DWORD thread;
-} g_peer;
-__declspec(dllexport) int __stdcall AL335_ConfigurePeer(
-    const void *policy, al_peer_bind_fn bind, al_peer_tick_fn tick,
-    al_peer_enable_fn enable) {
-    if (g_init_attempted || g_peer.status || !policy || !bind || !tick || !enable)
-        return 0;
-    g_peer.policy=policy; g_peer.bind=bind;
-    g_peer.tick=tick; g_peer.enable=enable;
-    InterlockedExchange(&g_peer.status,1);
-    return 1;
-}
-__declspec(dllexport) LONG __stdcall AL335_PeerStatus(void) {
-    return InterlockedCompareExchange(&g_peer.status,0,0);
-}
-
 
 typedef void (__cdecl *al_lua_fn)(const char *, const char *, int);
 
@@ -285,20 +258,8 @@ static void handle_control(UINT message, WPARAM command) {
         }
     }
     if (!g_engine.bound || !is_game_thread()) return;
-    if (g_peer.status==1) {
-        if (g_peer.bind(g_peer.policy)==1) {
-            g_peer.thread=GetCurrentThreadId();
-            InterlockedExchange(&g_peer.status,2);
-        } else InterlockedExchange(&g_peer.status,-1);
-    }
-    if (command==1u) {
-        /* A failed peer never silently leaves an AutoLoot-only session. */
-        if (g_peer.status==1 || g_peer.status==-1) return;
-        al12340_enable(&g_engine,1);
-    } else if (command==0u) {
-        al12340_enable(&g_engine,0);
-        if (g_peer.status==2) g_peer.enable(0);
-    }
+    if (command==1u) al12340_enable(&g_engine, 1);
+    else if (command==0u) al12340_enable(&g_engine, 0);
 }
 static void drive_engine(void) {
     DWORD now;
@@ -309,9 +270,6 @@ static void drive_engine(void) {
     g_last_drive_ms=now;
     g_driving=1u;
     al12340_tick(&g_engine, (uint32_t)now);
-    /* PP stays disabled until an explicit command after policy verification. */
-    if (g_peer.status==2 && g_peer.thread==GetCurrentThreadId())
-        g_peer.tick((uint32_t)now);
     g_driving=0u;
 }
 __declspec(dllexport) LRESULT CALLBACK AL335_HookProc(int code, WPARAM wp, LPARAM lp) {

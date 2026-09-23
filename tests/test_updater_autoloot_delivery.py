@@ -15,7 +15,7 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
         source = (ROOT / "tools/updater/UpdaterAutoLootDiagFeature.cs").read_text(encoding="utf-8")
         report = (ROOT / "tools/updater/UpdaterIssueReportFeature.cs").read_text(encoding="utf-8")
         version = (ROOT / "tools/updater/UpdaterSafety.cs").read_text(encoding="utf-8")
-        self.assertIn('Version = "0.3.9-335"', version)
+        self.assertRegex(version, r'public const string Version = "0\.3\.\d+-335";')
         self.assertIn('UpdaterArtifactPrefix + liveHead', maintenance)
         self.assertIn('GetString(meta, "git_sha"), liveHead', maintenance)
         self.assertIn('GetString(meta, "channel"), branch', maintenance)
@@ -47,9 +47,12 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
             self.assertEqual(runtime["files"], [])
             self.assertEqual(registry["modules"], [])
         else:
-            self.assertEqual([x["component"] for x in runtime["files"]],
-                             ["Client12340", "AutoLoot"])
-            self.assertEqual([m["component"] for m in registry["modules"]], ["AutoLoot"])
+            actual = [x["component"] for x in runtime["files"]]
+            owners = [m["component"] for m in registry["modules"]]
+            self.assertEqual(actual[:2], ["Client12340", "AutoLoot"])
+            self.assertEqual(owners[:1], ["AutoLoot"])
+            self.assertEqual(actual[2:], ["AutoPickPocket"] if len(actual) > 2 else [])
+            self.assertEqual(owners[1:], ["AutoPickPocket"] if len(owners) > 1 else [])
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import json
+import os
 import re
 import sys
 from manifest_common import ROOT, load_json
@@ -92,10 +93,36 @@ def route(ledger, module, requested=None):
             "reason": "new-isolated-experiment-check-live-head-before-creation",
             "requires_live_head_check": True}
 
+
+def scope_errors(ledger, runtime, branch):
+    """Fail closed when a feature run would package unrelated active DLLs."""
+    if not isinstance(branch, str) or not branch:
+        return ["missing branch identity"]
+    if not branch.startswith("feature/"):
+        return []
+    matches = [e for e in ledger.get("experiments", [])
+               if isinstance(e, dict) and e.get("branch") == branch]
+    if len(matches) != 1:
+        return [branch + ": exactly one registered experiment is required before a game package"]
+    experiment = matches[0]
+    if experiment.get("status") not in ("in_progress", "testing", "accepted"):
+        return [branch + ": experiment status does not permit packaging"]
+    modules = experiment.get("modules")
+    if not isinstance(modules, list) or not modules:
+        return [branch + ": experiment has no declared game modules"]
+    active = {row.get("component") for row in runtime.get("files", [])
+              if isinstance(row, dict) and row.get("kind") == "dll"}
+    missing = sorted(set(modules) - active)
+    if missing:
+        return [branch + ": INCOMPLETE_EXPERIMENT; missing active DLL components: " +
+                ", ".join(missing)]
+    return []
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("validate")
+    sub.add_parser("verify-scope")
     route_cmd = sub.add_parser("route")
     route_cmd.add_argument("--module", required=True)
     route_cmd.add_argument("--branch")
@@ -109,6 +136,15 @@ def main():
             return 1
         if args.command == "validate":
             print("EXPERIMENT_LEDGER: PASS; experiments", len(ledger["experiments"]))
+        elif args.command == "verify-scope":
+            branch = os.environ.get("GITHUB_REF_NAME", "")
+            runtime = load_json(ROOT / "runtime/current.json")
+            errors = scope_errors(ledger, runtime, branch)
+            if errors:
+                for error in errors:
+                    print("EXPERIMENT_SCOPE: FAIL", error)
+                return 1
+            print("EXPERIMENT_SCOPE: PASS; branch", branch)
         else:
             print(json.dumps(route(ledger, args.module, args.branch), indent=2))
         return 0

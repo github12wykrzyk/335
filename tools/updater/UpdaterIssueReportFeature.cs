@@ -403,17 +403,10 @@ namespace WoW335Updater
             {
                 var debugDir = Path.Combine(root, ".wow335_debug");
                 if (!Directory.Exists(debugDir)) return new string[0];
-                // Always include AutoPickPocket, even if other modules have
-                // written three newer files. Reuse the existing report button.
-                var pickPocket = Path.Combine(debugDir, "AutoPickPocket.jsonl");
-                var newest = Directory.GetFiles(debugDir, "*.jsonl")
-                    .OrderByDescending(File.GetLastWriteTimeUtc);
-                if (File.Exists(pickPocket))
-                    return new[] { pickPocket }.Concat(newest
-                        .Where(path => !string.Equals(path, pickPocket,
-                            StringComparison.OrdinalIgnoreCase))
-                        .Take(2)).ToArray();
-                return newest.Take(3).ToArray();
+                return Directory.GetFiles(debugDir, "*.jsonl")
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .Take(3)
+                    .ToArray();
             }
 
             private async Task<long> FindExistingIssueAsync(HttpClient client, string marker)

@@ -47,5 +47,5 @@
       "docs": "src/AutoLoot/NATIVE_ADAPTER.md"
     }
   ],
-  "state": "infrastructure-only"
+  "state": "test-candidate"
 }

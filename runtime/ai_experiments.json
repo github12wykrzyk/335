@@ -19,7 +19,7 @@
         "logical:targeting"
       ],
       "status": "in_progress",
-      "observed_head": "04e2086ce0023ae9a853995a4c6d23c1bc8fc9d6",
+      "observed_head": "2ec3f478cd9113a434036fe454d31a449dc161a9",
       "verified_commit": null,
       "tests": [],
       "package": null
