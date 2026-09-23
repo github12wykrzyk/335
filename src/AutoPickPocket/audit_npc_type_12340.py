@@ -19,7 +19,7 @@ def check_binary(binary: bytes, sha: str, size: int) -> None:
         raise ValueError("wrong exact Wow.exe hash or size")
     if binary[:2]!=b"MZ": raise ValueError("not MZ")
     pe=struct.unpack_from("<I",binary,0x3c)[0]
-    if binary[pe:pe+4]!=b"PE\\0\\0" or struct.unpack_from("<H",binary,pe+4)[0]!=0x14c:
+    if binary[pe:pe+4]!=bytes((80,69,0,0)) or struct.unpack_from("<H",binary,pe+4)[0]!=0x14c:
         raise ValueError("not PE32 x86")
     opt=pe+24
     if struct.unpack_from("<H",binary,opt)[0]!=0x10b: raise ValueError("not PE32")
