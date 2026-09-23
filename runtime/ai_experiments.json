@@ -4,9 +4,9 @@
   "purpose": "Experiment ownership, dependency and exact-SHA in-game test evidence. Live GitHub HEAD and runtime/current.json remain authoritative.",
   "experiments": [
     {
-      "id": "autopickpocket-12340",
-      "goal": "Isolated automated Pick Pocket on nearby NPCs with GUID history, silent commands and loader-report diagnostics; native game adapter not yet verified",
-      "branch": "feature/autopickpocket-12340",
+      "id": "autopickpocket-packets-12340",
+      "goal": "Separate 12340 native CMSG_CAST_SPELL packet transport and correlated GUID Pick Pocket; protocol codec audited, exact game sender ABI not yet verified",
+      "branch": "feature/autopickpocket-packets-12340",
       "modules": [
         "AutoPickPocket"
       ],
@@ -16,10 +16,11 @@
       "shared_resources": [
         "wow12340:object-manager",
         "logical:spell-cast",
-        "logical:targeting"
+        "logical:targeting",
+        "logical:packet-send"
       ],
-      "status": "in_progress",
-      "observed_head": "2ec3f478cd9113a434036fe454d31a449dc161a9",
+      "status": "blocked",
+      "observed_head": "57064c5cc071e3212ee72c356bcc008dc1a1746d",
       "verified_commit": null,
       "tests": [],
       "package": null
