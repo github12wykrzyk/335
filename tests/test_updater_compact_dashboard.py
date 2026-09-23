@@ -22,7 +22,7 @@ class CompactUpdaterDashboardTests(unittest.TestCase):
         self.assertIn("monitorStrips = UiGrid(3, 2);", monitor)
         self.assertIn("Arrange335MonitorBadges(branches)", monitor)
         self.assertIn('"/branches?per_page=100"', monitor)
-        self.assertIn('"branch=" + Uri.EscapeDataString(b)', monitor)
+        self.assertIn('"/actions/runs?branch=" + Uri.EscapeDataString(b)', monitor)
         self.assertIn("i < branches.Count && i < 6", monitor)
         self.assertIn("Interval = 20000", monitor)
 

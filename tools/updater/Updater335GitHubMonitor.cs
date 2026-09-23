@@ -93,9 +93,8 @@ namespace WoW335Updater
                 : yellow ? Color.FromArgb(255, 221, 153)
                 : red ? Color.FromArgb(255, 178, 188) : UiMuted;
             var shortHead = string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length));
-            var compactName = branch.Replace("feature/", "").Replace("promote/", "promote/");
+            var compactName = branch.Replace("feature/", "").Replace("promote/", "p/");
             badge.Text = compactName + "  •  " + state;
-            dashboardTips.SetToolTip(badge, branch + " • " + shortHead);
             var tooltip = detail + "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss");
             dashboardTips.SetToolTip(outline, tooltip);
             dashboardTips.SetToolTip(badge, tooltip);
