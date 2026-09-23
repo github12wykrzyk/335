@@ -11,13 +11,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class AutoPickPocketDeliveryTests(unittest.TestCase):
     def test_current_isolated_adapter_not_considered_playable(self):
-        blockers = inspect(ROOT)
-        self.assertTrue(any("ACTIVE_RUNTIME" in s for s in blockers))
-        self.assertTrue(any("GAME_POLICY" in s or "MISSING_SOURCE: src/AutoPickPocket/autopickpocket_game_policies.c" in s
-                            for s in blockers))
-        self.assertTrue(any("GAME_THREAD_LOADER" in s or "MISSING_SOURCE: src/Loader12340/Wow335Loader.c" in s
-                            for s in blockers))
-        self.assertTrue(any("UPDATER" in s for s in blockers))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "runtime").mkdir()
+            (root / "runtime/current.json").write_text(json.dumps({
+                "files": [{"component": "Client12340", "kind": "exe"},
+                          {"component": "AutoLoot", "kind": "dll"}]}))
+            (root / "runtime/module_registry.json").write_text(json.dumps({
+                "modules": [{"component": "AutoLoot"}]}))
+            (root / "tools/updater").mkdir(parents=True)
+            (root / "tools/updater/UpdaterAutoLootRuntimeFeature.cs").write_text(
+                "if (listed.Length != 1) reject();")
+            blockers = inspect(root)
+            self.assertTrue(any("ACTIVE_RUNTIME" in s for s in blockers))
+            self.assertTrue(any("MISSING_SOURCE: src/AutoPickPocket/autopickpocket_game_policies.c" in s
+                                for s in blockers))
+            self.assertTrue(any("MISSING_SOURCE: src/Loader12340/Wow335Loader.c" in s
+                                for s in blockers))
+            self.assertTrue(any("UPDATER" in s for s in blockers))
     def test_empty_fixture_rejected_not_exception(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIn("MISSING_SOURCE: runtime/current.json", inspect(Path(tmp)))
@@ -32,6 +43,10 @@ class AutoPickPocketDeliveryTests(unittest.TestCase):
         self.assertIn("if: always()", wf)  # exact-SHA blocker report even on failure
         self.assertIn("FINAL_PACKAGE gate", wf)
         self.assertNotIn("continue-on-error:", wf)
+        candidate = (ROOT / ".github/workflows/build_work_candidate.yml").read_text(encoding="utf-8")
+        self.assertLess(candidate.index("Block AutoLoot-only package on AutoPickPocket feature branch"),
+                        candidate.index("Package and strictly verify runnable client"))
+        self.assertIn("tools/autopickpocket_delivery.py --report", candidate)
 
 if __name__ == "__main__":
     unittest.main()

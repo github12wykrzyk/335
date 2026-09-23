@@ -71,6 +71,19 @@ jobs:
         run: |
           python tools/candidate_readiness.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Block AutoLoot-only package on AutoPickPocket feature branch
+        if: github.ref_name == 'feature/autopickpocket-12340' && steps.pp_route.outputs.core_only != 'true' && steps.readiness.outputs.ready == 'true'
+        shell: pwsh
+        run: |
+          python tools/autopickpocket_delivery.py --report dist/autopickpocket_delivery.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload AutoPickPocket blocker report on full candidate rejection
+        if: always() && github.ref_name == 'feature/autopickpocket-12340' && steps.pp_route.outputs.core_only != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoPickPocket-CANDIDATE-STATUS-${{ github.sha }}
+          path: dist/autopickpocket_delivery.json
+          if-no-files-found: warn
       - name: Build all registered game DLLs (only when runtime is ready)
         if: steps.pp_route.outputs.core_only != 'true' && steps.readiness.outputs.ready == 'true'
         shell: pwsh

@@ -58,7 +58,10 @@ def core_only(branch: str, changed: set[str], manifest: dict, registry: dict) ->
                     ".github/workflows/build_work_candidate.yml",
                     "tools/autopickpocket_experiment.py",
                     "runtime/ai_experiments.json",
-                    ".github/workflows/audit_autopickpocket_abi.yml"}
+                    ".github/workflows/audit_autopickpocket_abi.yml",
+                    ".github/workflows/autopickpocket_delivery.yml",
+                    "tools/autopickpocket_delivery.py",
+                    "PROJECT_INSTRUCTIONS.md"}
         for path in changed
     )
 
