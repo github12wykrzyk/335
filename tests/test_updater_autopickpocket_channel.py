@@ -19,6 +19,9 @@ class PickPocketUpdaterChannelTests(unittest.TestCase):
         self.assertIn('remote.Channel == "pp_test" ? PpTestBranch : "work"', self.source)
         self.assertIn('UpdaterSafety.RequireLatestSuccessfulRun(runs, workflowName, branch)', self.source)
         self.assertIn('!string.Equals(GetString(chosen, "head_sha"), liveHead', self.source)
+    def test_feature_branch_builds_the_updater(self):
+        wf = (ROOT / ".github/workflows/build_updater.yml").read_text(encoding="utf-8")
+        self.assertIn("'feature/autopickpocket-12340'", wf)
     def test_pp_cannot_launch_via_autoloot_only_fallback(self):
         guard = self.source.index('AutoPickPocket TEST: wymagany jest zweryfikowany wspólny loader.')
         launch = self.source.index('if (!TryLaunchInstalledAutoLoot(root, exe, state))')

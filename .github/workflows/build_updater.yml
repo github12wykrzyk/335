@@ -6,6 +6,7 @@ on:
       - work
       - main
       - 'feature/autoloot-12340'
+      - 'feature/autopickpocket-12340'
     paths:
       - 'tools/updater/**'
       - 'src/AutoLoot/autoloot_win32_launcher.c'
