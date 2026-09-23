@@ -25,8 +25,8 @@
     {
       "component": "AutoLoot",
       "path": "runtime/AutoLoot335.dll",
-      "version": "1.0.1-test",
-      "sha256": "6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3",
+      "version": "1.0.1-test+sha.ff37c95efbfa",
+      "sha256": "ff37c95efbfa4dd061d1ad9e409a96a59f3d66cc2164ed63fba4a3fd5dfc052c",
       "arch": "x86",
       "canonical_source": "src/AutoLoot/autoloot_win32_host.c",
       "depends_on": [],
