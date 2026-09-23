@@ -52,7 +52,7 @@ try {
     $arrange=$type.GetMethod('Arrange335MonitorBadges',
         [Reflection.BindingFlags]::NonPublic -bor [Reflection.BindingFlags]::Instance)
     $parameters=[object[]]::new(1)
-    $parameters[0]=$branches
+    $parameters[0]=$branches.PSObject.BaseObject
     $null=$arrange.Invoke($form,$parameters)
     $form.PerformLayout()
     $badges.PerformLayout()
@@ -68,7 +68,7 @@ try {
     foreach ($name in @('work','main','feature/autoloot-12340',
         'feature/autopickpocket-12340','feature/loader-12340',
         'promote/stable-infrastructure-12340')) { $six.Add($name) }
-    $parameters[0]=$six
+    $parameters[0]=$six.PSObject.BaseObject
     $null=$arrange.Invoke($form,$parameters)
     $badges.PerformLayout()
     if ($badges.Controls.Count -ne 6 -or $badges.Controls[0].Width -lt 112) {
