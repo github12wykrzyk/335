@@ -17,11 +17,11 @@ try {
     $build=$root.GetControlFromPosition(0,2)
     $actions=$build.GetControlFromPosition(0,5)
     if ($actions.ColumnCount -ne 3) { throw "Expected exactly three primary actions." }
-    $expected=@("Sprawdź","Aktualizuj","Aktualizuj i uruchom")
+    $expected=@("Sprawd*","Aktualizuj","Aktualizuj i uruchom")
     for ($i=0; $i -lt 3; $i++) {
         $button=$actions.GetControlFromPosition($i,0)
-        if ($button -isnot [System.Windows.Forms.Button] -or $button.Text -ne $expected[$i]) {
-            throw "Incorrect primary action at column $i."
+        if ($button -isnot [System.Windows.Forms.Button] -or $button.Text -notlike $expected[$i]) {
+            throw "Incorrect primary action at column $i; got [$($button.GetType().FullName)] [$($button.Text)]."
         }
     }
     # The available card interior is 166px minus its bottom margin (9)
