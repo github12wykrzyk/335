@@ -126,6 +126,7 @@ static int test_next_target_rescan_no_extra_tick(void){
  pp_tick(&e,10u);CHECK(s.cast_n==1 && s.casted[0].lo==102u);
  s.result=PP_RESULT_SUCCESS;
  pp_tick(&e,11u);CHECK(s.cast_n==2 && s.casted[1].lo==101u);
+ CHECK(s.scans==1u); /* second GUID from the initial bounded queue */
  CHECK(s.events[PP_EVENT_SUCCESS]==1);
  s.result=PP_RESULT_EMPTY;
  pp_tick(&e,12u);CHECK(s.cast_n==2 && s.events[PP_EVENT_EMPTY]==1);
@@ -143,4 +144,24 @@ static int test_failed_or_timedout_npc_does_not_block_next_guid(void){
                          s.casted[3].lo==101u);
  return 0;
 }
-int main(void){if(test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+static int test_stale_queue_rebuilds_before_cast(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,10u);CHECK(s.cast_n==1 && s.casted[0].lo==102u);
+ CHECK(s.scans==1u && e.queue_count==1u);
+ /* NPC 101 disappeared, GUID 103 spawned while result was pending. */
+ s.n=1u;s.t[0].guid.lo=103u;s.t[0].eligible=1u;
+ s.t[0].distance_sq=1.0f;
+ s.result=PP_RESULT_SUCCESS;
+ pp_tick(&e,1300u); /* 1290ms after scan: snapshot expired */
+ CHECK(s.cast_n==2 && s.casted[1].lo==103u && s.scans==2u);
+ return 0;
+}
+static int test_queue_dropped_on_disable_and_world_reset(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,10u);CHECK(e.queue_count==1u);
+ pp_enable(&e,0);CHECK(e.queue_count==0u);
+ pp_enable(&e,1);pp_tick(&e,20u);CHECK(e.queue_count==1u);
+ pp_reset(&e);CHECK(e.queue_count==0u);
+ return 0;
+}
+int main(void){if(test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

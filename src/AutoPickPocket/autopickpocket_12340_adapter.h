@@ -23,6 +23,8 @@ typedef struct {
     int (*verify_exe_sha256)(void *, const char *expected);
     int (*verify_cast_abi)(void *, uintptr_t native_cast_va, uintptr_t position_va);
     uint32_t (*thread_id)(void *);
+    /* Optional monotonic clock for diagnostic scan-duration measurement. */
+    uint32_t (*clock_ms)(void *);
     int (*read_u32)(void *, uintptr_t addr, uint32_t *out);
     int (*position)(void *, uintptr_t unit_obj, float xyz[3]);
     /* Must prove allowed living non-player NPC with native creature type 6/7.
@@ -44,6 +46,7 @@ typedef struct {
     uint32_t owner_thread;
     uint64_t current_world;
     uint32_t cached_manager,cached_player_obj;
+    uint32_t last_scan_duration_ms,last_scan_candidates;
     unsigned bound;
 } Pp12340Adapter;
 int pp12340_bind(Pp12340Adapter *a, const Pp12340Host *host);

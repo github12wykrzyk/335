@@ -71,6 +71,7 @@ void pp_enable(PpEngine *engine, int enable) {
     engine->active_valid=0u;
     engine->active_attempt_id=0u;
     engine->scan_started=0u;
+    engine->queue_count=0u;
     engine->probe_mode=0u;
 }
 void pp_reset(PpEngine *engine) {
@@ -83,6 +84,7 @@ void pp_reset(PpEngine *engine) {
     engine->probe_mode=0u;
     engine->active_attempt_id=0u; /* keep next_attempt_id across world resets */
     engine->scan_started=0u;
+    engine->queue_count=0u;
 }
 /* Reject an unverified target, rather than substituting a nearby NPC.
  * Once submitted, pp_tick only observes the result or timeout.
@@ -134,9 +136,8 @@ int pp_probe_once(PpEngine *e,PpGuid selected,uint32_t now) {
     return 1;
 }
 void pp_tick(PpEngine *engine, uint32_t now) {
-    PpTarget targets[PP_SCAN_CAP];
     PpTarget best = {0}; /* MSVC /W4: initialized even on the no-candidate path. */
-    size_t i, count;
+    size_t i;
     int found=0;
     PpHistory *h;
     PpResult outcome;
@@ -152,7 +153,6 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             if (engine->probe_mode) {engine->enabled=0u;return;}
             /* A terminal GUID is excluded from the very next scan.
              * Reuse this pulse for a different nearby target. */
-            engine->scan_started=0u;
             goto scan_next;
         case PP_RESULT_EMPTY:
             block(engine,engine->active,now,0u,1);
@@ -160,20 +160,18 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             emit(engine,PP_EVENT_EMPTY,engine->active);
             engine->active_valid=0u;
             if (engine->probe_mode) {engine->enabled=0u;return;}
-            engine->scan_started=0u;
             goto scan_next;
         case PP_RESULT_PERMANENT:
             block(engine,engine->active,now,0u,1);
             emit(engine,PP_EVENT_INELIGIBLE,engine->active);
             engine->active_valid=0u;
-            if (engine->probe_mode) engine->enabled=0u;
-            return;
+            if (engine->probe_mode) {engine->enabled=0u;return;}
+            goto scan_next;
         case PP_RESULT_RETRYABLE:
             failure(engine,engine->active,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
             ++engine->retries;
             engine->active_valid=0u;
             if (engine->probe_mode) {engine->enabled=0u;return;}
-            engine->scan_started=0u;
             goto scan_next;
         case PP_RESULT_PENDING: break;
         default: return; /* unknown result fails closed */
@@ -184,47 +182,68 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         engine->active_valid=0u;
         if (engine->probe_mode) {engine->enabled=0u;return;}
         /* A timed-out NPC must not stall independent eligible GUIDs. */
-        engine->scan_started=0u;
         goto scan_next;
     }
 scan_next:
     if (engine->probe_mode) return;
-    if (engine->scan_started && (uint32_t)(now-engine->last_scan_ms)<PP_SCAN_INTERVAL_MS)
-        return;
-    engine->scan_started=1u;
-    engine->last_scan_ms=now;
+    /* One bounded snapshot covers several nearby GUIDs. A candidate is
+     * consumed once; a queued GUID never bypasses pp_cast's fresh range and
+     * type checks. Refill after expiry/exhaustion, no repeated full walk
+     * following each successful Pick Pocket. */
+    if (engine->queue_count &&
+        (uint32_t)(now-engine->queue_built_ms)>=PP_QUEUE_TTL_MS)
+        engine->queue_count=0u;
     if (engine->api.can_cast(engine->api.ctx)!=1) {
         idle_event(engine,PP_EVENT_NOT_CASTABLE,now);
         return;
     }
-    count=engine->api.scan(engine->api.ctx,targets,PP_SCAN_CAP);
-    if (count>PP_SCAN_CAP) count=PP_SCAN_CAP;
-    if (!count) {
-        idle_event(engine,PP_EVENT_NO_CANDIDATES,now);
-        return;
+    if (!engine->queue_count) {
+        if (engine->scan_started &&
+            (uint32_t)(now-engine->last_scan_ms)<PP_SCAN_INTERVAL_MS)
+            return;
+        engine->scan_started=1u;
+        engine->last_scan_ms=now;
+        engine->queue_built_ms=now;
+        engine->queue_count=engine->api.scan(engine->api.ctx,
+                                            engine->queue,PP_SCAN_CAP);
+        if (engine->queue_count>PP_SCAN_CAP)
+            engine->queue_count=PP_SCAN_CAP;
+        if (!engine->queue_count) {
+            idle_event(engine,PP_EVENT_NO_CANDIDATES,now);
+            return;
+        }
     }
-    for(i=0u;i<count;++i) {
-        PpTarget target=targets[i];
+    /* Select the nearest *unblocked* queued GUID and consume it. Keep
+     * blocked entries only until this snapshot expires; never retry a
+     * rejected GUID in a tight loop. */
+    for(i=0u;i<engine->queue_count;++i) {
+        PpTarget target=engine->queue[i];
         if (!target.eligible || !nonzero(target.guid) ||
-            !(target.distance_sq>=0.0f && target.distance_sq<FLT_MAX)) continue;
+            !(target.distance_sq>=0.0f && target.distance_sq<FLT_MAX))
+            continue;
         h=entry(engine,target.guid,0);
-        if (h && (h->terminal || !deadline_reached(now,h->blocked_until_ms))) continue;
+        if (h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
+                  !deadline_reached(now,h->blocked_until_ms)))
+            continue;
         if (!found || target.distance_sq<best.distance_sq) {
             best=target;
             found=1;
         }
     }
     if (!found) {
+        engine->queue_count=0u;
         idle_event(engine,PP_EVENT_ALL_BLOCKED,now);
         return;
     }
-    /* Record every submission attempt, including native rejection. */
-    h=entry(engine,best.guid,1);
-    if (h->attempts>=PP_MAX_ATTEMPTS_PER_GUID) {
-        h->terminal=1u;
-        emit(engine,PP_EVENT_GAVE_UP,best.guid);
-        return;
+    /* Only one native cast submission in a loader pulse. */
+    for(i=0u;i<engine->queue_count;++i) {
+        if(same(engine->queue[i].guid,best.guid)) {
+            engine->queue[i]=engine->queue[engine->queue_count-1u];
+            --engine->queue_count;
+            break;
+        }
     }
+    h=entry(engine,best.guid,1);
     ++h->attempts;
     if (++engine->next_attempt_id==0u) ++engine->next_attempt_id;
     engine->active_attempt_id=engine->next_attempt_id;
@@ -237,7 +256,5 @@ scan_next:
     } else {
         failure(engine,best.guid,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
         ++engine->retries;
-        /* Do not override the native-cast-per-pulse bound after an
-         * ambiguous rejected submission. Try another GUID next pulse. */
     }
 }

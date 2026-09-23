@@ -11,6 +11,7 @@ extern "C" {
 #define PP_SCAN_CAP 64u
 #define PP_HISTORY_CAP 256u
 #define PP_SCAN_INTERVAL_MS 20u
+#define PP_QUEUE_TTL_MS 1200u
 #define PP_RESULT_TIMEOUT_MS 1500u
 #define PP_RETRY_DELAY_MS 800u
 #define PP_TIMEOUT_DELAY_MS 3000u
@@ -74,6 +75,11 @@ typedef struct {
     /* Monotonic nonce isolates delayed responses from old casts or worlds. */
     uint32_t active_attempt_id, next_attempt_id;
     uint32_t started_ms, last_scan_ms;
+    /* Ephemeral nearby GUID snapshot: each candidate is removed after one
+     * submission; the adapter revalidates identity, range and spell on cast. */
+    PpTarget queue[PP_SCAN_CAP];
+    size_t queue_count;
+    uint32_t queue_built_ms;
     unsigned history_next, active_valid, enabled, scan_started;
     unsigned probe_mode;
     uint32_t last_diagnostic_ms;

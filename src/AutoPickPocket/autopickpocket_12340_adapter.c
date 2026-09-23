@@ -71,7 +71,10 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
     PpGuid player_guid, guid;
     float me[3],pos[3];
     size_t count=0u;
+    uint32_t scan_started=a->host.clock_ms ? a->host.clock_ms(a->host.ctx) : 0u;
     unsigned i;
+    a->last_scan_duration_ms=0u;
+    a->last_scan_candidates=0u;
     if (!out || !cap || !mgr(a,&manager) ||
         !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID,&player_guid.lo) ||
         !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID+4u,&player_guid.hi) ||
@@ -117,6 +120,9 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
         if (!read32(a,(uintptr_t)obj+PP_OBJ_NEXT,&next) || next==obj) break;
         obj=next;
     }
+    a->last_scan_candidates=(uint32_t)count;
+    if(a->host.clock_ms)
+        a->last_scan_duration_ms=(uint32_t)(a->host.clock_ms(a->host.ctx)-scan_started);
     return count;
 }
 static int pp_can_cast(void *ctx) {

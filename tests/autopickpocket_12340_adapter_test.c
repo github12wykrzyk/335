@@ -17,6 +17,7 @@ typedef struct {
     uint32_t last_attempt,expected_result_attempt;
     unsigned player_pos_calls,move_player_after_scan;
     unsigned eligible_calls;
+    uint32_t clock_value;
     float npc_b_distance;
     PpGuid last_guid;
 } Mock;
@@ -28,6 +29,7 @@ static int abi(void *p,uintptr_t spell,uintptr_t pos) {
            pos==PP12340_POSITION_VA;
 }
 static uint32_t tid(void *p){return ((Mock*)p)->thread;}
+static uint32_t mock_clock(void *p){Mock *m=(Mock*)p;m->clock_value+=3u;return m->clock_value;}
 static uint64_t world(void *p){return ((Mock*)p)->world;}
 static int read32(void *p,uintptr_t addr,uint32_t *out){
     (void)p;
@@ -89,6 +91,7 @@ static void event(void *p,PpEvent ev,PpGuid g,uint32_t attempt){Mock *m=(Mock*)p
 static Pp12340Host host(Mock *m) {
     Pp12340Host h;memset(&h,0,sizeof(h));h.ctx=m;
     h.verify_exe_sha256=digest;h.verify_cast_abi=abi;h.thread_id=tid;
+    h.clock_ms=mock_clock;
     h.read_u32=read32;h.position=pos;h.eligible_npc=eligible;
     h.spell_usable=usable;h.cast_guid=cast;h.cast_result=result;
     h.world_token=world;h.event=event;return h;
@@ -193,6 +196,7 @@ static int test_cached_player_revalidates_and_resets(void){
  CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
  pp12340_tick(&a,0u);
  CHECK(a.cached_manager==MANAGER && a.cached_player_obj==PLAYER);
+ CHECK(a.last_scan_candidates==2u && a.last_scan_duration_ms==3u);
  pp12340_reset(&a);
  CHECK(a.cached_manager==0u && a.cached_player_obj==0u);
  pp12340_tick(&a,20u);

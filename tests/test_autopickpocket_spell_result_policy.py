@@ -44,13 +44,13 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn("verify_hash(NULL,PP12340_CLIENT_SHA256)",HOST)
         self.assertIn("if (g_initialized && command==2u)",HOST)
         self.assertNotIn("LootSlot(",POLICY)
-        self.assertIn("policy.on_success=release_completed_target",POLICY)
-        self.assertIn("string.upper(UnitGUID('target'))=='0X",POLICY)
-        self.assertIn("then ClearTarget() end",POLICY)
-        self.assertIn("ClearTarget();_G.W335PP_DONE=n",POLICY)
-        self.assertIn("_G.W335PP_DONE~=n",POLICY)
-        self.assertIn("elapsed>=80u",POLICY)
-        self.assertIn("kind==PP_EVENT_SUCCESS",HOST)
-        self.assertNotIn("ClearTarget()",HOST)
+        for source in (POLICY,HOST):
+            for forbidden in ("ClearTarget(", "TargetUnit(", "UnitGUID('target')",
+                              "on_success", "release_completed_target"):
+                self.assertNotIn(forbidden,source)
+        for metric in ("scan_ms","scan_candidates","queue_depth","queue_age_ms",
+                       "pulse_gap_ms","cast_gap_ms","result_wait_ms","next_wait_ms"):
+            self.assertIn(metric,HOST)
+        self.assertIn("h.clock_ms=clock_ms",HOST)
 if __name__=="__main__":
     unittest.main()
