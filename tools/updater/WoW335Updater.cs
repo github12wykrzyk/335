@@ -215,6 +215,9 @@ namespace WoW335Updater
             {
                 ValidateInputs();
                 SaveConfig(false);
+                if (UseEpochTestFlow() &&
+                    !await MaintenanceFeature.EnsureCurrentUpdaterAsync(this))
+                    return; // updater restart/error; never use an obsolete game-package workflow
                 SetBusy(true, "Sprawdzanie GitHuba...");
                 if (UseEpochTestFlow())
                 {
@@ -269,7 +272,11 @@ namespace WoW335Updater
         private async Task<bool> UpdateAsync()
         {
             if (UseEpochTestFlow())
+            {
+                if (!await MaintenanceFeature.EnsureCurrentUpdaterAsync(this))
+                    return false; // newer updater will restart; no premature game launch
                 return await EpochInstallAsync();
+            }
             try
             {
                 ValidateInputs();

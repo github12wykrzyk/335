@@ -218,3 +218,14 @@ przed nadpisaniem aktywnego eksperymentu.
 Przed pełnym autonomicznym instalowaniem na czystej instalacji klienta
 wymagany jest dopuszczony komplet zależnych DLL i manifest: bieżący
 Epoch TEST integruje tylko zweryfikowany stan AutoLoot z work/149a2523.
+
+## 0.3.13-335-epoch-test — bez osobnego przycisku aktualizacji updatera
+
+Każda operacja Sprawdź, Aktualizuj lub Aktualizuj i uruchom na kanale
+Epoch TEST najpierw sprawdza najnowszy udany workflow updatera na
+dokładnym SHA brancha feature/loader-12340. Jeśli wersja aplikacji się
+zmieniła, pobiera i weryfikuje nowy updater, restartuje aplikację,
+a instalację DLL i uruchomienie gry wstrzymuje do ponownej akcji
+użytkownika. Zachowano oryginalny weryfikowany SHA256,
+Windows x86 bootstrap, kopię aktualnego updatera i odbudowę po błędzie.
+Brak dodatkowego przycisku self-update na ekranie.

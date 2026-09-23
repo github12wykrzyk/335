@@ -19,10 +19,23 @@ namespace WoW335Updater
 {
     internal static class MaintenanceFeature
     {
+        private static MaintenanceController activeController;
+
         public static void Attach(Form form)
         {
             if (form == null) return;
-            new MaintenanceController(form).Attach();
+            activeController = new MaintenanceController(form);
+            activeController.Attach();
+        }
+
+        // No separate updater button: all three primary actions first verify
+        // this executable against the exact current feature-branch CI artifact.
+        // False means restart was initiated or the update check failed.
+        public static async Task<bool> EnsureCurrentUpdaterAsync(Form form)
+        {
+            if (activeController == null)
+                throw new InvalidOperationException("Updater maintenance is not initialized.");
+            return await activeController.SelfUpdateAsync();
         }
 
         private sealed class MaintenanceController
@@ -190,13 +203,13 @@ namespace WoW335Updater
                 }
             }
 
-            private async Task SelfUpdateAsync()
+            internal async Task<bool> SelfUpdateAsync()
             {
                 string finalStatus = "Gotowy";
                 var exitingForUpdate = false;
                 try
                 {
-                    if (maintenanceBusy) return;
+                    if (maintenanceBusy) return false;
                     if (string.IsNullOrWhiteSpace(token.Text))
                         throw new InvalidOperationException("Wpisz GitHub token z prawem odczytu repozytorium i Actions.");
 
@@ -209,7 +222,7 @@ namespace WoW335Updater
                     {
                         finalStatus = "Updater jest aktualny (" + remote.Version + ").";
                         Log(finalStatus);
-                        return;
+                        return true;
                     }
 
                     var currentDir = Path.GetDirectoryName(currentExe);
@@ -241,12 +254,14 @@ namespace WoW335Updater
                     Log(finalStatus);
                     exitingForUpdate = true;
                     form.BeginInvoke((MethodInvoker)delegate { System.Windows.Forms.Application.Exit(); });
+                    return false;
                 }
                 catch (Exception ex)
                 {
                     finalStatus = "Aktualizacja updatera nie powiodła się";
                     Log("BŁĄD self-update: " + ex.Message);
                     MessageBox.Show(form, ex.Message, "WoW335 Updater", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return false;
                 }
                 finally
                 {
