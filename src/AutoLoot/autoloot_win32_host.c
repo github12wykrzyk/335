@@ -24,6 +24,8 @@ static UINT g_message;
 static unsigned g_was_owned;
 static AlGuid g_last_owned;
 static unsigned g_init_attempted;
+static DWORD g_last_drive_ms;
+static unsigned g_driving;
 
 typedef void (__cdecl *al_lua_fn)(const char *, const char *, int);
 
@@ -247,21 +249,35 @@ __declspec(dllexport) LRESULT CALLBACK AL335_HookProc(int code, WPARAM wp, LPARA
     if (code < 0 || !lp) return CallNextHookEx(NULL, code, wp, lp);
     msg=(MSG *)lp;
     if (!g_message) g_message=RegisterWindowMessageA(AL_WINMSG_NAME);
-    if (msg->message != g_message) return CallNextHookEx(NULL, code, wp, lp);
-    if (!g_init_attempted) {
-        g_init_attempted=1u;
-        g_game_thread=GetCurrentThreadId();
-        if (!bind_host()) {
-            g_game_thread=0;
-            return CallNextHookEx(NULL, code, wp, lp);
+    /* The external launcher now posts to the actual game HWND.  Some
+     * nested message pumps (mouse capture, held keys) may still filter out
+     * non-input messages.  Once initialized, opportunistically drive the
+     * state machine from ANY retrieved game-thread message, not only our
+     * registered timer command. This does not execute on a worker thread or
+     * install a new opcode hook, and does not interfere with game input. */
+    if (msg->message == g_message) {
+        if (!g_init_attempted) {
+            g_init_attempted=1u;
+            g_game_thread=GetCurrentThreadId();
+            if (!bind_host()) {
+                g_game_thread=0;
+                return CallNextHookEx(NULL, code, wp, lp);
+            }
         }
+        if (!g_engine.bound || !is_game_thread())
+            return CallNextHookEx(NULL, code, wp, lp);
+        if (msg->wParam==1u) al12340_enable(&g_engine, 1);
+        else if (msg->wParam==0u) al12340_enable(&g_engine, 0);
     }
-    if (!g_engine.bound || !is_game_thread()) return CallNextHookEx(NULL, code, wp, lp);
-    if (msg->wParam==1u) al12340_enable(&g_engine, 1);
-    else if (msg->wParam==0u) al12340_enable(&g_engine, 0);
-    else if (msg->wParam==2u) {
+    if (g_engine.bound && is_game_thread() && g_engine.engine.enabled &&
+        !g_driving && msg->message != WM_QUIT) {
         now=GetTickCount();
-        al12340_tick(&g_engine, (uint32_t)now);
+        if ((uint32_t)(now - g_last_drive_ms) >= 80u) {
+            g_last_drive_ms=now;
+            g_driving=1u;
+            al12340_tick(&g_engine, (uint32_t)now);
+            g_driving=0u;
+        }
     }
     return CallNextHookEx(NULL, code, wp, lp);
 }

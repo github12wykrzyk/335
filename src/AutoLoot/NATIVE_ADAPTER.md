@@ -40,3 +40,21 @@ simulated memory and verifies fail-closed ABI bind, thread ownership, loot
 request/drain, empty confirmation, per-GUID backoff and OFF. Windows CI
 also compiles the native PE32 x86 DLL separately but MUST NOT claim
 `FINAL_PACKAGE: PASS` before a real host and actual active runtime exist.
+
+## Held keyboard / mouse capture — test of native preview
+
+The x86 launcher now posts on/off/tick control messages to WoW's **window
+HWND**, not `PostThreadMessageW` (which uses a null HWND and can be
+filtered out in nested input message loops). The existing `WH_GETMESSAGE`
+callback also performs a time-gated AutoLoot tick on any retrieved game-thread
+message while the module is enabled, including ordinary keyboard and mouse
+traffic. A reentrancy guard permits at most one tick in flight and no more
+than one every 80 ms. There is no gameplay key-up gate.
+
+The active runtime still remains empty: this is an independently built
+experimental native preview retrieved by the TEST updater from an exact SHA.
+The in-game report that the earlier preview looted normally is evidence for
+that earlier test only; **held-input behavior for this new SHA is not yet
+verified**. These changes cannot execute while the client's game thread is
+completely frozen or pumps no messages at all. Never advertise absolute
+guarantees of background operation when the game is paused.

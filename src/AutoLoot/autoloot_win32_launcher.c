@@ -10,14 +10,14 @@
 #include <string.h>
 typedef UINT (WINAPI *message_id_fn)(void);
 typedef LRESULT (CALLBACK *hook_fn)(int, WPARAM, LPARAM);
-typedef struct { DWORD pid; DWORD tid; } Search;
+typedef struct { DWORD pid; DWORD tid; HWND hwnd; } Search;
 static BOOL CALLBACK find_window(HWND hwnd, LPARAM lparam) {
     Search *s = (Search *)lparam;
     DWORD pid = 0u;
     DWORD tid;
     if (!IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER)) return TRUE;
     tid = GetWindowThreadProcessId(hwnd, &pid);
-    if (tid && pid == s->pid) { s->tid=tid; return FALSE; }
+    if (tid && pid == s->pid) { s->tid=tid; s->hwnd=hwnd; return FALSE; }
     return TRUE;
 }
 int wmain(int argc, wchar_t **argv) {
@@ -61,7 +61,7 @@ int wmain(int argc, wchar_t **argv) {
     if (!CreateProcessW(path,command,NULL,NULL,FALSE,0,NULL,gameDir,&si,&pi)) {
         fprintf(stderr,"Wow.exe launch failed: %lu\n",GetLastError());goto cleanup;
     }
-    s.pid=pi.dwProcessId;s.tid=0;
+    s.pid=pi.dwProcessId;s.tid=0;s.hwnd=NULL;
     start=GetTickCount();
     while (GetTickCount()-start < 120000u && s.tid==0u) {
         if (!GetExitCodeProcess(pi.hProcess,&exitCode) || exitCode != STILL_ACTIVE) break;
@@ -71,16 +71,26 @@ int wmain(int argc, wchar_t **argv) {
     if (!s.tid) { fputs("WoW game window thread not found; no hook installed.\n",stderr); goto cleanup; }
     hook=SetWindowsHookExW(WH_GETMESSAGE,proc,host,s.tid);
     if (!hook) {fprintf(stderr,"Game-thread hook rejected: %lu\n",GetLastError());goto cleanup;}
-    PostThreadMessageW(s.tid,msg,1u,0u);
+    /* Thread messages carry hwnd=NULL and can disappear from filtered
+     * GetMessage/PeekMessage loops during held mouse/keyboard input.
+     * Address the actual WoW window so nested/capture message pumps receive
+     * the same control messages as normal game-window traffic. */
+    if (!PostMessageW(s.hwnd,msg,1u,0u)) {
+        fprintf(stderr,"Unable to start window-targeted native AutoLoot: %lu\n",GetLastError());
+        goto cleanup;
+    }
     puts("Native AutoLoot requested on selected game thread; exact-client checks may keep it OFF.");
     while (GetExitCodeProcess(pi.hProcess,&exitCode) && exitCode==STILL_ACTIVE) {
-        PostThreadMessageW(s.tid,msg,2u,0u);
+        if (!IsWindow(s.hwnd) || !PostMessageW(s.hwnd,msg,2u,0u)) {
+            fprintf(stderr,"WoW window lost; stopping AutoLoot launcher.\n");
+            goto cleanup;
+        }
         Sleep(100);
     }
     result=0;
 cleanup:
     if (hook) {
-        if (s.tid) PostThreadMessageW(s.tid,msg,0u,0u);
+        if (IsWindow(s.hwnd)) PostMessageW(s.hwnd,msg,0u,0u);
         Sleep(150);
         UnhookWindowsHookEx(hook);
     }
