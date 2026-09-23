@@ -72,6 +72,36 @@ namespace WoW335Updater
                    HashFile(Path.Combine(folder, TocName)) == Hash(toc);
         }
 
+        // Refresh only an untouched addon previously installed by this updater.
+        // Never adopt or overwrite manually edited addons during game updates.
+        internal static string RefreshManagedIfPresent(string root, Assembly assembly)
+        {
+            if (string.IsNullOrWhiteSpace(root)) return null;
+            var addonDir = Path.Combine(root, "Interface", "AddOns", AddonName);
+            if (!Directory.Exists(addonDir)) return null;
+            if ((File.GetAttributes(addonDir) & FileAttributes.ReparsePoint) != 0 ||
+                Directory.GetDirectories(addonDir).Length != 0) return null;
+            var files = Directory.GetFiles(addonDir).Select(Path.GetFileName)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+            var expected = new[] { ScriptName, TocName, MarkerName }
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+            if (!files.SequenceEqual(expected, StringComparer.OrdinalIgnoreCase))
+                return null;
+            foreach (var file in files) RejectLink(Path.Combine(addonDir, file));
+            var marker = File.ReadAllText(Path.Combine(addonDir, MarkerName), Encoding.UTF8)
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (marker.Length != 4 || marker[0] != "WOW335_AUTOLOOT_DIAG_MANAGED_V1" ||
+                !Regex.IsMatch(marker[1], "^[0-9a-f]{40}$") ||
+                !Regex.IsMatch(marker[2], "^[0-9a-f]{64}$") ||
+                !Regex.IsMatch(marker[3], "^[0-9a-f]{64}$") ||
+                !string.Equals(marker[2], HashFile(Path.Combine(addonDir, ScriptName)),
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(marker[3], HashFile(Path.Combine(addonDir, TocName)),
+                    StringComparison.OrdinalIgnoreCase))
+                return null;
+            return Install(root, assembly, true); // backs up the exact previous managed addon
+        }
+
         internal static string Install(string root, Assembly assembly, bool replaceExisting)
         {
             if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))

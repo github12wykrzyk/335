@@ -263,6 +263,20 @@ namespace WoW335Updater
 
                 Log("SHA256 paczki OK: " + gotPackageSha.Substring(0, 16) + "...");
                 var result = ApplyPackage(innerBytes, lastRemote);
+                // The optional diagnostic addon is outside the game DLL manifest.
+                // Replace only an untouched updater-managed installation, with backup.
+                try
+                {
+                    var refreshed = AutoLootDiagSupport.RefreshManagedIfPresent(
+                        gameDir.Text.Trim(), typeof(AutoLootDiagSupport).Assembly);
+                    if (!string.IsNullOrWhiteSpace(refreshed))
+                        Log("AutoLoot DIAG: " + refreshed);
+                }
+                catch (Exception addonError)
+                {
+                    Log("AutoLoot DIAG: nie udało się odświeżyć opcjonalnego dodatku: " +
+                        addonError.Message);
+                }
                 status.Text = result.Changed == 0
                     ? "Pliki już były aktualne."
                     : "Aktualizacja zakończona: " + result.Changed + " plików.";
