@@ -40,7 +40,7 @@ jobs:
           report=json.loads(Path('dist/autoloot_abi.json').read_text())
           assert report['client_sha256']=='2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d'
           assert report['target_build']==12340
-          for name in ['UnitRightClick','FrameScriptExecute','ObjectPosition']:
+          for name in ['UnitRightClick','FrameScriptExecute','ObjectPosition','UnitPosition']:
               obj=report['functions'][name]
               assert obj['section']=='.text' and len(obj['disassembly'])>=4
               print('EXACT_CLIENT',name,obj['va'],obj['bytes_hex'][:32],obj['disassembly'][:5])

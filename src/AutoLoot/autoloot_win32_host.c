@@ -7,12 +7,13 @@
 #include <windows.h>
 #include <wincrypt.h>
 #include <math.h>
+#include <float.h>
 #include <string.h>
 #include "autoloot_12340_adapter.h"
 
 #pragma comment(lib, "Advapi32.lib")
 #define AL_WINMSG_NAME "WoW335_AutoLoot_12340_GameThread_v1"
-#define AL_GET_POS_VA 0x004D5EA0u
+#define AL_GET_POS_VA 0x006E6F10u
 #define AL_LOOT_GUID_VA 0x00BFA8D8u
 #define AL_FIRST_VALID_PTR 0x10000u
 #define AL_MAX_VALID_PTR 0x7FFE0000u
@@ -24,8 +25,6 @@ static unsigned g_was_owned;
 static AlGuid g_last_owned;
 static unsigned g_init_attempted;
 
-typedef void (__thiscall *al_pos_fn)(void *, float *);
-typedef void (__thiscall *al_right_click_fn)(void *, int);
 typedef void (__cdecl *al_lua_fn)(const char *, const char *, int);
 
 static int same(AlGuid a, AlGuid b) {
@@ -125,7 +124,14 @@ static int position(void *ctx, uintptr_t obj, float out[3]) {
     if (!is_game_thread() || !out || !readable((void *)obj, 0x40))
         return 0;
     __try {
-        ((al_pos_fn)AL_GET_POS_VA)((void *)obj, out);
+        {
+            uintptr_t fn = AL_GET_POS_VA;
+            __asm {
+                mov ecx, obj
+                push out
+                call fn
+            }
+        }
         return _finite(out[0]) && _finite(out[1]) && _finite(out[2]);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return 0;
@@ -138,7 +144,12 @@ static int right_click(void *ctx, uintptr_t va, uintptr_t obj, unsigned auto_loo
     /* Stock 12340 OnRightClick(this=unit in ECX, autoLoot=1).
      * The cast keeps x86 __thiscall and is never used on other clients. */
     __try {
-        ((al_right_click_fn)va)((void *)obj, 1);
+        __asm {
+            mov ecx, obj
+            push 1
+            mov eax, va
+            call eax
+        }
         g_was_owned = 0u;
         return 1;
     } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }

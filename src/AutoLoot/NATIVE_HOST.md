@@ -5,7 +5,7 @@
 The pinned `Wow.exe` is PE32 x86 and has SHA256
 `2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d`.
 Its exact function bytes at unit right-click, Lua execution and object
-position are extracted in CI. Independent public 3.3.5a (12340) references
+position are extracted in CI. The exact client's base\n`CGObject_C__GetPosition` at `0x004D5EA0` returns zero for generic\nobjects; the native host instead calls the unit override at\n`0x006E6F10`, separately audited in the exact EXE. Independent public 3.3.5a (12340) references
 indicate object-manager pointer `0x00C79CE0 -> +0x2ED0`, first object
 `+0xAC`, local GUID `+0xC0`, unit type `+0x14`, linked-list next
 `+0x3C`, GUID `+0x30`, descriptor `+0x08`, unit health field
