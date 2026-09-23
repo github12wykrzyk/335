@@ -117,6 +117,9 @@ def patch(data: bytes, expected_sha256: str) -> tuple[bytes, dict]:
                 adjust_file_pointer(row+20)  # PointerToRawData
             adjust_file_pointer(row+24)  # PointerToRelocations
             adjust_file_pointer(row+28)  # PointerToLinenumbers
+        for old_off, payload in snapshots:
+            if source[old_off + header_delta:old_off + header_delta + len(payload)] != payload:
+                raise ValueError("PE section bytes changed during header relocation")
         # IMAGE_DEBUG_DIRECTORY.PointerToRawData is a file offset, not an RVA.
         debug_rva, debug_size = rd32(opt+96+6*8), rd32(opt+96+6*8+4)
         if debug_rva or debug_size:
@@ -126,9 +129,6 @@ def patch(data: bytes, expected_sha256: str) -> tuple[bytes, dict]:
                 debug_off = rva_offset_existing(source, table, count,
                                                 required_headers, debug_rva + 28*i, 28)
                 adjust_file_pointer(debug_off + 24)
-        for old_off, payload in snapshots:
-            if source[old_off + header_delta:old_off + header_delta + len(payload)] != payload:
-                raise ValueError("PE section bytes changed during header relocation")
     wr32(opt+60, required_headers)  # SizeOfHeaders
     if section_head+40 > required_headers or section_head+40 > original_first_raw+header_delta:
         raise ValueError("expanded PE headers do not fit the additional section")
