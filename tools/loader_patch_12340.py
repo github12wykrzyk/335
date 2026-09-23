@@ -18,6 +18,22 @@ SECTION = b".w335ldr"
 I386 = 0x14c
 
 
+def rva_offset_existing(source: bytes, table: int, count: int,
+                        size_headers: int, rva: int, size: int) -> int:
+    if not rva or size < 0 or rva + size > 0xffffffff:
+        raise ValueError("invalid debug RVA")
+    if rva < size_headers and rva + size <= size_headers:
+        return rva
+    for i in range(count):
+        row = table + i*40
+        vsize, va, raw_size, raw_off = struct.unpack_from("<IIII", source, row+8)
+        if va <= rva and rva + size <= va + min(vsize or raw_size, raw_size):
+            off = raw_off + rva - va
+            if off+size <= len(source):
+                return off
+    raise ValueError("unmapped original debug directory RVA")
+
+
 def patch(data: bytes, expected_sha256: str) -> tuple[bytes, dict]:
     if hashlib.sha256(data).hexdigest() != expected_sha256:
         raise ValueError("exact pinned 12340 exe SHA256 mismatch")
@@ -73,9 +89,49 @@ def patch(data: bytes, expected_sha256: str) -> tuple[bytes, dict]:
                 raise ValueError("invalid existing section raw bounds")
             original_first_raw = min(original_first_raw, raw_off)
         highest_va_end = max(highest_va_end, align(va + max(virtual_size, raw_size), section_align))
-    if (section_head+40 > size_headers or section_head+40 > original_first_raw or
-            any(source[section_head:section_head+40])):
-        raise ValueError("no safe unused PE section-header slot; refusing EXE mutation")
+    if size_headers > original_first_raw or original_first_raw % file_align:
+        raise ValueError("invalid raw section/header layout for safe expansion")
+    if any(source[section_head:min(section_head+40, original_first_raw)]):
+        raise ValueError("occupied bytes in existing PE headers; refusing to overwrite data")
+    required_headers = align(max(size_headers, section_head + 40), file_align)
+    header_delta = align(max(0, required_headers - original_first_raw), file_align)
+    if header_delta:
+        # Insert a full file-aligned gap before the first raw section, preserving
+        # all existing raw section contents and any trailing overlay byte-for-byte.
+        snapshots = [
+            (rd32(table+i*40+20), bytes(source[
+                rd32(table+i*40+20):rd32(table+i*40+20)+rd32(table+i*40+16)]))
+            for i in range(count) if rd32(table+i*40+16)
+        ]
+        source[original_first_raw:original_first_raw] = bytes(header_delta)
+        def adjust_file_pointer(pos: int):
+            value = rd32(pos)
+            if value >= original_first_raw:
+                wr32(pos, value + header_delta)
+            elif value and value + 1 > original_first_raw:
+                raise ValueError("raw pointer overlaps header insertion")
+        adjust_file_pointer(pe + 12)  # COFF symbol table (if any)
+        for i in range(count):
+            row = table+i*40
+            if rd32(row+16):
+                adjust_file_pointer(row+20)  # PointerToRawData
+            adjust_file_pointer(row+24)  # PointerToRelocations
+            adjust_file_pointer(row+28)  # PointerToLinenumbers
+        # IMAGE_DEBUG_DIRECTORY.PointerToRawData is a file offset, not an RVA.
+        debug_rva, debug_size = rd32(opt+96+6*8), rd32(opt+96+6*8+4)
+        if debug_rva or debug_size:
+            if not debug_rva or debug_size % 28 or debug_size > 28*1024:
+                raise ValueError("unsupported debug directory")
+            for i in range(debug_size//28):
+                debug_off = rva_offset_existing(source, table, count,
+                                                required_headers, debug_rva + 28*i, 28)
+                adjust_file_pointer(debug_off + 24)
+        for old_off, payload in snapshots:
+            if source[old_off + header_delta:old_off + header_delta + len(payload)] != payload:
+                raise ValueError("PE section bytes changed during header relocation")
+    wr32(opt+60, required_headers)  # SizeOfHeaders
+    if section_head+40 > required_headers or section_head+40 > original_first_raw+header_delta:
+        raise ValueError("expanded PE headers do not fit the additional section")
     if size_image < highest_va_end:
         raise ValueError("inconsistent existing SizeOfImage")
     # Bound import and Authenticode must not be silently invalidated.
@@ -163,6 +219,8 @@ def patch(data: bytes, expected_sha256: str) -> tuple[bytes, dict]:
         "in_game_verified": False,
         "final_package": "NOT_RUN",
         "section": SECTION.decode("ascii"),
+        "header_expansion_bytes": header_delta,
+        "size_of_headers": required_headers,
     }
 
 
