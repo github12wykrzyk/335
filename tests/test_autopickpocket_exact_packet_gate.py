@@ -50,7 +50,7 @@ class ExactPacketGateTests(unittest.TestCase):
             self.fail("unmapped runtime gate 0x%08X" % va)
         host = (ROOT / "src/AutoPickPocket/autopickpocket_win32_host.c").read_text()
         for name, address in SITES.items():
-            match = re.search(r"static const BYTE " + name + r"\\[\\]\\s*=\\s*\\{([^}]*)\\}", host)
+            match = re.search(r"static const BYTE " + name + r"\[\]\s*=\s*\{([^}]*)\}", host)
             self.assertIsNotNone(match, "missing ABI gate: " + name)
             expected = bytes(int(token,16) for token in
                              re.findall(r"0x[0-9a-fA-F]{2}", match.group(1)))
