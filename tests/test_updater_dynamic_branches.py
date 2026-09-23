@@ -10,16 +10,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DynamicBranchMonitorTests(unittest.TestCase):
-    def test_main_window_uses_dynamic_scrollable_branch_badges(self):
+    def test_main_window_shows_branch_badges_in_full_width_adaptive_ribbon(self):
         source = (ROOT / "tools/updater/Updater335GitHubMonitor.cs").read_text(encoding="utf-8")
         dashboard = (ROOT / "tools/updater/Updater335Dashboard.cs").read_text(encoding="utf-8")
         self.assertIn("FlowLayoutPanel monitorLayout", source)
-        self.assertIn("monitorLayout.AutoScroll = true;", source)
+        self.assertIn("monitorLayout.AutoScroll = false;", source)
+        self.assertIn("monitorLayout.WrapContents = true;", source)
         self.assertIn("Rebuild335MonitorBadges(names);", source)
         self.assertIn("monitorLayout.Controls.Add(outline);", source)
         self.assertIn("monitorLayout.Resize += delegate { Resize335MonitorBadges(); };", source)
-        self.assertIn("header.Controls.Add(Build335MonitorHeader(), 1, 0);", dashboard)
+        self.assertIn("monitorBadgeFrames.Count, available / 185", source)
+        self.assertIn("int rows = (monitorBadgeFrames.Count + columns - 1) / columns;", source)
+        self.assertIn("monitorStripRow.Height = height;", source)
+        self.assertIn("Height = MonitorBadgeHeight, Width = 175", source)
         self.assertIn("badge.Click += delegate { Open335Monitor(); };", source)
+        self.assertIn("var root = UiGrid(1, 5);", dashboard)
+        self.assertIn("Bind335MonitorRow(root.RowStyles[1]);", dashboard)
+        self.assertIn("root.Controls.Add(Build335MonitorHeader(), 0, 1);", dashboard)
+        self.assertIn("root.Controls.Add(config, 0, 2);", dashboard)
+        self.assertNotIn("header.Controls.Add(Build335MonitorHeader()", dashboard)
         self.assertNotIn('foreach (var b in new[] { "work", "main" })', source)
 
     def test_all_branches_are_discovered_without_auto_authorizing_installation(self):
