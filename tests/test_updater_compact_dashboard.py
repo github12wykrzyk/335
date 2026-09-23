@@ -16,6 +16,9 @@ class CompactUpdaterDashboardTests(unittest.TestCase):
         self.assertIn('UiButton(rollbackButton, "Rollback")', ui)
         self.assertIn('UiButton(autoLootReport, "Wyślij log AutoLoot")', ui)
         self.assertIn('UiButton(monitorButton, "Szczegóły GitHub")', ui)
+        self.assertIn("20f, 39f, 21f, 23f, 7f, 40f", ui)
+        workflow = (ROOT / ".github/workflows/build_updater.yml").read_text(encoding="utf-8")
+        self.assertIn("DashboardLayoutSmoke.ps1", workflow)
 
     def test_live_branch_badges_are_small_and_dynamic(self):
         monitor = (ROOT / "tools/updater/Updater335GitHubMonitor.cs").read_text(encoding="utf-8")
@@ -25,6 +28,7 @@ class CompactUpdaterDashboardTests(unittest.TestCase):
         self.assertIn('"/actions/runs?branch=" + Uri.EscapeDataString(b)', monitor)
         self.assertIn("i < branches.Count && i < 6", monitor)
         self.assertIn("Interval = 20000", monitor)
+        self.assertIn("monitorLayoutKey", monitor)
 
     def test_module_list_comes_only_from_installed_state(self):
         ui = (ROOT / "tools/updater/Updater335Dashboard.cs").read_text(encoding="utf-8")

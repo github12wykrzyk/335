@@ -171,7 +171,7 @@ namespace WoW335Updater
             var build = UiCard("AKTUALIZACJA I MODUŁY", 5);
             build.Padding = new Padding(9, 3, 9, 3);
             build.RowStyles.Clear();
-            foreach (var h in new[] { 22f, 43f, 23f, 24f, 8f, 40f })
+            foreach (var h in new[] { 20f, 39f, 21f, 23f, 7f, 40f })
                 build.RowStyles.Add(new RowStyle(SizeType.Absolute, h));
             var versions = UiGrid(2, 1);
             var installed = UiGrid(1, 2);

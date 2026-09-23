@@ -51,3 +51,8 @@ Belka GitHub pokazuje w dwóch ciasnych rzędach do 6 bieżących branchy,
 wykrywanych z GitHuba; kolejne branche i pełne SHA są dostępne w szczegółach.
 Każda plakietka dotyczy aktualnego HEAD danego brancha. Odczyt co 20 sekund
 ogranicza liczbę zapytań; status Actions nie poświadcza działania w grze.
+
+Test Windows dashboardu tworzy rzeczywistą kontrolkę WinForms x86, sprawdza
+trzy główne przyciski, rozmiary sekcji (bez pionowego obcięcia), zwinięcie
+i rozwinięcie narzędzi oraz siatkę statusów 3 × 2. Belka branchy jest
+przebudowywana tylko po zmianie zestawu nazw, aby nie migotała co odczyt.

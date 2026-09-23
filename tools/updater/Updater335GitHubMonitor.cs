@@ -13,6 +13,7 @@ namespace WoW335Updater
     {
         private readonly Timer monitorTimer = new Timer { Interval = 20000 };
         private TableLayoutPanel monitorStrips;
+        private string monitorLayoutKey = "";
         private readonly Button monitorButton = new Button();
         private readonly Dictionary<string, Label> monitorBadges = new Dictionary<string, Label>
         {
@@ -44,6 +45,11 @@ namespace WoW335Updater
         private void Arrange335MonitorBadges(IList<string> branches)
         {
             if (monitorStrips == null) return;
+            var compactNames = new List<string>();
+            for (var index = 0; index < branches.Count && index < 6; index++) compactNames.Add(branches[index]);
+            var layoutKey = string.Join("|", compactNames);
+            if (layoutKey == monitorLayoutKey) return;
+            monitorLayoutKey = layoutKey;
             monitorStrips.SuspendLayout();
             try
             {

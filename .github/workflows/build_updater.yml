@@ -194,6 +194,12 @@ jobs:
           & "$env:windir\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File tools\updater\tests\AutoLootRuntimeSmoke.ps1 -UpdaterExe dist\WoW335Updater.exe -LoaderExe dist\WoW335RuntimeLoader.exe
           if ($LASTEXITCODE -ne 0) { throw "Native AutoLoot embedded loader verification failed" }
 
+      - name: Verify compact WinForms dashboard geometry and tool drawer
+        shell: pwsh
+        run: |
+          & "$env:windir\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File tools\\updater\\tests\\DashboardLayoutSmoke.ps1 -UpdaterExe dist\\WoW335Updater.exe
+          if ($LASTEXITCODE -ne 0) { throw "Compact updater dashboard smoke failed" }
+
       - name: Verify exact-SHA addon resources, SavedVariables parser and installation fail-closed
         shell: pwsh
         run: |
