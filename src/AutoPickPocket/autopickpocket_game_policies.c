@@ -118,7 +118,6 @@ static int begin_attempt(void *ctx,PpGuid guid,uint32_t nonce){
       "_G.W335PP_S='0';_G.W335PP_O='0';_G.W335PP_E='0';"
       "_G.W335PP_RANGE='0';_G.W335PP_M='0';"
       "_G.W335PP_MB=GetMoney and GetMoney() or -1;"
-      "_G.W335PP_PT=UnitGUID and UnitGUID('target') or '';"
       "_G.W335PP_FAIL='0';_G.W335PP_T=GetTime();_G.W335PP_ARM=_G.W335PP_N",
       (unsigned long)nonce,(unsigned long)guid.hi,(unsigned long)guid.lo);
     if(n<=0 || n>=(int)sizeof(script) || !run(script))return 0;
@@ -179,21 +178,6 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
     }
     return PP_RESULT_PENDING;
 }
-/* Only clear a GUID auto-selected by native fallback, never an earlier
- * player-selected target with the same GUID. No action for packet casts. */
-static void after_cast_submitted(void *ctx,PpGuid guid,uint32_t nonce){
-    char script[420];int n;(void)ctx;
-    if(!is_owner() || !active || nonce!=current_attempt ||
-       !same(guid,current_target))return;
-    n=sprintf_s(script,sizeof(script),
-      "if _G.W335PP_N=='%lu' and _G.W335PP_G=='0X%08lX%08lX' "
-      "then local t=UnitGUID and UnitGUID('target');"
-      "if t and ClearTarget and string.upper(t)==_G.W335PP_G "
-      "and string.upper(_G.W335PP_PT or '')~=_G.W335PP_G "
-      "then ClearTarget() end end",
-      (unsigned long)nonce,(unsigned long)guid.hi,(unsigned long)guid.lo);
-    if(n>0 && n<(int)sizeof(script))(void)run(script);
-}
 /* Do not cancel a newer cast or another GUID on delayed callbacks. */
 static void end_attempt(void *ctx,PpGuid guid,uint32_t nonce){
     (void)ctx;
@@ -206,7 +190,6 @@ PP335_EXPORT const Pp335Policy *__stdcall PP335_VerifiedPolicyV1(void){
     policy.spell_usable=spell_usable;
     policy.begin_attempt=begin_attempt;
     policy.cast_result=cast_result;
-    policy.after_cast_submitted=after_cast_submitted;
     policy.end_attempt=end_attempt;
     policy.world_token=world_token;
     return &policy;

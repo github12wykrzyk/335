@@ -26,7 +26,6 @@ typedef struct {
      * the observer cannot associate a result with this GUID and nonce. */
     int (*begin_attempt)(void *,PpGuid target,uint32_t attempt_id);
     PpResult (*cast_result)(void *,PpGuid target,uint32_t attempt_id);
-    void (*after_cast_submitted)(void *,PpGuid target,uint32_t attempt_id);
     /* Explicit game-thread release of a timed-out/refused exact attempt. */
     void (*end_attempt)(void *,PpGuid target,uint32_t attempt_id);
     uint64_t (*world_token)(void *);

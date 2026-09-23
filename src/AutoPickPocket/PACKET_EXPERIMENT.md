@@ -58,3 +58,7 @@ package gate and the user's actual in-game confirmation.
 ## 1.1.2 TEST — packet no-result adaptation, native cast path
 
 A user-supplied game report contained consecutive packet submission events followed by ~900ms timeouts without server/loot evidence. Packet dispatch is not success. On TWO timed-out exact-GUID and nonce packet submissions, this experimental module changes transport once per process to the verified five-argument native GUID-cast mechanism; it never transmits both paths for one attempt. Structured events contain `packet_no_ack_native_fallback`, `transport` and `no_ack_count`. Native fallback is NOT a confirmation of raw-packet functionality. Native path also observes nonce-scoped `PLAYER_MONEY` together with `LOOT_OPENED` within 400ms; report labels this as indicative `wallet_loot_signal`, not GUID-proven success when loot-source GUID is unavailable. The previously selected user target is not cleared after native casting. User must verify real theft and absence of target side effects in game.
+
+## Target ownership (CI regression)
+
+Never call ClearTarget(), TargetUnit() or UnitGUID('target') from the packet or fallback policy: a previous experimental native target-release callback violated the branch's existing no-target-mutation invariant and was removed. Native cast target side effects remain subject to actual in-game verification.

@@ -306,8 +306,6 @@ static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target,uint32_
             ((native_fn)va)(spell,0u,target.lo,target.hi,0u);
             submitted=1;
         }__except(EXCEPTION_EXECUTE_HANDLER){submitted=0;}
-        if(submitted && g_policy.after_cast_submitted)
-            g_policy.after_cast_submitted(g_policy.context,target,attempt_id);
     }else{
         __try{
             ((send_fn)PP335_SEND_VA)(&packet);
