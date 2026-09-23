@@ -783,10 +783,10 @@ namespace WoW335Updater
                     exe = candidates.FirstOrDefault();
                 }
                 if (exe == null) throw new InvalidOperationException("Nie znalazłem WoW*.exe w wybranym katalogu.");
-                if (!TryLaunchInstalledAutoLoot(root, exe, state))
+                if (!TryLaunchInstalledModules(root, exe, state))
                 {
                     Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = root, UseShellExecute = true });
-                    Log("Uruchomiono: " + Path.GetFileName(exe) + " (brak aktywnego AutoLoot).");
+                    Log("Uruchomiono: " + Path.GetFileName(exe) + " (brak zarządzanych modułów DLL).");
                 }
             }
             catch (Exception ex)

@@ -156,3 +156,24 @@ The work candidate workflow now rebuilds each registered active DLL with
 MSVC x86 for every candidate and requires exact binary SHA256 equality before
 FINAL_PACKAGE: PASS. A previous failed CI run cannot let a source change slip
 past an incremental build selection on the next commit.
+
+## 0.3.10-335 — uniwersalny loader x86 z listy aktywnych modułów
+
+Zewnętrzny loader PE32 x86 jest wbudowany w updater jako `WoW335Runtime.Loader.exe`.
+Po `Aktualizuj updater` instalacja pełnej, zweryfikowanej paczki gry tworzy
+`dlls.txt` wyłącznie z aktywnych DLL z bieżącego manifestu. Przy starcie
+`Uruchom grę` updater sprawdza dokładny Wow.exe, kompletność zestawu,
+SHA256 każdej biblioteki i listy, architekturę PE32 x86 oraz blokuje
+niezgodne/niezarządzane DLL. Loader odczytuje lokalny `dlls.txt`, ładuje
+biblioteki w kolejności zależności i podłącza ich hooki do wątku okna gry.
+
+Nowe moduły muszą eksportować opisany w `src/Loader/README.md` interfejs
+`W335_*`, mieć wpis w `runtime/module_registry.json`, kompletny build x86
+i przejść bramki paczki. Dotychczasowy AutoLoot335.dll działa przez kompatybilne
+eksporty `AL335_*`. Loader nie pobiera DLL spoza aktywnego manifestu,
+nie obchodzi arbitrażu współdzielonych hooków i nie przesądza działania
+w grze bez rzeczywistego testu.
+
+Oddzielny przycisk historycznego natywnego podglądu AutoLoot blokuje się,
+gdy w instalacji są jakiekolwiek zarejestrowane DLL, żeby nie tworzyć
+równoległej sesji hooków. `main` i aktywna binarka AutoLoot nie są zmieniane.

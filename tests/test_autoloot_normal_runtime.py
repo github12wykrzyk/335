@@ -7,31 +7,40 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RegisteredAutoLootTests(unittest.TestCase):
-    def test_game_launcher_loads_only_selected_directory_registered_dll(self):
-        src = (ROOT / "src/AutoLoot/autoloot_win32_launcher.c").read_text(encoding="utf-8")
-        self.assertIn("#ifdef AL_NORMAL_RUNTIME", src)
+    def test_universal_game_loader_uses_ordered_local_manifest_and_hook_chain(self):
+        src = (ROOT / "src/Loader/loader_win32.c").read_text(encoding="utf-8")
+        self.assertIn("read_manifest(directory, modules, &count)", src)
+        self.assertIn("MAX_MODULES 32", src)
+        self.assertIn("valid_name(line)", src)
+        self.assertIn("_wcsicmp(modules[i].name, modules[n].name)", src)
+        self.assertIn("LoadLibraryExW(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH)", src)
+        self.assertIn("W335_MessageId", src)
+        self.assertIn("W335_HookProc", src)
+        self.assertIn("W335_CallWndProc", src)
         self.assertIn('L"AutoLoot335.dll"', src)
-        self.assertIn("gameDir, AL_HOST_FILENAME", src)
-        self.assertIn("SendMessageTimeoutW(hwnd, msg, command", src)
-        self.assertIn("SMTO_ABORTIFHUNG | SMTO_BLOCK", src)
         self.assertIn("SetWindowsHookExW(WH_CALLWNDPROC", src)
-        self.assertIn("send_control(s.hwnd,msg,2u,200u)", src)
-        self.assertNotIn("PostMessageW(s.hwnd,msg,2u,0u)", src)
-        self.assertNotIn("PostThreadMessageW(", src)
+        self.assertIn("SetWindowsHookExW(WH_GETMESSAGE", src)
+        self.assertIn("SMTO_ABORTIFHUNG | SMTO_BLOCK", src)
+        self.assertIn("TerminateProcess(pi.hProcess, 1u)", src)
+        self.assertNotIn("PostMessageW(", src)
 
-    def test_updater_auto_load_requires_installed_exact_hashes(self):
+    def test_updater_multi_module_launch_requires_all_installed_exact_hashes(self):
         code = (ROOT / "tools/updater/WoW335Updater.cs").read_text(encoding="utf-8")
         feature = (ROOT / "tools/updater/UpdaterAutoLootRuntimeFeature.cs").read_text(encoding="utf-8")
         workflow = (ROOT / ".github/workflows/build_updater.yml").read_text(encoding="utf-8")
-        self.assertIn("TryLaunchInstalledAutoLoot(root, exe, state)", code)
+        self.assertIn("TryLaunchInstalledModules(root, exe, state)", code)
+        self.assertNotIn("TryLaunchInstalledAutoLoot(root, exe, state)", code)
         self.assertIn('state["managed_sha256"] = fileHashes;', code)
-        self.assertIn("AutoLootRuntime.Launcher.exe", feature)
+        self.assertIn("WoW335Runtime.Loader.exe", feature)
+        self.assertIn("registered.Length == 0", feature)
+        self.assertIn("expected.SetEquals(listed)", feature)
+        self.assertIn("listed.Length != registered.Length", feature)
         self.assertIn("Sha256File(dll)", feature)
         self.assertIn("Sha256File(order)", feature)
+        self.assertIn("NativeCheckX86(File.ReadAllBytes(dll), true)", feature)
         self.assertIn("UpdaterBuildInfo.PinnedClientSha256", feature)
-        self.assertIn("RegisteredAutoLootDll", feature)
-        self.assertIn("/DAL_NORMAL_RUNTIME", workflow)
-        self.assertIn("AutoLootRuntime.Launcher.exe", workflow)
+        self.assertIn("src\\Loader\\loader_win32.c", workflow)
+        self.assertIn("WoW335Runtime.Loader.exe", workflow)
 
     def test_runtime_never_promotes_unregistered_or_unaccepted_modules(self):
         runtime = json.loads((ROOT / "runtime/current.json").read_text(encoding="utf-8"))

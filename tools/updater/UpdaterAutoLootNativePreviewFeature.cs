@@ -62,10 +62,9 @@ namespace WoW335Updater
                 root = Path.GetFullPath(root);
                 var state = ReadInstalledState();
                 if (state != null && AsArray(GetValue(state, "managed_files"))
-                    .Any(x => string.Equals(Convert.ToString(x), "AutoLoot335.dll",
-                                           StringComparison.OrdinalIgnoreCase)))
+                    .Any(x => Convert.ToString(x).EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidOperationException(
-                        "Zarejestrowany AutoLoot335.dll jest już w paczce gry. " +
+                        "Zarejestrowane moduły DLL są już w paczce gry. " +
                         "Użyj «Uruchom grę», aby uniknąć podwójnego ładowania AutoLoot.");
                 var wow = Path.Combine(root, "Wow.exe");
                 if (!File.Exists(wow) ||
