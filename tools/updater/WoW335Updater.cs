@@ -84,7 +84,7 @@ namespace WoW335Updater
         private void BuildUi()
         {
             channel.DropDownStyle = ComboBoxStyle.DropDownList;
-            channel.Items.AddRange(new object[] { "TEST (work)", "STABLE (main)" });
+            channel.Items.AddRange(new object[] { "TEST (loader-12340)", "STABLE (main)" });
             channel.SelectedIndex = 0;
             rollbackChoice.DropDownStyle = ComboBoxStyle.DropDownList;
             token.UseSystemPasswordChar = true;
@@ -194,6 +194,12 @@ namespace WoW335Updater
             return channel.SelectedIndex == 1;
         }
 
+        private bool UseEpochTestFlow()
+        {
+            return !IsStable() &&
+                UpdaterBuildInfo.Version.EndsWith("-epoch-test", StringComparison.Ordinal);
+        }
+
         private void ValidateInputs()
         {
             if (busy) throw new InvalidOperationException("Updater już wykonuje operację.");
@@ -210,6 +216,28 @@ namespace WoW335Updater
                 ValidateInputs();
                 SaveConfig(false);
                 SetBusy(true, "Sprawdzanie GitHuba...");
+                if (UseEpochTestFlow())
+                {
+                    var root = Path.GetFullPath(gameDir.Text.Trim());
+                    var installedEpoch = EpochInstalled(root);
+                    if (installedEpoch != null)
+                        EpochValidateLaunch(root);
+                    else
+                    {
+                        EpochCheckFile(Path.Combine(root, "Wow.exe"), UpdaterBuildInfo.PinnedClientSha256);
+                        if (File.Exists(Path.Combine(root, "dlls.txt")))
+                            EpochExistingManagedOrder(root, Path.Combine(root, "dlls.txt"));
+                    }
+                    var latest = await EpochLatestAsync();
+                    Show335Remote("TEST / Epoch", latest.Item1, latest.Item2);
+                    bool current = installedEpoch != null &&
+                        string.Equals(GetString(installedEpoch, "git_sha"), latest.Item1, StringComparison.Ordinal);
+                    status.Text = current ? "Loader i aktywne DLL są aktualne." :
+                        "Dostępna aktualizacja loadera TEST: " + ShortSha(latest.Item1);
+                    Log("Sprawdzono parę Epoch TEST: " + ShortSha(latest.Item1) +
+                        " • aktualny stan: " + (current ? "zgodny" : "wymaga instalacji lub aktualizacji"));
+                    return;
+                }
                 lastRemote = await FindLatestPackageAsync();
                 Show335Remote(lastRemote.Channel, lastRemote.HeadSha, lastRemote.RunId);
                 var installed = ReadInstalledState();
@@ -238,13 +266,15 @@ namespace WoW335Updater
             }
         }
 
-        private async Task UpdateAsync()
+        private async Task<bool> UpdateAsync()
         {
+            if (UseEpochTestFlow())
+                return await EpochInstallAsync();
             try
             {
                 ValidateInputs();
                 if (EpochInstalled(Path.GetFullPath(gameDir.Text.Trim())) != null)
-                    throw new InvalidOperationException("Najpierw Przywróć Epoch DLL — zwykła aktualizacja work nie może nadpisać aktywnego eksperymentu.");
+                    throw new InvalidOperationException("Kanał STABLE/work nie jest zgodny z aktywnym loaderem TEST; pliki gry pozostają bez zmian.");
                 if (IsGameRunning(gameDir.Text.Trim()))
                     throw new InvalidOperationException("Gra działa z tego katalogu. Zamknij WoW przed aktualizacją.");
 
@@ -272,6 +302,7 @@ namespace WoW335Updater
                 if (!string.IsNullOrWhiteSpace(result.BackupDir)) Log("Backup: " + result.BackupDir);
                 TrimBackups(gameDir.Text.Trim(), MaxBackups);
                 RefreshLocalState();
+                return true;
             }
             catch (Exception ex)
             {
@@ -279,6 +310,7 @@ namespace WoW335Updater
                 status.Text = "Aktualizacja nie powiodła się";
                 Log("BŁĄD: " + ex.Message);
                 MessageBox.Show(this, ex.Message, "WoW335 Updater", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
             finally
             {
@@ -288,8 +320,7 @@ namespace WoW335Updater
 
         private async Task UpdateAndPlayAsync()
         {
-            await UpdateAsync();
-            if (!status.Text.StartsWith("Aktualizacja nie powiodła", StringComparison.OrdinalIgnoreCase))
+            if (await UpdateAsync())
             {
                 status.Text = "Gotowe. Uruchamiam WoW...";
                 LaunchGame();
@@ -586,6 +617,21 @@ namespace WoW335Updater
                     + " • run " + GetLong(installed, "run_id")
                     + " • " + ShortSha(GetString(installed, "head_sha"))
                     + whenText;
+                if (UpdaterBuildInfo.Version.EndsWith("-epoch-test", StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        var epochState = EpochInstalled(Path.GetFullPath(root));
+                        if (epochState != null)
+                            localInfo.Text = "TEST Epoch " + ShortSha(GetString(epochState, "git_sha")) +
+                                " • moduły: " + AsArray(GetValue(epochState, "module_load_order")).Length +
+                                " • backup zachowany";
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        localInfo.Text = "TEST Epoch: wymagana naprawa stanu: " + ex.Message;
+                    }
+                }
             }
 
             var backupRoot = Path.Combine(root, ".wow335_updater", "backups");

@@ -186,9 +186,42 @@ namespace WoW335Updater
             return order;
         }
 
-        private async Task EpochInstallAsync()
+        // Same live-HEAD and latest-success gate used by installation, without
+        // downloading or changing any game file. The three primary UI actions
+        // share this source of truth.
+        private async Task<Tuple<string, long>> EpochLatestAsync()
         {
-            if (busy) return;
+            using (var client = CreateClient())
+            {
+                var branch = AsDictionary(json.DeserializeObject(
+                    await GetStringAsync(client, ApiRoot + "/branches/" + EpochBranch)));
+                var sha = GetString(AsDictionary(GetValue(branch, "commit")), "sha");
+                if (!UpdaterSafety.IsGitCommitSha(sha))
+                    throw new InvalidOperationException("Brak prawidłowego HEAD Epoch TEST.");
+                var runs = AsArray(GetValue(AsDictionary(json.DeserializeObject(
+                    await GetStringAsync(client, ApiRoot + "/actions/runs?branch=" +
+                        EpochBranch + "&per_page=50"))), "workflow_runs"));
+                var run = UpdaterSafety.RequireLatestSuccessfulRun(runs, EpochWorkflow, EpochBranch);
+                if (!string.Equals(GetString(run, "head_sha"), sha, StringComparison.Ordinal))
+                    throw new InvalidOperationException("CI Epoch TEST nie dotyczy aktualnego HEAD.");
+                var id = GetLong(run, "id");
+                var artifacts = AsArray(GetValue(AsDictionary(json.DeserializeObject(
+                    await GetStringAsync(client, ApiRoot + "/actions/runs/" + id +
+                        "/artifacts?per_page=100"))), "artifacts"));
+                var found = artifacts.Select(AsDictionary).Any(a =>
+                    !GetBool(a, "expired") &&
+                    string.Equals(GetString(a, "name"),
+                        "EpochConnection-TEST-PAIR-" + sha, StringComparison.Ordinal));
+                if (!found)
+                    throw new InvalidOperationException("Brak zweryfikowanej pary DLL dla bieżącego SHA.");
+                return Tuple.Create(sha, id);
+            }
+        }
+
+        private async Task<bool> EpochInstallAsync()
+        {
+            if (busy) return false;
+            bool completed = false;
             string statusText = "Epoch TEST: nie zainstalowano.";
             string stage = "wstępna kontrola lokalnych plików";
             bool acquired = false;
@@ -198,16 +231,18 @@ namespace WoW335Updater
                 if (!Directory.Exists(root)) throw new InvalidOperationException("Wybierz katalog WoW.");
                 if (IsGameRunning(root)) throw new InvalidOperationException("Zamknij WoW przed zmianą DLL.");
                 EpochCheckFile(Path.Combine(root, "Wow.exe"), UpdaterBuildInfo.PinnedClientSha256);
-                EpochCheckFile(Path.Combine(root, EpochDll), EpochOriginalSha);
-                if (EpochInstalled(root) != null)
-                    throw new InvalidOperationException("Epoch TEST jest zainstalowany; użyj przycisku rollback.");
+                var previousEpochState = EpochInstalled(root);
+                if (previousEpochState == null)
+                    EpochCheckFile(Path.Combine(root, EpochDll), EpochOriginalSha);
+                else
+                    EpochValidateLaunch(root);
                 if (string.IsNullOrWhiteSpace(token.Text))
                     throw new InvalidOperationException("Wymagany token GitHub Contents: Read i Actions: Read.");
                 var manager = EpochManager(root);
                 var loaderPath = Path.Combine(root, EpochLoader);
                 var listPath = Path.Combine(root, "dlls.txt");
                 EpochNotLink(loaderPath); EpochNotLink(listPath);
-                if (File.Exists(loaderPath))
+                if (previousEpochState == null && File.Exists(loaderPath))
                     throw new InvalidOperationException("Epoch TEST: kolizja z istniejącym Wow335Loader.dll.");
                 // Validate a previously installed *managed* work AutoLoot, not an
                 // arbitrary user-provided filename. Leave its DLL and list unchanged.
@@ -291,28 +326,115 @@ namespace WoW335Updater
                         throw new InvalidOperationException("Epoch TEST: niezgodny SHA256 pobranych DLL.");
                     EpochPE32(epoch); EpochPE32(loader);
                 }
-                if (MessageBox.Show(this,
-                    "Izolowany eksperyment loadera. Windows CI sprawdził parę PE32 x86, ale działanie tunelu logowania i świata nie zostało zweryfikowane w grze.\n\n" +
-                    "Oryginalna EpochConnection.dll zostanie zachowana w kopii, a Wow335Loader.dll pobrana z bieżącego CI. " +
-                    "Obecny dlls.txt oraz zarejestrowany AutoLoot335.dll pozostaną bez zmian. " +
-                    "AutoLoot otrzyma testowy hook na wątku gry; działanie obu DLL razem wymaga testu w grze.\n\n" +
-                    "SHA: " + sha + "\nZainstalować wariant TEST?",
-                    "EpochConnection TEST", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+
+                if (previousEpochState != null &&
+                    string.Equals(GetString(previousEpochState, "epoch_sha256"), epochSha,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(GetString(previousEpochState, "loader_sha256"), loaderSha,
+                        StringComparison.OrdinalIgnoreCase))
                 {
-                    statusText = "Epoch TEST: anulowano.";
-                    return;
+                    EpochValidateLaunch(root);
+                    if (GetString(previousEpochState, "git_sha") != sha)
+                    {
+                        previousEpochState["git_sha"] = sha;
+                        UpdaterSafety.WriteUtf8Atomic(EpochStatePath(root), json.Serialize(previousEpochState),
+                            ".stage", ".previous");
+                        Log("Epoch TEST: zweryfikowano nowe CI; bajty DLL bez zmian.");
+                    }
+                    statusText = "Aktualne: Epoch TEST " + sha.Substring(0, 12) +
+                        " • aktywne moduły: " + activeOrder.Length;
+                    Log(statusText);
+                    completed = true;
+                    return true;
                 }
                 stage = "weryfikacja stanu przed instalacją";
                 // Re-check after user confirmation and download, prior to any write.
                 if (IsGameRunning(root)) throw new InvalidOperationException("Gra została uruchomiona; instalacja zablokowana.");
                 EpochCheckFile(Path.Combine(root, "Wow.exe"), UpdaterBuildInfo.PinnedClientSha256);
-                EpochCheckFile(Path.Combine(root, EpochDll), EpochOriginalSha);
+                if (previousEpochState == null)
+                    EpochCheckFile(Path.Combine(root, EpochDll), EpochOriginalSha);
+                else
+                    EpochValidateLaunch(root);
                 EpochNotLink(loaderPath); EpochNotLink(listPath);
-                if (File.Exists(loaderPath) || EpochInstalled(root) != null)
+                if ((previousEpochState == null && File.Exists(loaderPath)) ||
+                    (previousEpochState != null && EpochInstalled(root) == null))
                     throw new InvalidOperationException("Epoch TEST: pliki klienta zmieniły się w czasie pobierania.");
                 var checkedOrder = EpochExistingManagedOrder(root, listPath);
                 if (!activeOrder.SequenceEqual(checkedOrder, StringComparer.Ordinal))
                     throw new InvalidOperationException("Epoch TEST: kolejność DLL zmieniła się w czasie pobierania.");
+                if (previousEpochState != null)
+                {
+                    // Update ONLY the verified TEST pair. Preserve original backup,
+                    // managed work AutoLoot and exact dlls.txt; restore prior pair on failure.
+                    var backupIdExisting = GetString(previousEpochState, "backup_id");
+                    var backupOriginal = Path.Combine(manager, "backups", backupIdExisting, EpochDll);
+                    EpochCheckFile(backupOriginal, EpochOriginalSha);
+                    var transactional = Path.Combine(manager, "replace-" + Guid.NewGuid().ToString("N"));
+                    Directory.CreateDirectory(transactional);
+                    var oldEpoch = Path.Combine(transactional, "oldEpoch.dll");
+                    var oldLoader = Path.Combine(transactional, "oldLoader.dll");
+                    var nextEpoch = Path.Combine(transactional, EpochDll);
+                    var nextLoader = Path.Combine(transactional, EpochLoader);
+                    bool restoreCompleted = false;
+                    bool loaderReplaced = false;
+                    bool epochReplaced = false;
+                    try
+                    {
+                        File.Copy(Path.Combine(root, EpochDll), oldEpoch);
+                        File.Copy(loaderPath, oldLoader);
+                        EpochCheckFile(oldEpoch, GetString(previousEpochState, "epoch_sha256"));
+                        EpochCheckFile(oldLoader, GetString(previousEpochState, "loader_sha256"));
+                        File.WriteAllBytes(nextEpoch, epoch);
+                        File.WriteAllBytes(nextLoader, loader);
+                        EpochCheckFile(nextEpoch, epochSha);
+                        EpochCheckFile(nextLoader, loaderSha);
+                        loaderReplaced = true;
+                        EpochStageFile(nextLoader, loaderPath, loaderSha);
+                        epochReplaced = true;
+                        EpochStageFile(nextEpoch, Path.Combine(root, EpochDll), epochSha);
+                        EpochCheckFile(Path.Combine(root, "dlls.txt"),
+                            GetString(previousEpochState, "dlls_sha256"));
+                        previousEpochState["git_sha"] = sha;
+                        previousEpochState["epoch_sha256"] = epochSha;
+                        previousEpochState["loader_sha256"] = loaderSha;
+                        UpdaterSafety.WriteUtf8Atomic(EpochStatePath(root),
+                            json.Serialize(previousEpochState), ".stage", ".previous");
+                        statusText = "Aktualizacja Epoch TEST: " + sha.Substring(0, 12) +
+                            " • moduły: " + activeOrder.Length;
+                        Log(statusText);
+                        completed = true;
+                        restoreCompleted = true;
+                    }
+                    catch
+                    {
+                        if (epochReplaced)
+                        {
+                            var target = Path.Combine(root, EpochDll);
+                            var oldHash = Sha256File(oldEpoch);
+                            if (!File.Exists(target) ||
+                                string.Equals(Sha256File(target), epochSha, StringComparison.OrdinalIgnoreCase))
+                                EpochStageFile(oldEpoch, target, oldHash);
+                            else
+                                EpochCheckFile(target, oldHash);
+                        }
+                        if (loaderReplaced)
+                        {
+                            var oldHash = Sha256File(oldLoader);
+                            if (!File.Exists(loaderPath) ||
+                                string.Equals(Sha256File(loaderPath), loaderSha, StringComparison.OrdinalIgnoreCase))
+                                EpochStageFile(oldLoader, loaderPath, oldHash);
+                            else
+                                EpochCheckFile(loaderPath, oldHash);
+                        }
+                        restoreCompleted = true;
+                        throw;
+                    }
+                    finally
+                    {
+                        if (restoreCompleted) Directory.Delete(transactional, true);
+                    }
+                    return completed;
+                }
                 stage = "instalacja i backup plików zarządzanych";
                 Directory.CreateDirectory(manager);
                 var backupId = Guid.NewGuid().ToString("N");
@@ -356,6 +478,7 @@ namespace WoW335Updater
                     statusText = "Epoch TEST: " + sha.Substring(0, 12) +
                         " • aktywne moduły: " + activeOrder.Length + " • wymagany test w grze.";
                     Log(statusText);
+                    completed = true;
                 }
                 catch
                 {
@@ -383,6 +506,7 @@ namespace WoW335Updater
             }
             catch (Exception ex)
             {
+                statusText = "Aktualizacja nie powiodła się: Epoch TEST";
                 Log("Epoch TEST: BŁĄD [" + stage + "] " + ex.Message);
                 MessageBox.Show(this, "Etap: " + stage + "\n" + ex.Message,
                     "EpochConnection TEST", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -391,6 +515,7 @@ namespace WoW335Updater
             {
                 if (acquired) SetBusy(false, statusText);
             }
+            return completed;
         }
 
         private void EpochRollback()

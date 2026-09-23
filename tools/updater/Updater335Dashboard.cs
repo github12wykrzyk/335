@@ -89,30 +89,23 @@ namespace WoW335Updater
         private void Build335Dashboard()
         {
             if (dashboardReady) return;
-            var repair = TakeFeatureButton("VERIFY / REPAIR");
-            var diagnostics = TakeFeatureButton("DIAGNOSTYKA ZIP");
-            var selfUpdate = TakeFeatureButton("AKTUALIZUJ UPDATER");
-            var report = TakeFeatureButton("WYŚLIJ RAPORT");
-            var reportToken = TakeFeatureButton("TOKEN RAPORTU");
-            var autoLootReport = TakeFeatureButton("WYŚLIJ LOG AUTOLOOT");
             Controls.Clear(); // Remove only the obsolete absolute-position labels from feature attachment.
             SuspendLayout();
             Font = new Font("Segoe UI", 9f);
             BackColor = UiCanvas;
             ForeColor = UiInk;
-            ClientSize = new Size(1060, 750);
-            MinimumSize = new Size(970, 680);
+            ClientSize = new Size(1060, 555);
+            MinimumSize = new Size(970, 490);
             AutoScaleMode = AutoScaleMode.Dpi;
             StartPosition = FormStartPosition.CenterScreen;
             DoubleBuffered = true;
             Text = "WoW335 Updater v" + UpdaterVersion + " • 3.3.5a / 12340";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
 
-            var root = UiGrid(1, 5);
+            var root = UiGrid(1, 4);
             root.Padding = new Padding(16);
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
@@ -136,25 +129,25 @@ namespace WoW335Updater
             root.Controls.Add(header, 0, 0);
 
             var config = UiCard("KONFIGURACJA", 3);
-            var path = UiGrid(3, 1);
+            var path = UiGrid(2, 1);
             path.ColumnStyles.Clear();
             path.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
             path.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            path.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 122));
-            path.Controls.Add(UiLabel("Katalog gry", 9, UiMuted), 0, 0);
+                        path.Controls.Add(UiLabel("Katalog gry", 9, UiMuted), 0, 0);
             UiInput(gameDir); path.Controls.Add(gameDir, 1, 0);
-            path.Controls.Add(UiButton(browseButton, "Wybierz…"), 2, 0);
+            dashboardTips.SetToolTip(gameDir, "Dwuklik: wybierz katalog gry. Zmiany zapisują się automatycznie.");
+            gameDir.DoubleClick += BrowseButton_Click;
             config.Controls.Add(path, 0, 1);
 
-            var settings = UiGrid(5, 1);
+            var settings = UiGrid(4, 1);
             settings.ColumnStyles.Clear();
-            foreach (var w in new[] { 94, 178, 112, -1, 105 })
+            foreach (var w in new[] { 94, 178, 112, -1 })
                 settings.ColumnStyles.Add(w < 0 ? new ColumnStyle(SizeType.Percent, 100) : new ColumnStyle(SizeType.Absolute, w));
             settings.Controls.Add(UiLabel("Kanał", 9, UiMuted), 0, 0);
             UiInput(channel); settings.Controls.Add(channel, 1, 0);
             settings.Controls.Add(UiLabel("Token GitHub", 9, UiMuted), 2, 0);
             UiInput(token); settings.Controls.Add(token, 3, 0);
-            settings.Controls.Add(UiButton(saveButton, "Zapisz"), 4, 0);
+            token.Leave += delegate { SaveConfig(false); };
             config.Controls.Add(settings, 0, 2);
             config.Controls.Add(UiLabel("Dostęp do github12wykrzyk/335 • token tylko do odczytu (Contents + Actions), zapis DPAPI. Nie nadpisujemy realmlist.", 8.5f, UiMuted), 0, 3);
             root.Controls.Add(config, 0, 1);
@@ -180,83 +173,38 @@ namespace WoW335Updater
             build.Controls.Add(status, 0, 2);
             progress.Dock = DockStyle.Fill; progress.Style = ProgressBarStyle.Marquee;
             build.Controls.Add(progress, 0, 3);
-            var actions = UiGrid(4, 1);
+            var actions = UiGrid(3, 1);
             actions.Controls.Add(UiButton(checkButton, "Sprawdź"), 0, 0);
             actions.Controls.Add(UiButton(updateButton, "Aktualizuj"), 1, 0);
             actions.Controls.Add(UiButton(updatePlayButton, "Aktualizuj i uruchom", true), 2, 0);
-            actions.Controls.Add(UiButton(launchButton, "Uruchom grę"), 3, 0);
+
             build.Controls.Add(actions, 0, 4);
             root.Controls.Add(build, 0, 2);
-
-            var tools = UiCard("NARZĘDZIA I PRZYWRACANIE", 4);
-            var utility = UiGrid(5, 1);
-            var toolButtons = new[] { repair, diagnostics, report, reportToken, selfUpdate };
-            var toolNames = new[] { "Sprawdź / napraw", "Diagnostyka ZIP", "Wyślij raport", "Token raportu", "Aktualizuj updater" };
-            for (int i = 0; i < toolButtons.Length; i++)
-                utility.Controls.Add(UiButton(toolButtons[i], toolNames[i]), i, 0);
-            tools.Controls.Add(utility, 0, 1);
-            var addonTools = UiGrid(3, 1);
-            addonTools.ColumnStyles.Clear();
-            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
-            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
-            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            autoLootDiagInstallButton.Click += delegate { InstallAutoLootDiagnostic(); };
-            dashboardFeatureButtons.Add(autoLootDiagInstallButton);
-            addonTools.Controls.Add(UiButton(autoLootDiagInstallButton, "Instaluj test AutoLoot"), 0, 0);
-            addonTools.Controls.Add(UiButton(autoLootReport, "Wyślij log AutoLoot"), 1, 0);
-            autoLootNativePreviewButton.Click += async delegate { await NativeAutoLootPreviewAsync(); };
-            dashboardFeatureButtons.Add(autoLootNativePreviewButton);
-            addonTools.Controls.Add(UiButton(autoLootNativePreviewButton, "Natywny AutoLoot TEST"), 2, 0);
-            tools.Controls.Add(addonTools, 0, 2);
-            var epochTools = UiGrid(3, 1);
-            epochTestInstallButton.Click += async delegate { await EpochInstallAsync(); };
-            epochModulesButton.Click += delegate { EpochModules(); };
-            epochTestRollbackButton.Click += delegate { EpochRollback(); };
-            dashboardFeatureButtons.Add(epochTestInstallButton);
-            dashboardFeatureButtons.Add(epochModulesButton);
-            dashboardFeatureButtons.Add(epochTestRollbackButton);
-            epochTools.Controls.Add(UiButton(epochTestInstallButton, "Epoch Loader TEST"), 0, 0);
-            epochTools.Controls.Add(UiButton(epochModulesButton, "Aktywne DLL / kolejność"), 1, 0);
-            epochTools.Controls.Add(UiButton(epochTestRollbackButton, "Przywróć Epoch DLL"), 2, 0);
-            tools.Controls.Add(epochTools, 0, 3);
-            var rollback = UiGrid(3, 1);
-            rollback.ColumnStyles.Clear();
-            rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 119));
-            rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-            rollback.Controls.Add(UiLabel("Przywróć kopię", 9, UiMuted), 0, 0);
-            UiInput(rollbackChoice); rollback.Controls.Add(rollbackChoice, 1, 0);
-            rollback.Controls.Add(UiButton(rollbackButton, "Rollback"), 2, 0);
-            tools.Controls.Add(rollback, 0, 4);
-            root.Controls.Add(tools, 0, 3);
 
             var journal = UiGrid(1, 2);
             journal.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
             journal.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var logHeader = UiGrid(3, 1);
+            var logHeader = UiGrid(1, 1);
             logHeader.ColumnStyles.Clear();
             logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            
             logHeader.Controls.Add(UiLabel("DZIENNIK SESJI", 9, UiAccent, true), 0, 0);
-            logHeader.Controls.Add(UiButton(monitorButton, "Monitor GH"), 1, 0);
-            var copy = UiButton(new Button(), "Kopiuj log");
-            copy.Click += delegate { try { Clipboard.SetText(log.Text); } catch (Exception ex) { Log("Błąd kopiowania: " + ex.Message); } };
-            logHeader.Controls.Add(copy, 2, 0);
+
             journal.Controls.Add(logHeader, 0, 0);
             log.Dock = DockStyle.Fill; log.BackColor = UiCanvas; log.ForeColor = UiMuted;
             log.Font = new Font("Consolas", 9f); log.BorderStyle = BorderStyle.FixedSingle;
             journal.Controls.Add(log, 0, 1);
-            root.Controls.Add(journal, 0, 4);
+            root.Controls.Add(journal, 0, 3);
 
             dashboardReady = true;
             gameDir.TextChanged += delegate { availableBuild.Text = "Katalog zmieniony • sprawdź ponownie."; lastRemote = null; };
+            gameDir.Leave += delegate { SaveConfig(false); RefreshLocalState(); };
             channel.SelectedIndexChanged += delegate { availableBuild.Text = "Kanał zmieniony • sprawdź ponownie."; lastRemote = null; SaveConfig(false); };
             token.TextChanged += delegate { connectionBadge.Text = string.IsNullOrWhiteSpace(token.Text) ? "GitHub: brak tokenu" : "GitHub: token niesprawdzony"; lastRemote = null; };
             status.TextChanged += delegate { status.ForeColor = status.Text.IndexOf("błąd", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 status.Text.IndexOf("nie powiod", StringComparison.OrdinalIgnoreCase) >= 0 ? Color.FromArgb(255, 164, 164) : UiInk; };
             Shown += delegate { Fit335Window(); Start335Monitor(); };
-            FormClosed += delegate { dashboardTips.Dispose(); };
+            FormClosed += delegate { SaveConfig(false); dashboardTips.Dispose(); };
             ResumeLayout(true);
         }
 

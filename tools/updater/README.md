@@ -198,3 +198,23 @@ The updater now uses a dedicated 40-lowercase-hex Git SHA check and retains
 64-hex SHA256 validation for all binary/dlls.txt hashes.
 An executable Windows x86 regression test covers real Git SHA length, file
 SHA256 length, malformed hex and case handling. No changes to game DLL bytes.
+
+## 0.3.12-335-epoch-test — trzy przyciski, jeden workflow
+
+Główne okno testowego updatera zawiera tylko: Sprawdź, Aktualizuj,
+Aktualizuj i uruchom. Dodatkowe przyciski eksperymentów AutoLoot i
+Epoch, narzędzi i ręcznego rollbacku nie są wyświetlane. Kanał TEST
+sprawdza dokładny HEAD feature/loader-12340 i najnowszy udany workflow
+pary DLL; instalacja i kolejne aktualizacje Epoch odbywają się przez
+podstawowe przyciski. Funkcja Aktualizuj i uruchom uruchamia grę
+WYŁĄCZNIE po powodzeniu weryfikacji/instalacji. Aktualizacje
+istniejącej pary zachowują oryginalny backup oraz istniejące
+AutoLoot335.dll i dlls.txt, a przy niepowodzeniu próbują przywrócić
+poprzednią parę zweryfikowanych bajtów. Lokalna historia backupów
+nie jest kasowana. Ukrycie przycisków NIE oznacza promocji TEST
+do STABLE ani FINAL_PACKAGE: PASS. Kanał STABLE pozostaje chroniony
+przed nadpisaniem aktywnego eksperymentu.
+
+Przed pełnym autonomicznym instalowaniem na czystej instalacji klienta
+wymagany jest dopuszczony komplet zależnych DLL i manifest: bieżący
+Epoch TEST integruje tylko zweryfikowany stan AutoLoot z work/149a2523.

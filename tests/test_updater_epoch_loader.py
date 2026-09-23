@@ -18,9 +18,22 @@ class EpochUpdaterTests(unittest.TestCase):
         self.assertIn('UpdaterBuildInfo.Version.EndsWith("-epoch-test"',maintenance)
         self.assertIn('"feature/loader-12340"',maintenance)
         self.assertIn("UpdaterEpochLoaderFeature.cs",wf)
-        self.assertIn("Epoch Loader TEST",ui)
-        self.assertIn("Aktywne DLL / kolejność",ui)
-        self.assertIn("Przywróć Epoch DLL",ui)
+        # Core UI is exactly three actions; TEST install and rollback stay in
+        # managed code rather than separate visible buttons.
+        self.assertEqual(ui.count("actions.Controls.Add(UiButton("),3)
+        for label in ('"Sprawdź"', '"Aktualizuj"', '"Aktualizuj i uruchom"'):
+            self.assertIn(label,ui)
+        for old in ('Epoch Loader TEST', 'Aktywne DLL / kolejność',
+                    'Przywróć Epoch DLL', 'Instaluj test AutoLoot',
+                    'Natywny AutoLoot TEST', '"Rollback"', '"Uruchom grę"'):
+            self.assertNotIn(old,ui)
+        self.assertIn('UseEpochTestFlow()',app)
+        self.assertIn('return await EpochInstallAsync()',app)
+        self.assertIn('var latest = await EpochLatestAsync();',app)
+        self.assertIn('if (await UpdateAsync())',app)
+        self.assertIn('private async Task<bool> EpochInstallAsync()',feature)
+        self.assertIn('private async Task<Tuple<string, long>> EpochLatestAsync()',feature)
+        self.assertIn('EpochValidateLaunch(root);',app)
         self.assertIn("EpochValidateLaunch(root);",app)
         self.assertIn("EpochBranch = \"feature/loader-12340\"",feature)
         self.assertIn("UpdaterSafety.RequireLatestSuccessfulRun",feature)
@@ -61,7 +74,7 @@ class EpochUpdaterTests(unittest.TestCase):
         self.assertIn("SetWindowsHookExW(WH_GETMESSAGE",loader)
         self.assertIn("PostMessageW(game.hwnd,message,1u,0u)",loader)
         self.assertIn("activate_autoloot(autoloot)",loader)
-        self.assertIn("najpierw Przywróć Epoch DLL".lower(),app.lower())
+        self.assertIn("Kanał STABLE/work nie jest zgodny",app)
         self.assertEqual(interop["final_package"],"NOT_RUN")
         self.assertIn("module_load_order",feature)
         self.assertNotIn("github12wykrzyk/wow112",feature)
