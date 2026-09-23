@@ -38,6 +38,7 @@ namespace WoW335Updater
                                                 Dictionary<string, object> state)
         {
             root = Path.GetFullPath(root);
+            UpdaterSafety.RequireNoLegacyEpoch(root);
             exe = Path.GetFullPath(exe);
             var order = SafeDestination(root, "dlls.txt");
             if (state == null)

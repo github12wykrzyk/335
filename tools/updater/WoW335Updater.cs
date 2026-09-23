@@ -443,6 +443,7 @@ namespace WoW335Updater
         private ApplyResult ApplyPackage(byte[] packageBytes, RemotePackageInfo remote)
         {
             var root = Path.GetFullPath(gameDir.Text.Trim());
+            UpdaterSafety.RequireNoLegacyEpoch(root);
             var files = new List<PackageFile>();
             var packageNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             using (var ms = new MemoryStream(packageBytes, false))

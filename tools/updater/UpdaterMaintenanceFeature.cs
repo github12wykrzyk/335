@@ -106,6 +106,7 @@ namespace WoW335Updater
                     ValidateGameAndToken();
                     SetBusy(true, "Weryfikacja zainstalowanej paczki...");
                     var root = Path.GetFullPath(gameDir.Text.Trim());
+                    UpdaterSafety.RequireNoLegacyEpoch(root);
                     var installed = ReadInstalledState(root);
                     if (installed == null)
                         throw new InvalidOperationException("Brak .wow335_updater/installed.json. Najpierw wykonaj aktualizację updaterem.");
