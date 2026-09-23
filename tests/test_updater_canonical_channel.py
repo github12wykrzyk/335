@@ -11,6 +11,9 @@ class CanonicalUpdaterChannelTests(unittest.TestCase):
         self.assertIn("    if: github.ref_name == 'work'", workflow)
         self.assertIn("name: WoW335Updater-${{ github.sha }}", workflow)
         self.assertNotIn("WoW335Updater-EXPERIMENT-", workflow)
+        self.assertIn("github.rest.actions.deleteArtifact", workflow)
+        self.assertIn("artifact.name === keep", workflow)
+        self.assertIn("  actions: write", workflow)
         self.assertNotIn("      - main", workflow)
         self.assertNotIn("      - 'feature/**'", workflow)
 

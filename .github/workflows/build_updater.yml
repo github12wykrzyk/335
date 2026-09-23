@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: build-wow335-updater-${{ github.ref }}
@@ -228,3 +229,22 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
+
+      - name: Delete obsolete updater artifacts across branches
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const keep = 'WoW335Updater-${{ github.sha }}';
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              ...context.repo, per_page: 100
+            });
+            let removed = 0;
+            for (const artifact of artifacts) {
+              if (!artifact.name.startsWith('WoW335Updater-') || artifact.name === keep) continue;
+              await github.rest.actions.deleteArtifact({
+                ...context.repo, artifact_id: artifact.id
+              });
+              core.info('Removed obsolete updater: ' + artifact.name + ' / ' + artifact.id);
+              removed++;
+            }
+            core.info('UPDATER_ARTIFACT_PRUNE: PASS; kept ' + keep + '; removed ' + removed);

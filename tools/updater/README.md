@@ -210,6 +210,6 @@ branch's exact current HEAD, an authentic pinned WoW 12340 x86 client, the
 registered DLL set and FINAL_PACKAGE: PASS. An experiment without a verified
 game package fails closed; it is not installed automatically or promoted.
 The updater stores the installed branch for diagnostics and rollback.
-Old workflow artifacts may remain on GitHub but are never used by self-update.
+After a successful work updater upload, CI deletes obsolete updater artifacts from all branches, leaving the current work-HEAD updater as the only published updater artifact. This does not delete game-package artifacts or historic branch source.
 For a one-time upgrade from a broken older updater, download the new canonical
 work Actions artifact and replace only WoW335Updater.exe while it is closed.
