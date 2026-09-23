@@ -7,6 +7,7 @@ on:
       - 'EpochConnection.dll'
       - 'src/Loader12340/**'
       - 'runtime/epoch_loader_interop.json'
+      - 'runtime/ai_experiments.json'
       - 'tools/epoch_connection_loader_patch.py'
       - 'tools/verify_epoch_test_pair.py'
       - 'tests/test_epoch_connection_loader_patch.py'

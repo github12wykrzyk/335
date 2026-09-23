@@ -15,6 +15,7 @@ on:
       - 'tools/verify_epoch_test_pair.py'
       - 'src/Loader12340/**'
       - 'runtime/epoch_loader_interop.json'
+      - 'runtime/ai_experiments.json'
       - '.github/workflows/loader_12340_preview.yml'
       - 'src/AutoLoot/diagnostics/**'
       - 'runtime/client_exe_target.json'
