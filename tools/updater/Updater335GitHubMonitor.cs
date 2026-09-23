@@ -12,7 +12,8 @@ namespace WoW335Updater
     internal sealed partial class MainForm
     {
         private readonly Timer monitorTimer = new Timer { Interval = 20000 };
-        private TableLayoutPanel monitorStrips;
+        private FlowLayoutPanel monitorStrips;
+        private bool monitorResizing;
         private string monitorLayoutKey = "";
         private readonly Button monitorButton = new Button();
         private readonly Dictionary<string, Label> monitorBadges = new Dictionary<string, Label>
@@ -28,35 +29,59 @@ namespace WoW335Updater
         private RichTextBox monitorOutput;
         private string monitorReport = "Nie pobrano jeszcze informacji z GitHub.";
 
-        private TableLayoutPanel Build335MonitorHeader()
+        private FlowLayoutPanel Build335MonitorHeader()
         {
-            // Six compact, evenly sized branch badges fit into the header.
-            var frame = UiGrid(1, 1);
-            monitorStrips = UiGrid(3, 2);
-            monitorStrips.RowStyles.Clear();
-            monitorStrips.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-            monitorStrips.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            // One row across the full window: new branches extend right, never wrap.
+            monitorStrips = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoScroll = true,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty,
+                Padding = new Padding(0, 1, 0, 0)
+            };
+            monitorStrips.Resize += delegate { Resize335MonitorBadges(); };
             Arrange335MonitorBadges(new[] { "work", "main" });
-            frame.Controls.Add(monitorStrips, 0, 0);
             monitorButton.Click += delegate { Open335Monitor(); };
-            return frame;
+            return monitorStrips;
+        }
+
+        private void Resize335MonitorBadges()
+        {
+            if (monitorStrips == null || monitorResizing) return;
+            var count = monitorStrips.Controls.Count;
+            if (count == 0) return;
+            monitorResizing = true;
+            try
+            {
+                // Six current branches fit a typical 960px window; with more
+                // branches, keep every badge on one horizontally scrollable row.
+                var available = Math.Max(1, monitorStrips.ClientSize.Width - monitorStrips.Padding.Horizontal);
+                var width = Math.Max(112, Math.Min(210, (available - count * 6 - 4) / count));
+                monitorStrips.SuspendLayout();
+                foreach (Control item in monitorStrips.Controls)
+                    if (item.Width != width) item.Width = width;
+                monitorStrips.ResumeLayout(true);
+            }
+            finally { monitorResizing = false; }
         }
 
         private void Arrange335MonitorBadges(IList<string> branches)
         {
             if (monitorStrips == null) return;
-            var compactNames = new List<string>();
-            for (var index = 0; index < branches.Count && index < 6; index++) compactNames.Add(branches[index]);
-            var layoutKey = string.Join("|", compactNames);
+            // Compare *all* branch names, not the first six. Preserve layout on
+            // routine status refresh so the user's horizontal scroll won't jump.
+            var layoutKey = string.Join("|", branches);
             if (layoutKey == monitorLayoutKey) return;
             monitorLayoutKey = layoutKey;
             monitorStrips.SuspendLayout();
             try
             {
                 monitorStrips.Controls.Clear();
-                for (var i = 0; i < branches.Count && i < 6; i++)
+                foreach (var name in branches)
                 {
-                    var name = branches[i];
                     Label badge;
                     Panel outline;
                     if (!monitorBadges.TryGetValue(name, out badge))
@@ -70,18 +95,20 @@ namespace WoW335Updater
                     badge.Dock = DockStyle.Fill;
                     badge.AutoEllipsis = true;
                     badge.Margin = Padding.Empty;
-                    badge.Padding = new Padding(6, 0, 3, 0);
+                    badge.Padding = new Padding(5, 0, 3, 0);
                     badge.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular);
                     badge.TextAlign = ContentAlignment.MiddleLeft;
-                    outline.Dock = DockStyle.Fill;
-                    outline.Margin = new Padding(3, 2, 3, 2);
+                    // Leave room for the horizontal scrollbar even at 125% DPI.
+                    outline.Height = 25;
+                    outline.Margin = new Padding(3, 1, 3, 1);
                     outline.Padding = new Padding(1);
                     if (!outline.Controls.Contains(badge)) outline.Controls.Add(badge);
-                    monitorStrips.Controls.Add(outline, i % 3, i / 3);
-                    Set335Badge(name, "UNKNOWN", "", "Oczekiwanie na odczyt aktualnego HEAD.");
+                    monitorStrips.Controls.Add(outline);
+                    Set335Badge(name, "UNKNOWN", "", "Oczekiwanie na bieżący HEAD.");
                 }
             }
             finally { monitorStrips.ResumeLayout(true); }
+            Resize335MonitorBadges();
         }
 
         private void Set335Badge(string branch, string state, string head, string detail)
@@ -100,7 +127,9 @@ namespace WoW335Updater
                 : red ? Color.FromArgb(255, 178, 188) : UiMuted;
             var shortHead = string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length));
             var compactName = branch.Replace("feature/", "").Replace("promote/", "p/");
-            badge.Text = compactName + "  •  " + state;
+            var compactState = state == "SUCCESS" ? "OK" : state == "RUNNING" ? "RUN" :
+                state == "PENDING" ? "WAIT" : state == "UNKNOWN" ? "?" : state;
+            badge.Text = compactName + "  •  " + compactState;
             var tooltip = detail + "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss");
             dashboardTips.SetToolTip(outline, tooltip);
             dashboardTips.SetToolTip(badge, tooltip);
@@ -214,18 +243,21 @@ namespace WoW335Updater
                     var rows = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase);
                     try
                     {
-                        var refs = AsArray(json.DeserializeObject(
-                            await GetStringAsync(client, ApiRoot + "/branches?per_page=100")));
-                        foreach (var item in refs)
+                        // GitHub paginates at 100 items. Load subsequent pages
+                        // instead of silently hiding new branches from the bar.
+                        for (var page = 1; page <= 100; page++)
                         {
-                            var row = AsDictionary(item);
-                            var name = GetString(row, "name");
-                            if (ValidGameBranch(name) && !rows.ContainsKey(name)) rows[name] = row;
-                        }
-                        if (refs.Length >= 100)
-                        {
-                            hasErrors = true;
-                            output.AppendLine("Lista branchy ma 100 lub więcej wpisów; pełny wykaz w konfiguracji.");
+                            var refs = AsArray(json.DeserializeObject(await GetStringAsync(
+                                client, ApiRoot + "/branches?per_page=100&page=" + page)));
+                            foreach (var item in refs)
+                            {
+                                var row = AsDictionary(item);
+                                var name = GetString(row, "name");
+                                if (ValidGameBranch(name) && !rows.ContainsKey(name)) rows[name] = row;
+                            }
+                            if (refs.Length < 100) break;
+                            if (page == 100)
+                                throw new InvalidOperationException("Repo ma ponad 10000 branchy; lista niekompletna.");
                         }
                     }
                     catch (Exception ex)
@@ -240,8 +272,6 @@ namespace WoW335Updater
                     branches.Insert(0, "main");
                     branches.Insert(0, "work");
                     Arrange335MonitorBadges(branches);
-                    if (branches.Count > 6)
-                        output.AppendLine("Belka pokazuje pierwsze 6 branchy; pozostałe są w szczegółach poniżej.");
                     foreach (var b in branches)
                     {
                         try

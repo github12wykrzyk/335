@@ -122,24 +122,26 @@ namespace WoW335Updater
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
-            var header = UiGrid(2, 1);
-            header.ColumnStyles.Clear();
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            var branding = UiGrid(1, 3);
-            branding.RowStyles.Clear();
-            branding.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            branding.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
-            branding.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            branding.Controls.Add(UiLabel("WoW 335", 20, UiAccent, true), 0, 0);
-            branding.Controls.Add(UiLabel("3.3.5a  •  build 12340", 8.5f, UiMuted), 0, 1);
+            // A full-width, single-line branch bar sits below the compact title.
+            var header = UiGrid(1, 2);
+            header.RowStyles.Clear();
+            header.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var branding = UiGrid(3, 1);
+            branding.ColumnStyles.Clear();
+            branding.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 167));
+            branding.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            branding.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 205));
+            branding.Controls.Add(UiLabel("WoW 335", 17, UiAccent, true), 0, 0);
+            branding.Controls.Add(UiLabel("Updater " + UpdaterVersion + "   •   3.3.5a / 12340", 8.5f, UiMuted), 1, 0);
             connectionBadge.Text = "GitHub: sprawdzanie";
             connectionBadge.ForeColor = UiMuted;
             connectionBadge.Dock = DockStyle.Fill;
+            connectionBadge.TextAlign = ContentAlignment.MiddleRight;
             connectionBadge.AutoEllipsis = true;
-            branding.Controls.Add(connectionBadge, 0, 2);
+            branding.Controls.Add(connectionBadge, 2, 0);
             header.Controls.Add(branding, 0, 0);
-            header.Controls.Add(Build335MonitorHeader(), 1, 0);
+            header.Controls.Add(Build335MonitorHeader(), 0, 1);
             root.Controls.Add(header, 0, 0);
 
             var config = UiCard("KONFIGURACJA", 2);

@@ -47,12 +47,15 @@ po opuszczeniu pola lub zmianie brancha; token DPAPI pozostaje chroniony.
 Widoczna linia DLL pochodzi z lokalnego manifestu zainstalowanej paczki,
 nie z eksperymentów GitHub; status CI nie jest testem w grze.
 
-Belka GitHub pokazuje w dwóch ciasnych rzędach do 6 bieżących branchy,
-wykrywanych z GitHuba; kolejne branche i pełne SHA są dostępne w szczegółach.
-Każda plakietka dotyczy aktualnego HEAD danego brancha. Odczyt co 20 sekund
-ogranicza liczbę zapytań; status Actions nie poświadcza działania w grze.
+## 0.3.15-335 — wszystkie branche w jednym rzędzie
 
-Test Windows dashboardu tworzy rzeczywistą kontrolkę WinForms x86, sprawdza
-trzy główne przyciski, rozmiary sekcji (bez pionowego obcięcia), zwinięcie
-i rozwinięcie narzędzi oraz siatkę statusów 3 × 2. Belka branchy jest
-przebudowywana tylko po zmianie zestawu nazw, aby nie migotała co odczyt.
+Pełnoszeroka, pojedyncza belka nad konfiguracją pokazuje wszystkie
+odkryte branche. Sześć obecnych branchy mieści się w jednym rzędzie
+z małymi ramkami; nowe branche nie są ukrywane ani przenoszone do
+kolejnego wiersza. Gdy zabraknie miejsca, tylko belka przewija się
+poziomo. Lista jest pobierana stronicowo z GitHuba (do 10000 pozycji
+z jawnym błędem przy przekroczeniu), odświeża status każdego HEAD.
+Szczegóły SHA i workflow pozostają w podpowiedziach oraz monitorze.
+Layout nie przebudowuje się podczas samych zmian statusu, więc nie
+gubi pozycji paska. Test WinForms x86 sprawdza jeden rząd oraz to, że
+dodanie dziewięciu branchy nie pomija ani nie zawija statusów.
