@@ -109,7 +109,9 @@ static int spell_usable(void *ctx,uint32_t spell_id){
 static int begin_attempt(void *ctx,PpGuid guid,uint32_t nonce){
     char script[448],armed[32],want[32];int n;(void)ctx;
     if(!is_owner() || !nonce || !(guid.lo|guid.hi) || !observer())return 0;
-    if(active && (uint32_t)(GetTickCount()-started_ms)<1500u)return 0;
+    /* Core owns the timeout and explicitly cancels this exact nonce.
+     * Keep a shared-bound guard only against concurrent active submissions. */
+    if(active && (uint32_t)(GetTickCount()-started_ms)<PP_RESULT_TIMEOUT_MS)return 0;
     clear();
     n=sprintf_s(script,sizeof(script),
       "_G.W335PP_N='%lu';_G.W335PP_G='0X%08lX%08lX';"
@@ -132,7 +134,7 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
     if(!is_owner() || !active || nonce!=current_attempt ||
        !same(guid,current_target))return PP_RESULT_PENDING;
     elapsed=(uint32_t)(GetTickCount()-started_ms);
-    if(elapsed>1500u)return PP_RESULT_PENDING;
+    if(elapsed>PP_RESULT_TIMEOUT_MS)return PP_RESULT_PENDING;
     (void)sprintf_s(want,sizeof(want),"%lu",(unsigned long)nonce);
     if(!value("W335PP_S",sent,sizeof(sent)) ||
        !value("W335PP_O",loot,sizeof(loot)) ||
@@ -168,12 +170,19 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
     }
     return PP_RESULT_PENDING;
 }
+/* Do not cancel a newer cast or another GUID on delayed callbacks. */
+static void end_attempt(void *ctx,PpGuid guid,uint32_t nonce){
+    (void)ctx;
+    if(is_owner() && active && nonce==current_attempt &&
+       same(guid,current_target))clear();
+}
 PP335_EXPORT const Pp335Policy *__stdcall PP335_VerifiedPolicyV1(void){
     if(!owner)owner=GetCurrentThreadId();
     memset(&policy,0,sizeof(policy));
     policy.spell_usable=spell_usable;
     policy.begin_attempt=begin_attempt;
     policy.cast_result=cast_result;
+    policy.end_attempt=end_attempt;
     policy.world_token=world_token;
     return &policy;
 }

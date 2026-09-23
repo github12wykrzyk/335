@@ -17,6 +17,7 @@ typedef struct {
     uint32_t last_attempt,expected_result_attempt;
     unsigned player_pos_calls,move_player_after_scan;
     unsigned eligible_calls;
+    unsigned end_count;PpGuid end_guid;uint32_t end_nonce;
     uint32_t clock_value;
     float npc_a_distance,npc_b_distance;
     PpGuid last_guid;
@@ -86,6 +87,9 @@ static int cast(void *p,uintptr_t addr,uint32_t spell,PpGuid target,uint32_t att
     ++m->casts;m->cast_spell=spell;m->last_guid=target;m->last_attempt=attempt;
     return 1;
 }
+static void end_attempt(void *p,PpGuid guid,uint32_t nonce){
+    Mock *m=(Mock*)p;++m->end_count;m->end_guid=guid;m->end_nonce=nonce;
+}
 static PpResult result(void *p,PpGuid g,uint32_t attempt){Mock *m=(Mock*)p;(void)g;return m->expected_result_attempt && m->expected_result_attempt!=attempt ? PP_RESULT_PENDING : m->result;}
 static void event(void *p,PpEvent ev,PpGuid g,uint32_t attempt){Mock *m=(Mock*)p;(void)g;(void)attempt;++m->callbacks;++m->events[ev];}
 static Pp12340Host host(Mock *m) {
@@ -94,6 +98,7 @@ static Pp12340Host host(Mock *m) {
     h.clock_ms=mock_clock;
     h.read_u32=read32;h.position=pos;h.eligible_npc=eligible;
     h.spell_usable=usable;h.cast_guid=cast;h.cast_result=result;
+    h.end_attempt=end_attempt;
     h.world_token=world;h.event=event;return h;
 }
 static void defaults(Mock *m) {
@@ -236,8 +241,18 @@ static int test_discover_new_npc_while_previous_result_pending(void){
  CHECK(m.casts==2u && m.last_guid.lo==111u);
  return 0;
 }
+static int test_native_bridge_releases_policy_before_next_cast(void){
+ Mock m;Pp12340Adapter a;Pp12340Host h;uint32_t old;defaults(&m);h=host(&m);
+ CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ pp12340_tick(&a,10u);old=m.last_attempt;
+ CHECK(m.casts==1u && m.last_guid.lo==222u);
+ pp12340_tick(&a,910u);
+ CHECK(m.end_count==1u && m.end_guid.lo==222u && m.end_nonce==old);
+ CHECK(m.casts==2u && m.last_guid.lo==111u && m.last_attempt!=old);
+ return 0;
+}
 int main(void){
-    if(test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
+    if(test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
        test_attempt_correlation()||test_silent_commands()||
        test_moving_player_rechecked_before_cast()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");

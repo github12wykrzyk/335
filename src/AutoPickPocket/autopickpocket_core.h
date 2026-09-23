@@ -58,6 +58,10 @@ typedef struct {
     int (*cast_on_guid)(void *ctx, PpGuid target, uint32_t attempt_id);
     /* Correlate exact GUID and attempt to an authoritative result. */
     PpResult (*result)(void *ctx, PpGuid target, uint32_t attempt_id);
+    /* Game-thread-only cancellation of an abandoned exact GUID+nonce.
+     * The native policy must release its outstanding local arm before this
+     * engine can submit another GUID in the same loader pulse. */
+    void (*end_attempt)(void *ctx, PpGuid target, uint32_t attempt_id);
     /* Optional structured event sink; must not print to WoW chat. */
     void (*event)(void *ctx, PpEvent event, PpGuid target, uint32_t attempt_id);
 } PpAdapter;

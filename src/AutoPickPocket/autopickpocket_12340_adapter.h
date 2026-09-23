@@ -37,6 +37,7 @@ typedef struct {
     int (*cast_guid)(void *, uintptr_t native_cast_va, uint32_t spell_id, PpGuid guid, uint32_t attempt_id);
     /* Result must be correlated to THIS GUID and cast; unknown => pending. */
     PpResult (*cast_result)(void *, PpGuid guid, uint32_t attempt_id);
+    void (*end_attempt)(void *, PpGuid guid, uint32_t attempt_id);
     /* Distinct world/character discriminator, 0 if world unavailable. */
     uint64_t (*world_token)(void *);
     void (*event)(void *, PpEvent event, PpGuid guid, uint32_t attempt_id);

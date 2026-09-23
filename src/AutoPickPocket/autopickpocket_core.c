@@ -66,6 +66,8 @@ int pp_init(PpEngine *engine, PpAdapter api) {
 }
 void pp_enable(PpEngine *engine, int enable) {
     if (!engine) return;
+    if (engine->active_valid && engine->api.end_attempt)
+        engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
     engine->enabled=enable ? 1u : 0u;
     /* Disable forgets pending cast, but not confirmed terminal history. */
     engine->active_valid=0u;
@@ -76,6 +78,8 @@ void pp_enable(PpEngine *engine, int enable) {
 }
 void pp_reset(PpEngine *engine) {
     if (!engine) return;
+    if (engine->active_valid && engine->api.end_attempt)
+        engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
     memset(engine->history,0,sizeof(engine->history));
     engine->history_next=0u;
     engine->diagnostic_started=0u;
@@ -121,6 +125,8 @@ int pp_probe_once(PpEngine *e,PpGuid selected,uint32_t now) {
     if (++e->next_attempt_id==0u) ++e->next_attempt_id;
     e->active_attempt_id=e->next_attempt_id;
     if (e->api.cast_on_guid(e->api.ctx,selected,e->active_attempt_id)!=1) {
+        if (e->api.end_attempt)
+            e->api.end_attempt(e->api.ctx,selected,e->active_attempt_id);
         block(e,selected,now,0u,1);
         ++e->retries;
         emit(e,PP_EVENT_RETRY,selected);
@@ -195,6 +201,10 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         default: return; /* unknown result fails closed */
         }
         if ((uint32_t)(now-engine->started_ms) < PP_RESULT_TIMEOUT_MS) return;
+        /* Both layers release this exact attempt BEFORE another GUID can
+         * be cast in this very pulse; independent timeouts alone race. */
+        if (engine->api.end_attempt)
+            engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
         failure(engine,engine->active,now,PP_TIMEOUT_DELAY_MS,PP_EVENT_TIMEOUT);
         ++engine->timeouts;
         engine->active_valid=0u;
@@ -249,6 +259,8 @@ scan_next:
         ++engine->casts;
         emit(engine,PP_EVENT_CAST,best.guid);
     } else {
+        if (engine->api.end_attempt)
+            engine->api.end_attempt(engine->api.ctx,best.guid,engine->active_attempt_id);
         failure(engine,best.guid,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
         ++engine->retries;
     }

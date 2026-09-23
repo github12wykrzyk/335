@@ -178,6 +178,11 @@ static PpResult pp_result(void *ctx,PpGuid guid,uint32_t attempt_id) {
         return PP_RESULT_PENDING;
     return result;
 }
+static void pp_end_attempt(void *ctx,PpGuid guid,uint32_t attempt_id) {
+    Pp12340Adapter *a=(Pp12340Adapter *)ctx;
+    if(a->host.end_attempt)
+        a->host.end_attempt(a->host.ctx,guid,attempt_id);
+}
 static void pp_event(void *ctx,PpEvent event,PpGuid guid,uint32_t attempt_id) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
     if (a->host.event) a->host.event(a->host.ctx,event,guid,attempt_id);
@@ -207,6 +212,7 @@ int pp12340_bind(Pp12340Adapter *a,const Pp12340Host *host) {
     api.can_cast=pp_can_cast;
     api.cast_on_guid=pp_cast;
     api.result=pp_result;
+    api.end_attempt=pp_end_attempt;
     api.event=pp_event;
     if (!pp_init(&a->engine,api)) return 0;
     a->bound=1u;

@@ -245,6 +245,11 @@ static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     if(!is_game_thread() || !g_policy.cast_result)return PP_RESULT_PENDING;
     return g_policy.cast_result(g_policy.context,guid,attempt_id);
 }
+static void end_attempt(void *ctx,PpGuid guid,uint32_t attempt_id) {
+    (void)ctx;
+    if(is_game_thread() && g_policy.end_attempt)
+        g_policy.end_attempt(g_policy.context,guid,attempt_id);
+}
 static uint64_t world_token(void *ctx) {
     (void)ctx;
     if(!is_game_thread() || !g_policy.world_token)return 0u;
@@ -353,6 +358,7 @@ PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     h.spell_usable=usable;
     h.cast_guid=cast_guid;
     h.cast_result=result;
+    h.end_attempt=end_attempt;
     h.world_token=world_token;
     h.event=event;
     g_policy=*policy;

@@ -94,3 +94,21 @@ compare `scan_ms`, `pulse_gap_ms`, `cast_gap_ms`,
 Stealth+Sprint. In particular a repeating ~3 s gap with no casts while
 `not_castable` is emitted indicates spell/server readiness rather than
 unvisited NPCs; the updater report contains the structured evidence.
+
+## 1.0.6 TEST: coherent attempt release across the two timeout layers
+
+A user report on 1.0.5 showed repeated ~900 ms result timeouts and
+~1-3 s cast gaps. The native policy previously retained its own live
+attempt for 1500 ms, even after the engine had timed out at 900 ms.
+Worse, its timer started *after* the engine clock sample, so setting
+both guards to 900 ms alone would retain an occasional rejected next
+cast. The engine now explicitly signals `end_attempt(GUID,nonce)` on
+its result timeout, failed submission, enable/disable and world reset.
+The native policy clears only the matching in-flight GUID and nonce,
+never a newer attempt or other NPC. Both guards also share the same
+`PP_RESULT_TIMEOUT_MS` bound. Before immediately casting a different
+GUID in the same pulse, the previous local observer arm is released.
+This does not treat an unconfirmed spell as a success, force cooldown,
+change target/movement, or modify AutoLoot; the server still controls
+real spell availability. Validation requires a new exact x86 binary,
+finalized TEST candidate and a user's in-game report.
