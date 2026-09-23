@@ -17,7 +17,10 @@
  * No synthetic success is generated when the loot window simply disappears. */
 static const char LOOT_LUA[] =
     "pcall(function() local n=GetNumLootItems(); "
-    "for i=n,1,-1 do LootSlot(i); ConfirmLootSlot(i) end end)";
+    "for i=n,1,-1 do "
+    "local t,name,qty,quality,locked=GetLootSlotInfo(i); "
+    "if (t or name) and not locked then LootSlot(i) end "
+    "end end)";
 
 static int equal_guid(AlGuid a, AlGuid b) {
     return a.lo == b.lo && a.hi == b.hi;

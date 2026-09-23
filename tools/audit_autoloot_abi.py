@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FUNCTION_CANDIDATES = {
     "ObjectPointer": 0x004D4DB0,
     "UnitRightClick": 0x00731260,
+    "ObjectPosition": 0x004D5EA0,
     "FrameScriptExecute": 0x00819210,
     "LootSlot": 0x00589140,
     "LootResponse": 0x006D53B0,

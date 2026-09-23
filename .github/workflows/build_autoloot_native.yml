@@ -1,0 +1,67 @@
+name: Build isolated 12340 AutoLoot native host
+on:
+  push:
+    branches: ['feature/autoloot-12340']
+    paths:
+      - 'src/AutoLoot/**'
+      - 'tools/audit_autoloot_abi.py'
+      - '.github/workflows/build_autoloot_native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-host-x86:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact stock WoW12340 before linking host
+        run: python tools/verify_client_exe.py --exe Wow.exe --require-target
+      - name: Analyze pinned client function code for native host
+        run: |
+          python -m pip install capstone==5.0.6
+          python tools/audit_autoloot_abi.py --exe Wow.exe --out dist/autoloot_abi.json
+      - name: Build native AutoLoot host and launcher x86
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x86
+          if errorlevel 1 exit /b 1
+          if not exist dist mkdir dist
+          cl /nologo /W4 /WX /O2 /TC /LD /Fe:dist\AutoLoot335_Host_UNREGISTERED.dll src\AutoLoot\autoloot_core.c src\AutoLoot\autoloot_12340_adapter.c src\AutoLoot\autoloot_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib
+          if errorlevel 1 exit /b 1
+          cl /nologo /W4 /WX /O2 /TC /Fe:dist\AutoLoot335_Launcher_PREVIEW.exe src\AutoLoot\autoloot_win32_launcher.c /link /MACHINE:X86 /Brepro User32.lib
+          if errorlevel 1 exit /b 1
+      - name: Verify exact-client host contract, PE32 x86 and exports
+        shell: python
+        run: |
+          import json,struct,hashlib
+          from pathlib import Path
+          report=json.loads(Path('dist/autoloot_abi.json').read_text())
+          assert report['client_sha256']=='2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d'
+          assert report['target_build']==12340
+          for name in ['UnitRightClick','FrameScriptExecute','ObjectPosition']:
+              obj=report['functions'][name]
+              assert obj['section']=='.text' and len(obj['disassembly'])>=4
+              print('EXACT_CLIENT',name,obj['va'],obj['bytes_hex'][:32],obj['disassembly'][:5])
+          for name,dll in [('AutoLoot335_Host_UNREGISTERED.dll',True),('AutoLoot335_Launcher_PREVIEW.exe',False)]:
+              data=(Path('dist')/name).read_bytes()
+              assert data[:2]==b'MZ'
+              off=struct.unpack_from('<I',data,0x3c)[0]
+              assert data[off:off+4]==b'PE\0\0'
+              assert struct.unpack_from('<H',data,off+4)[0]==0x14c
+              assert struct.unpack_from('<H',data,off+24)[0]==0x10b
+              assert bool(struct.unpack_from('<H',data,off+22)[0]&0x2000)==dll
+              print('AUTOLOOT_NATIVE_BUILD:',name,'PE32 x86 PASS',len(data),hashlib.sha256(data).hexdigest())
+          print('FINAL_PACKAGE: NOT_RUN — loader, ABI in-game behavior, registered runtime and uploader delivery unverified')
+      - name: Test portable AutoLoot controller and native-adapter fake-client integration
+        run: python -m unittest discover -s tests -p "test_autoloot*.py" -v
+      - name: Preserve build evidence (NOT a distributable game package)
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoLoot12340-native-preview-NOT-INSTALLABLE-${{ github.sha }}
+          path: |
+            dist/autoloot_abi.json
+            dist/AutoLoot335_Host_UNREGISTERED.dll
+            dist/AutoLoot335_Launcher_PREVIEW.exe
+          if-no-files-found: error
