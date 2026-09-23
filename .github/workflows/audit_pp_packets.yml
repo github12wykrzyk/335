@@ -22,14 +22,14 @@ jobs:
       - name: Compile and run real Windows PE32 x86 packet codec harness
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
           if not defined VSINSTALL exit /b 1
-          call "%VSINSTALL%\\Common7\\Tools\\VsDevCmd.bat" -arch=x86 -host_arch=x64
+          call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=x64
           if errorlevel 1 exit /b 1
-          cl /nologo /W4 /WX /TC /Fe:pp_codec_test_x86.exe src\\AutoPickPocket\\autopickpocket_packet_12340.c tests\\autopickpocket_packet_test.c
+          cl /nologo /W4 /WX /TC /Fe:pp_codec_test_x86.exe src\AutoPickPocket\autopickpocket_packet_12340.c tests\autopickpocket_packet_test.c
           if errorlevel 1 exit /b 1
           pp_codec_test_x86.exe
           if errorlevel 1 exit /b 1
-          python -c "import pathlib,struct; b=pathlib.Path('pp_codec_test_x86.exe').read_bytes(); off=struct.unpack_from('<I',b,0x3c)[0]; assert b[:2]==b'MZ' and b[off:off+4]==b'PE\\x00\\x00' and struct.unpack_from('<H',b,off+4)[0]==0x14c; print('PP_CODEC_WINDOWS_PE32_X86: PASS')"
+          python -c "import pathlib,struct; b=pathlib.Path('pp_codec_test_x86.exe').read_bytes(); off=struct.unpack_from('<I',b,0x3c)[0]; assert b[:2]==b'MZ' and b[off:off+4]==b'PE\x00\x00' and struct.unpack_from('<H',b,off+4)[0]==0x14c; print('PP_CODEC_WINDOWS_PE32_X86: PASS')"
       - name: Audit exact pinned client without patching
         run: python tools/audit_pp_packet_12340.py
