@@ -119,20 +119,20 @@ static uint32_t thread_id(void *ctx) {
     (void)ctx;
     return GetCurrentThreadId();
 }
-static int position(void *ctx, uintptr_t obj, float out[3]) {
+static int position(void *ctx, uintptr_t obj, float coords[3]) {
     (void)ctx;
-    if (!is_game_thread() || !out || !readable((void *)obj, 0x40))
+    if (!is_game_thread() || !coords || !readable((void *)obj, 0x40))
         return 0;
     __try {
         {
             uintptr_t fn = AL_GET_POS_VA;
             __asm {
                 mov ecx, obj
-                push out
+                push coords
                 call fn
             }
         }
-        return _finite(out[0]) && _finite(out[1]) && _finite(out[2]);
+        return _finite(coords[0]) && _finite(coords[1]) && _finite(coords[2]);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return 0;
     }
