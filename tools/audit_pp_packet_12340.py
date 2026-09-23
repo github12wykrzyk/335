@@ -105,4 +105,23 @@ for addr,callat,dest in occurrences[:45]:
     print("DATASTORE_EXAMPLE",hex(addr),hex(callat),hex(dest))
 for dest,count in fanin.most_common(6):
     if count>=3:dump(dest,0,260)
+
+# Candidate functions from third-party 12340 spellqueue/packet tools are NOT
+# assumed compatible with this pinned executable; verify their exact bytes.
+for name,addr in [
+    ("spell_packet_construct",0x0080B2F5),
+    ("spell_packet_send_site",0x0080B4EE),
+    ("spellqueue_send_candidate",0x006B0B50),
+    ("warden_send_candidate",0x00632B50)
+]:
+    print("EXTERNAL_SEND_CANDIDATE",name,hex(addr))
+    dump(addr,0,280)
+for target in (0x006B0B50,0x00632B50):
+    found=[]
+    for start,buf,name in secs:
+        for i in range(len(buf)-4):
+            if buf[i]!=0xE8:continue
+            rel,=struct.unpack_from("<i",buf,i+1)
+            if start+i+5+rel==target:found.append(start+i)
+    print("SEND_XREF",hex(target),len(found),[hex(x) for x in found[:32]])
 print("PACKET_AUDIT: STATIC_ONLY; sender ABI not certified by opcode or xrefs alone")
