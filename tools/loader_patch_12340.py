@@ -91,8 +91,16 @@ def patch(data: bytes, expected_sha256: str) -> tuple[bytes, dict]:
         highest_va_end = max(highest_va_end, align(va + max(virtual_size, raw_size), section_align))
     if size_headers > original_first_raw or original_first_raw % file_align:
         raise ValueError("invalid raw section/header layout for safe expansion")
-    if any(source[section_head:min(section_head+40, original_first_raw)]):
-        raise ValueError("occupied bytes in existing PE headers; refusing to overwrite data")
+    occupied = source[section_head:min(section_head+40, original_first_raw)]
+    if any(occupied):
+        first_used = section_head + next(i for i, ch in enumerate(occupied) if ch)
+        raise ValueError(
+            "occupied bytes in existing PE headers; refusing overwrite: "
+            "section_count=%d optional_header_size=0x%x section_header_offset=0x%x "
+            "next_section_header_end=0x%x first_raw=0x%x size_headers=0x%x "
+            "occupied_at=0x%x occupied_hex=%s" % (
+                count, opt_size, section_head, section_head+40,
+                original_first_raw, size_headers, first_used, occupied.hex()))
     required_headers = align(max(size_headers, section_head + 40), file_align)
     header_delta = align(max(0, required_headers - original_first_raw), file_align)
     if header_delta:
