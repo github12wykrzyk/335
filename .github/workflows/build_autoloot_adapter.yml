@@ -1,0 +1,52 @@
+name: Build isolated WoW335 AutoLoot adapter
+on:
+  push:
+    branches: ['feature/autoloot-12340']
+    paths:
+      - 'src/AutoLoot/**'
+      - 'tests/autoloot_12340_adapter_harness.c'
+      - 'tests/test_autoloot_12340_adapter.py'
+      - '.github/workflows/build_autoloot_adapter.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic-native-x86:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify pinned client before compiling native adapter
+        run: python tools/verify_client_exe.py --exe Wow.exe --require-target
+      - name: Build isolated PE32 x86 adapter (NOT active game runtime)
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x86
+          if errorlevel 1 exit /b 1
+          if not exist dist mkdir dist
+          cl /nologo /W4 /WX /O2 /LD src\AutoLoot\autoloot_core.c src\AutoLoot\autoloot_12340_adapter.c /link /MACHINE:X86 /Brepro /OUT:dist\AutoLoot335_Adapter_DIAGNOSTIC.dll
+          if errorlevel 1 exit /b 1
+      - name: Verify PE32 x86 DLL identity (does not prove in-game behavior)
+        shell: python
+        run: |
+          import struct, hashlib
+          from pathlib import Path
+          p=Path('dist/AutoLoot335_Adapter_DIAGNOSTIC.dll')
+          d=p.read_bytes()
+          assert d[:2]==b'MZ'
+          off=struct.unpack_from('<I',d,0x3c)[0]
+          assert d[off:off+4]==b'PE\0\0'
+          assert struct.unpack_from('<H',d,off+4)[0]==0x14c
+          assert struct.unpack_from('<H',d,off+24)[0]==0x10b
+          assert struct.unpack_from('<H',d,off+22)[0]&0x2000
+          print('ISOLATED_ADAPTER_X86: PASS; size',len(d),'sha256',hashlib.sha256(d).hexdigest())
+          print('FINAL_PACKAGE: NOT_RUN; no verified host, runtime manifest remains empty')
+      - name: Run portable fake-client regression on Windows
+        run: python -m unittest discover -s tests -p test_autoloot_12340_adapter.py -v
+      - name: Save diagnostic only, NOT a runnable game package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoLoot335-DIAGNOSTIC-NOT-INSTALLABLE-${{ github.sha }}
+          path: dist/AutoLoot335_Adapter_DIAGNOSTIC.dll
+          if-no-files-found: error
