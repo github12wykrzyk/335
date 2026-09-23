@@ -34,7 +34,7 @@ static unsigned g_pulse_running;
 static uint32_t g_last_pulse_ms,g_pulse_delta_ms;
 static uint32_t g_last_cast_ms,g_last_result_ms,g_inflight_attempt;
 static uint8_t g_packet_cast_count;
-static unsigned g_native_failover,g_packet_unanswered;
+static unsigned g_native_failover,g_packet_unanswered,g_last_submitted_native;
 static uint32_t g_packet_nonce,g_packet_started_ms;
 static PpGuid g_packet_guid;
 static int valid_memory(const void *p,SIZE_T length) {
@@ -319,7 +319,8 @@ static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target,uint32_
             g_packet_started_ms=(uint32_t)GetTickCount();
         }
     }
-    if(!submitted)g_policy.end_attempt(g_policy.context,target,attempt_id);
+    if(submitted)g_last_submitted_native=(unsigned)using_native;
+    else g_policy.end_attempt(g_policy.context,target,attempt_id);
     return submitted;
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id);
@@ -424,7 +425,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu}\n",
+       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\\"transport\\":\\"%s\\",\\"no_ack_count\\":%u}\n",
        (unsigned long)now,(unsigned)kind,reason,
        (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi,
        (unsigned long)g_adapter.last_scan_duration_ms,
@@ -432,7 +433,9 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
        (unsigned long)g_adapter.engine.queue_count,
        (unsigned long)queue_age,(unsigned long)g_pulse_delta_ms,
        (unsigned long)cast_gap,(unsigned long)result_wait,
-       (unsigned long)next_wait);
+       (unsigned long)next_wait,
+       g_last_submitted_native ? "native_fallback" : "packet",
+       g_packet_unanswered);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);
     CloseHandle(file);
 }

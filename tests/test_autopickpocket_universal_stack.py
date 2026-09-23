@@ -30,6 +30,17 @@ class UniversalPPStack(unittest.TestCase):
         self.assertNotIn("0xF1,0x81,0xBE",host)
         self.assertIn('0x00632B50,"native_head","55 8b ec 56 8b f1 83 be 34 05 00 00 05"',audit)
 
+    def test_no_ack_packet_transport_has_one_way_correlated_native_fallback(self):
+        host=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.c").read_text()
+        policy=(ROOT/"src/AutoPickPocket/autopickpocket_game_policies.c").read_text()
+        self.assertIn("g_packet_nonce==attempt_id",host)
+        self.assertIn("PP_RESULT_TIMEOUT_MS-80u",host)
+        self.assertIn("packet_no_ack_native_fallback",host)
+        self.assertIn('g_last_submitted_native ? "native_fallback" : "packet"',host)
+        self.assertIn("PP_EVENT_PACKET_FALLBACK",host)
+        self.assertIn("PP_RESULT_MONEY_SUCCESS",policy)
+        self.assertIn("PLAYER_MONEY",policy)
+
     def test_registered_pp_is_complete_or_stays_inactive(self):
         runtime=json.loads((ROOT/"runtime/current.json").read_text())
         registry=json.loads((ROOT/"runtime/module_registry.json").read_text())

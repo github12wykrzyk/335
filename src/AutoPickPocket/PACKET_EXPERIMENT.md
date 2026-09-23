@@ -54,3 +54,7 @@ Corrected to the exact verified bytes; packet sender ABI audit is now triggered
 by changes to the host as well. The byte check alone cannot prove in-game
 reception or success; the next exact-HEAD TEST requires a new PE32 x86 build,
 package gate and the user's actual in-game confirmation.
+
+## 1.1.2 TEST — packet no-result adaptation, native cast path
+
+A user-supplied game report contained consecutive packet submission events followed by ~900ms timeouts without server/loot evidence. Packet dispatch is not success. On TWO timed-out exact-GUID and nonce packet submissions, this experimental module changes transport once per process to the verified five-argument native GUID-cast mechanism; it never transmits both paths for one attempt. Structured events contain `packet_no_ack_native_fallback`, `transport` and `no_ack_count`. Native fallback is NOT a confirmation of raw-packet functionality. Native path also observes nonce-scoped `PLAYER_MONEY` together with `LOOT_OPENED` within 400ms; report labels this as indicative `wallet_loot_signal`, not GUID-proven success when loot-source GUID is unavailable. The previously selected user target is not cleared after native casting. User must verify real theft and absence of target side effects in game.

@@ -123,6 +123,10 @@
         {
           "id": "wow12340:0x006B0B50-client-send-packet",
           "mode": "exclusive"
+        },
+        {
+          "id": "wow12340:0x0080DA40-guid-spell-cast",
+          "mode": "exclusive"
         }
       ],
       "build": {
