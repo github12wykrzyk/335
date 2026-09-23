@@ -15,6 +15,8 @@ on:
       - 'tests/test_updater_autoloot_delivery.py'
       - 'tests/test_updater_dynamic_branches.py'
       - 'tests/test_updater_epoch_loader.py'
+      - 'tests/test_loader_preflight.py'
+      - 'tests/test_loader_module_lock.py'
       - 'tests/test_updater_native_preview.py'
       - 'tools/updater/**'
       - '.github/workflows/loader_12340_preview.yml'
