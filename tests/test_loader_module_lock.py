@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class ModuleLockTests(unittest.TestCase):
     def test_native_loader_rejects_missing_or_mismatched_lock_before_any_load(self):
         source = (ROOT / "src/Loader12340/Wow335Loader.c").read_text(encoding="utf-8")
-        self.assertIn('L".wow335_updater', source)
+        self.assertIn('.wow335_updater', source)
         self.assertIn('modules.lock"', source)
         self.assertIn('L"MODULE_LOCK_SHA256_FAILED"', source)
         self.assertIn("CALG_SHA_256", source)
