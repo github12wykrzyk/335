@@ -27,7 +27,7 @@ namespace WoW335Updater
         }
     }
 
-    internal sealed class MainForm : Form
+    internal sealed partial class MainForm : Form
     {
         private const string Owner = "github12wykrzyk";
         private const string Repo = "335";
@@ -74,103 +74,29 @@ namespace WoW335Updater
             configPath = Path.Combine(configDir, "config.json");
 
             BuildUi();
+            MaintenanceFeature.Attach(this);
+            IssueReportFeature.Attach(this);
+            Build335Dashboard();
             LoadConfig();
             RefreshLocalState();
         }
 
         private void BuildUi()
         {
-            var title = new Label { Text = "WoW335 Updater v" + UpdaterVersion, Font = new Font("Segoe UI Semibold", 18F), AutoSize = true, Left = 20, Top = 16 };
-            Controls.Add(title);
-
-            Controls.Add(new Label { Text = "Katalog gry", AutoSize = true, Left = 22, Top = 66 });
-            gameDir.SetBounds(20, 86, 700, 26);
-            Controls.Add(gameDir);
-            browseButton.Text = "Wybierz...";
-            browseButton.SetBounds(730, 84, 108, 30);
-            browseButton.Click += BrowseButton_Click;
-            Controls.Add(browseButton);
-
-            Controls.Add(new Label { Text = "Kanał", AutoSize = true, Left = 22, Top = 126 });
             channel.DropDownStyle = ComboBoxStyle.DropDownList;
-            channel.Items.Add("TEST (work)");
-            channel.Items.Add("STABLE (main)");
-            channel.SetBounds(20, 146, 180, 28);
+            channel.Items.AddRange(new object[] { "TEST (work)", "STABLE (main)" });
             channel.SelectedIndex = 0;
-            Controls.Add(channel);
-
-            Controls.Add(new Label { Text = "GitHub token (tylko odczyt: Contents + Actions)", AutoSize = true, Left = 220, Top = 126 });
-            token.UseSystemPasswordChar = true;
-            token.SetBounds(218, 146, 500, 28);
-            Controls.Add(token);
-            saveButton.Text = "Zapisz";
-            saveButton.SetBounds(730, 144, 108, 30);
-            saveButton.Click += delegate { SaveConfig(true); };
-            Controls.Add(saveButton);
-
-            var note = new Label
-            {
-                Text = "Repo jest prywatne. Token zapisuję lokalnie zaszyfrowany przez Windows DPAPI dla bieżącego użytkownika.",
-                AutoSize = true,
-                Left = 22,
-                Top = 181,
-                ForeColor = Color.DimGray
-            };
-            Controls.Add(note);
-
-            localInfo.AutoSize = false;
-            localInfo.SetBounds(20, 204, 818, 24);
-            localInfo.Font = new Font("Segoe UI Semibold", 9F);
-            Controls.Add(localInfo);
-
-            checkButton.Text = "SPRAWDŹ";
-            checkButton.SetBounds(20, 238, 125, 38);
-            checkButton.Click += async delegate { await CheckAsync(); };
-            Controls.Add(checkButton);
-
-            updateButton.Text = "AKTUALIZUJ";
-            updateButton.SetBounds(155, 238, 125, 38);
-            updateButton.Click += async delegate { await UpdateAsync(); };
-            Controls.Add(updateButton);
-
-            updatePlayButton.Text = "UPDATE + PLAY";
-            updatePlayButton.SetBounds(290, 238, 160, 38);
-            updatePlayButton.Font = new Font("Segoe UI Semibold", 9F);
-            updatePlayButton.Click += async delegate { await UpdateAndPlayAsync(); };
-            Controls.Add(updatePlayButton);
-
-            launchButton.Text = "URUCHOM WOW";
-            launchButton.SetBounds(460, 238, 150, 38);
-            launchButton.Click += delegate { LaunchGame(); };
-            Controls.Add(launchButton);
-
-            Controls.Add(new Label { Text = "Cofnij do:", AutoSize = true, Left = 22, Top = 294 });
             rollbackChoice.DropDownStyle = ComboBoxStyle.DropDownList;
-            rollbackChoice.SetBounds(90, 289, 570, 28);
-            Controls.Add(rollbackChoice);
-
-            rollbackButton.Text = "ROLLBACK";
-            rollbackButton.SetBounds(670, 287, 168, 32);
+            token.UseSystemPasswordChar = true;
+            browseButton.Click += BrowseButton_Click;
+            saveButton.Click += delegate { SaveConfig(true); };
+            checkButton.Click += async delegate { await CheckAsync(); };
+            updateButton.Click += async delegate { await UpdateAsync(); };
+            updatePlayButton.Click += async delegate { await UpdateAndPlayAsync(); };
+            launchButton.Click += delegate { LaunchGame(); };
             rollbackButton.Click += delegate { Rollback(); };
-            Controls.Add(rollbackButton);
-
             status.Text = "Gotowy";
-            status.AutoSize = false;
-            status.SetBounds(20, 332, 818, 26);
-            status.Font = new Font("Segoe UI Semibold", 10F);
-            Controls.Add(status);
-
-            progress.SetBounds(20, 362, 818, 18);
-            progress.Style = ProgressBarStyle.Marquee;
-            progress.MarqueeAnimationSpeed = 25;
-            progress.Visible = false;
-            Controls.Add(progress);
-
             log.ReadOnly = true;
-            log.BackColor = Color.White;
-            log.Font = new Font("Consolas", 9F);
-            log.SetBounds(20, 392, 818, 245);
-            Controls.Add(log);
         }
 
         private void BrowseButton_Click(object sender, EventArgs e)
@@ -203,6 +129,7 @@ namespace WoW335Updater
             channel.Enabled = !value;
             status.Text = text;
             Cursor = value ? Cursors.WaitCursor : Cursors.Default;
+            Set335DashboardBusy(value);
         }
 
         private void Log(string message)
@@ -284,6 +211,7 @@ namespace WoW335Updater
                 SaveConfig(false);
                 SetBusy(true, "Sprawdzanie GitHuba...");
                 lastRemote = await FindLatestPackageAsync();
+                Show335Remote(lastRemote.Channel, lastRemote.HeadSha, lastRemote.RunId);
                 var installed = ReadInstalledState();
                 Log("Najnowszy build: " + ShortSha(lastRemote.HeadSha) + " / run " + lastRemote.RunId);
                 if (installed != null && GetLong(installed, "run_id") == lastRemote.RunId && GetString(installed, "channel") == lastRemote.Channel)
@@ -299,6 +227,7 @@ namespace WoW335Updater
             }
             catch (Exception ex)
             {
+                Show335RemoteError(ex.Message);
                 status.Text = "Błąd sprawdzania aktualizacji";
                 Log("BŁĄD: " + ex.Message);
             }
@@ -320,6 +249,7 @@ namespace WoW335Updater
                 SaveConfig(false);
                 SetBusy(true, "Pobieranie najnowszej paczki...");
                 lastRemote = await FindLatestPackageAsync();
+                Show335Remote(lastRemote.Channel, lastRemote.HeadSha, lastRemote.RunId);
                 Log("Pobieram artifact: " + lastRemote.ArtifactName);
                 var outerBytes = await DownloadBytesAsync(lastRemote.DownloadUrl);
                 Log("Pobrano " + FormatBytes(outerBytes.LongLength) + ". Weryfikuję paczkę...");
@@ -343,6 +273,7 @@ namespace WoW335Updater
             }
             catch (Exception ex)
             {
+                Show335RemoteError(ex.Message);
                 status.Text = "Aktualizacja nie powiodła się";
                 Log("BŁĄD: " + ex.Message);
                 MessageBox.Show(this, ex.Message, "WoW335 Updater", MessageBoxButtons.OK, MessageBoxIcon.Error);
