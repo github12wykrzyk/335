@@ -124,4 +124,12 @@ for target in (0x006B0B50,0x00632B50):
             rel,=struct.unpack_from("<i",buf,i+1)
             if start+i+5+rel==target:found.append(start+i)
     print("SEND_XREF",hex(target),len(found),[hex(x) for x in found[:32]])
+
+for name,addr,n in [
+    ("datastore_init_packet",0x0047B0A0,380),
+    ("datastore_read_slice",0x0047B6B0,260),
+    ("spell_send_caller",0x0080B4D0,75),
+]:
+    print("DATASTORE_ABI_CANDIDATE",name,hex(addr))
+    dump(addr,0,n)
 print("PACKET_AUDIT: STATIC_ONLY; sender ABI not certified by opcode or xrefs alone")
