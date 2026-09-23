@@ -23,7 +23,9 @@
     "package_builder": "tools/package_candidate.py",
     "package_gate": "tools/verify_candidate_package.py",
     "updater": "tools/updater",
-    "experiment_ledger": "runtime/ai_experiments.json"
+    "experiment_ledger": "runtime/ai_experiments.json",
+    "module_registry": "runtime/module_registry.json",
+    "module_registry_verifier": "tools/verify_module_registry.py"
   },
   "branches": {
     "stable": "main",

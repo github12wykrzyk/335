@@ -2,9 +2,9 @@ name: verify
 
 on:
   push:
-    branches: [work, main, 'feature/**', 'promote/**']
+    branches: [work, main, parallel, 'feature/**', 'promote/**']
   pull_request:
-    branches: [work, main]
+    branches: [work, main, parallel]
 
 permissions:
   contents: read

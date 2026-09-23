@@ -10,8 +10,19 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require current main ancestry and curated stable state
+        shell: pwsh
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor origin/main HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Promotion does not contain current main' }
+          $state = Get-Content CURRENT.json -Raw | ConvertFrom-Json
+          if ($state.status -ne 'stable' -or -not $state.stable_baseline) { throw 'Promotion requires accepted stable metadata and baseline' }
       - run: python tools/verify_repo.py
       - run: python tools/verify_current.py
+      - run: python tools/verify_module_registry.py
       - run: python -m unittest discover -s tests -v
       - name: Exact-byte runtime gate
         run: python tools/package_candidate.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json

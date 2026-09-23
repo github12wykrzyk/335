@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "target_build": 12340,
+  "purpose": "Machine-readable ownership and dependency contracts for active Windows x86 modules; declarations are not proof of in-game behavior.",
+  "modules": []
+}

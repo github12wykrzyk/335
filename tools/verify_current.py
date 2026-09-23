@@ -96,6 +96,12 @@ def main():
         errors.append("state is empty but runtime files are present")
     if manifest.get("state") != "empty" and not files:
         errors.append("non-empty state requires runtime files")
+    try:
+        from verify_module_registry import validate as validate_modules
+        registry = load_json(ROOT / "runtime/module_registry.json")
+        errors.extend(validate_modules(manifest, registry))
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        errors.append(f"module ownership registry unavailable: {exc}")
     if errors:
         print("CURRENT RUNTIME VERIFICATION: FAIL")
         for e in errors:
