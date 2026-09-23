@@ -234,9 +234,13 @@ namespace WoW335Updater
                     var latest = await EpochLatestAsync();
                     Show335Remote("TEST / Epoch", latest.Item1, latest.Item2);
                     bool current = installedEpoch != null &&
-                        string.Equals(GetString(installedEpoch, "git_sha"), latest.Item1, StringComparison.Ordinal);
+                        string.Equals(GetString(installedEpoch, "git_sha"), latest.Item1, StringComparison.Ordinal) &&
+                        (AsArray(GetValue(installedEpoch, "module_load_order")).Length == 0 ||
+                         (GetString(installedEpoch, "source_commit") == EpochWorkAutoLootCommit &&
+                          string.Equals(GetString(installedEpoch, "module_sha256"),
+                              EpochWorkAutoLootSha, StringComparison.OrdinalIgnoreCase)));
                     status.Text = current ? "Loader i aktywne DLL są aktualne." :
-                        "Dostępna aktualizacja loadera TEST: " + ShortSha(latest.Item1);
+                        "Dostępna aktualizacja loadera / AutoLoot TEST: " + ShortSha(latest.Item1);
                     Log("Sprawdzono parę Epoch TEST: " + ShortSha(latest.Item1) +
                         " • aktualny stan: " + (current ? "zgodny" : "wymaga instalacji lub aktualizacji"));
                     return;

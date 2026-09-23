@@ -229,3 +229,6 @@ a instalację DLL i uruchomienie gry wstrzymuje do ponownej akcji
 użytkownika. Zachowano oryginalny weryfikowany SHA256,
 Windows x86 bootstrap, kopię aktualnego updatera i odbudowę po błędzie.
 Brak dodatkowego przycisku self-update na ekranie.
+
+## 0.3.14-335-epoch-test — aktualizacja loadera i gry jednym przyciskiem
+TEST: „Aktualizuj” najpierw uruchamia istniejący mechanizm self-update updatera, następnie instaluje zweryfikowaną parę EpochConnection.dll/Wow335Loader.dll i migruje wyłącznie zarządzany AutoLoot335.dll 1.0.0-test do dokładnych bajtów 1.0.1-test z work/3cbc14b. Nowy loader instaluje WH_GETMESSAGE i WH_CALLWNDPROC oraz wysyła ograniczone czasowo impulsy do wątku gry co 40 ms. Nowe bajty AutoLoot są zagnieżdżone jako zasób updatera i weryfikowane SHA256/PE32 x86 w Actions. Lokalny stan starego AutoLoot i Epoch zachowuje backup/rollback; obce DLL nie są nadpisywane. „Sprawdź” rozróżnia aktualny loader i aktualny AutoLoot. Kanał STABLE/main bez zmian. Gra i łączność sieciowa wymagają testu konkretnego SHA.

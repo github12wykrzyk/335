@@ -37,10 +37,11 @@ static void log_event(const wchar_t *name, const wchar_t *event, DWORD code) {
     fclose(f);
 }
 
-/* AutoLoot335.dll from work/149a2523 is not self-activating: the game-thread
- * WH_GETMESSAGE hook and enable message are part of its documented ABI.
- * The caller/updater verifies exact bytes and manages the single DLL list.
- * This hook is installed only for the matching explicitly listed module. */
+/* AutoLoot335 1.0.1-test: a verified game-window-thread callback drives
+ * both WH_GETMESSAGE and WH_CALLWNDPROC. The loader never invokes game
+ * internals on its own worker thread. Fail closed when required exports are
+ * absent instead of silently reverting to the old input-delayed protocol.
+ */
 typedef UINT (WINAPI *al_message_fn)(void);
 typedef LRESULT (CALLBACK *al_hook_fn)(int, WPARAM, LPARAM);
 typedef struct { DWORD pid; DWORD tid; HWND hwnd; } GameWindow;
@@ -50,22 +51,27 @@ static BOOL CALLBACK find_game_window(HWND hwnd, LPARAM value) {
     if (!IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER)) return TRUE;
     tid=GetWindowThreadProcessId(hwnd,&pid);
     if (tid && pid==game->pid) {
-        game->tid=tid;
-        game->hwnd=hwnd;
-        return FALSE;
+        game->tid=tid; game->hwnd=hwnd; return FALSE;
     }
     return TRUE;
 }
+static int send_control(HWND hwnd, UINT message, WPARAM command, UINT wait_ms) {
+    DWORD_PTR ignored=0;
+    return SendMessageTimeoutW(hwnd,message,command,0,
+        SMTO_ABORTIFHUNG | SMTO_BLOCK,wait_ms,&ignored)!=0;
+}
 static DWORD activate_autoloot(HMODULE host) {
     GameWindow game={0};
-    HHOOK hook=NULL;
+    HHOOK msg_hook=NULL, dispatch_hook=NULL;
     al_message_fn getmsg=(al_message_fn)GetProcAddress(host,"AL335_MessageId");
     al_hook_fn callback=(al_hook_fn)GetProcAddress(host,"AL335_HookProc");
+    al_hook_fn dispatch=(al_hook_fn)GetProcAddress(host,"AL335_CallWndProc");
     UINT message;
-    DWORD start=GetTickCount();
+    DWORD start=GetTickCount(), result=1u;
     if (!getmsg) getmsg=(al_message_fn)GetProcAddress(host,"_AL335_MessageId@0");
     if (!callback) callback=(al_hook_fn)GetProcAddress(host,"_AL335_HookProc@12");
-    if (!getmsg || !callback || !(message=getmsg())) {
+    if (!dispatch) dispatch=(al_hook_fn)GetProcAddress(host,"_AL335_CallWndProc@12");
+    if (!getmsg || !callback || !dispatch || !(message=getmsg())) {
         log_event(L"AutoLoot335.dll",L"HOOK_EXPORT_MISSING",GetLastError());
         return 1;
     }
@@ -75,29 +81,39 @@ static DWORD activate_autoloot(HMODULE host) {
         if (!game.tid) Sleep(100);
     }
     if (!game.tid) {
-        log_event(L"AutoLoot335.dll",L"GAME_WINDOW_NOT_FOUND",0); return 1;
-    }
-    hook=SetWindowsHookExW(WH_GETMESSAGE,callback,host,game.tid);
-    if (!hook) {
-        log_event(L"AutoLoot335.dll",L"HOOK_FAILED",GetLastError()); return 1;
-    }
-    if (!PostMessageW(game.hwnd,message,1u,0u)) {
-        log_event(L"AutoLoot335.dll",L"ENABLE_FAILED",GetLastError());
-        UnhookWindowsHookEx(hook);
+        log_event(L"AutoLoot335.dll",L"GAME_WINDOW_NOT_FOUND",0);
         return 1;
     }
-    log_event(L"AutoLoot335.dll",L"HOOK_ENABLED",0);
+    msg_hook=SetWindowsHookExW(WH_GETMESSAGE,callback,host,game.tid);
+    if (!msg_hook) {
+        log_event(L"AutoLoot335.dll",L"HOOK_FAILED",GetLastError());
+        return 1;
+    }
+    dispatch_hook=SetWindowsHookExW(WH_CALLWNDPROC,dispatch,host,game.tid);
+    if (!dispatch_hook) {
+        log_event(L"AutoLoot335.dll",L"DISPATCH_HOOK_FAILED",GetLastError());
+        goto cleanup;
+    }
+    if (!send_control(game.hwnd,message,1u,2000u)) {
+        log_event(L"AutoLoot335.dll",L"ENABLE_FAILED",GetLastError());
+        goto cleanup;
+    }
+    log_event(L"AutoLoot335.dll",L"HOOK_ENABLED_RESPONSIVE",0);
     while (IsWindow(game.hwnd)) {
         DWORD owner=0;
         GetWindowThreadProcessId(game.hwnd,&owner);
-        if (owner!=game.pid || !PostMessageW(game.hwnd,message,2u,0u)) break;
-        Sleep(100);
+        if (owner!=game.pid) break;
+        /* A timed-out pulse is retried, never queued or run on this thread. */
+        send_control(game.hwnd,message,2u,200u);
+        Sleep(40);
     }
-    if (IsWindow(game.hwnd)) PostMessageW(game.hwnd,message,0u,0u);
-    Sleep(150);
-    UnhookWindowsHookEx(hook);
-    log_event(L"AutoLoot335.dll",L"HOOK_STOPPED",0);
-    return 0;
+    result=0;
+cleanup:
+    if (IsWindow(game.hwnd)) send_control(game.hwnd,message,0u,200u);
+    if (dispatch_hook) UnhookWindowsHookEx(dispatch_hook);
+    if (msg_hook) UnhookWindowsHookEx(msg_hook);
+    log_event(L"AutoLoot335.dll",L"HOOK_STOPPED",result);
+    return result;
 }
 
 static DWORD WINAPI load_modules(LPVOID unused) {

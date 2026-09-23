@@ -58,6 +58,29 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           [IO.File]::WriteAllText('dist/autoloot_diag_sha.txt', '${{ github.sha }}', [Text.Encoding]::ASCII)
 
+      - name: Verify bundled AutoLoot exact Windows x86 bytes and work provenance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          @'
+          import hashlib, json, struct
+          from pathlib import Path
+          p=Path('src/Loader12340/approved/AutoLoot335.dll')
+          data=p.read_bytes()
+          digest=hashlib.sha256(data).hexdigest()
+          assert digest=='6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3'
+          off=struct.unpack_from('<I',data,0x3c)[0]
+          assert data[:2]==b'MZ' and data[off:off+4]==b'PE\0\0'
+          assert struct.unpack_from('<H',data,off+4)[0]==0x14c
+          assert struct.unpack_from('<H',data,off+24)[0]==0x10b
+          assert struct.unpack_from('<H',data,off+22)[0]&0x2000
+          meta=json.loads(Path('runtime/epoch_loader_interop.json').read_text())
+          assert meta['source']['sha256']==digest
+          assert meta['source']['commit']=='3cbc14b66aa2ed5687b0132190c4381494c0bdb6'
+          assert meta['source']['run_id']==35872640642
+          print('EPOCH_AUTOLOOT_APPROVED_PE32_X86: PASS',digest)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compile WinForms updater and bootstrap x86
         shell: pwsh
         run: |
@@ -97,6 +120,7 @@ jobs:
             /resource:src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.lua,AutoLootDiag.WoW335AutoLootDiag.lua `
             /resource:src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.toc,AutoLootDiag.WoW335AutoLootDiag.toc `
             /resource:dist\autoloot_diag_sha.txt,AutoLootDiag.SourceCommit.txt `
+            /resource:src\Loader12340\approved\AutoLoot335.dll,EpochInterop.AutoLoot335.dll `
             tools\updater\WoW335Updater.cs `
             tools\updater\Updater335Dashboard.cs `
             tools\updater\Updater335GitHubMonitor.cs `

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -17,14 +18,44 @@ namespace WoW335Updater
         private const string EpochOriginalSha = "9af04f7afd21b0bc93860d66e6ccdc96ccf1b039ea31871119a3deaa271352c3";
         private const string EpochDll = "EpochConnection.dll";
         private const string EpochLoader = "Wow335Loader.dll";
-        // Exact registered work TEST snapshot currently installed in the user's updater.
-        // This experiment neither rebuilds nor overwrites its AutoLoot module.
-        private const string EpochWorkAutoLootCommit = "149a2523f8068e407a8fc74e058b4f24c81d21e5";
-        private const string EpochWorkAutoLootSha = "52bc5100d46c6edaa172ab5342d565454ea6629d7a0ec09bafc044f8f0f2b47e";
+        // Both source identities are verified. Legacy is accepted ONLY for
+        // migration; installed responsive 1.0.1-test is required for "current".
+        private const string EpochLegacyAutoLootCommit = "149a2523f8068e407a8fc74e058b4f24c81d21e5";
+        private const string EpochLegacyAutoLootSha = "52bc5100d46c6edaa172ab5342d565454ea6629d7a0ec09bafc044f8f0f2b47e";
+        private const string EpochWorkAutoLootCommit = "3cbc14b66aa2ed5687b0132190c4381494c0bdb6";
+        private const long EpochWorkAutoLootRunId = 35872640642L;
+        private const string EpochWorkAutoLootSha = "6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3";
         private const string EpochWorkAutoLoot = "AutoLoot335.dll";
         private readonly Button epochTestInstallButton = new Button();
         private readonly Button epochModulesButton = new Button();
         private readonly Button epochTestRollbackButton = new Button();
+
+        private static bool EpochKnownAutoLoot(string hash, string commit)
+        {
+            return (commit == EpochLegacyAutoLootCommit &&
+                    string.Equals(hash, EpochLegacyAutoLootSha, StringComparison.OrdinalIgnoreCase)) ||
+                   (commit == EpochWorkAutoLootCommit &&
+                    string.Equals(hash, EpochWorkAutoLootSha, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static byte[] EpochApprovedAutoLoot()
+        {
+            using (var stream = Assembly.GetExecutingAssembly()
+                .GetManifestResourceStream("EpochInterop.AutoLoot335.dll"))
+            {
+                if (stream == null || stream.Length < 512 || stream.Length > 1024 * 1024)
+                    throw new InvalidOperationException("Updater nie zawiera nowego AutoLoot PE32 x86.");
+                using (var output = new MemoryStream())
+                {
+                    stream.CopyTo(output);
+                    var bytes = output.ToArray();
+                    if (!string.Equals(Sha256(bytes), EpochWorkAutoLootSha, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("Nieprawidłowy SHA256 nowego AutoLoot w updaterze.");
+                    EpochPE32(bytes);
+                    return bytes;
+                }
+            }
+        }
 
         private static string EpochStatePath(string root)
         {
@@ -94,9 +125,8 @@ namespace WoW335Updater
                                StringComparison.Ordinal)))
                 throw new InvalidOperationException("Epoch TEST: nieznany zestaw aktywnych DLL.");
             if (entries.Length == 1 &&
-                (!string.Equals(GetString(state, "module_sha256"), EpochWorkAutoLootSha,
-                    StringComparison.OrdinalIgnoreCase) ||
-                 GetString(state, "source_commit") != EpochWorkAutoLootCommit))
+                !EpochKnownAutoLoot(GetString(state, "module_sha256"),
+                    GetString(state, "source_commit")))
                 throw new InvalidOperationException("Epoch TEST: niezgodna proweniencja AutoLoot.");
             return state;
         }
@@ -145,7 +175,10 @@ namespace WoW335Updater
                     "Epoch TEST: lista zawiera nieobsługiwane DLL. Nie nadpisuję jej ani nie uruchamiam.");
             var state = ReadInstalledState();
             if (state == null || GetString(state, "channel") != "test" ||
-                GetString(state, "head_sha") != EpochWorkAutoLootCommit ||
+                !EpochKnownAutoLoot(
+                    GetString(state, "head_sha") == EpochLegacyAutoLootCommit
+                        ? EpochLegacyAutoLootSha : EpochWorkAutoLootSha,
+                    GetString(state, "head_sha")) ||
                 GetLong(state, "schema_version") != 2)
                 throw new InvalidOperationException(
                     "Epoch TEST: AutoLoot musi pochodzić z dokładnego zweryfikowanego commita work.");
@@ -162,10 +195,12 @@ namespace WoW335Updater
             var hashes = hashValue as Dictionary<string, object>;
             if (hashValue != null && hashes == null)
                 throw new InvalidOperationException("Epoch TEST: nieprawidłowy format manifestu SHA256 work.");
-            EpochCheckFile(Path.Combine(root, EpochWorkAutoLoot), EpochWorkAutoLootSha);
+            var expectedHash = GetString(state, "head_sha") == EpochLegacyAutoLootCommit
+                ? EpochLegacyAutoLootSha : EpochWorkAutoLootSha;
+            EpochCheckFile(Path.Combine(root, EpochWorkAutoLoot), expectedHash);
             if (hashes != null)
             {
-                if (!string.Equals(GetString(hashes, EpochWorkAutoLoot), EpochWorkAutoLootSha,
+                if (!string.Equals(GetString(hashes, EpochWorkAutoLoot), expectedHash,
                         StringComparison.OrdinalIgnoreCase) ||
                     !string.Equals(GetString(hashes, "dlls.txt"), Sha256File(listPath),
                         StringComparison.OrdinalIgnoreCase))
@@ -175,15 +210,124 @@ namespace WoW335Updater
             {
                 // Pin legacy acceptance to the precise, successful work run;
                 // reject any other state that has no per-file SHA256 evidence.
-                if (GetLong(state, "run_id") != 35855470746L ||
+                if (GetString(state, "head_sha") != EpochLegacyAutoLootCommit ||
+                    GetLong(state, "run_id") != 35855470746L ||
                     GetString(state, "artifact_name") !=
-                        "WoW335-WORK-CANDIDATE-" + EpochWorkAutoLootCommit)
+                        "WoW335-WORK-CANDIDATE-" + EpochLegacyAutoLootCommit)
                     throw new InvalidOperationException(
                         "Epoch TEST: starszy stan updatera nie ma zaufanego manifestu SHA256.");
                 Log("Epoch TEST: starszy manifest work bez managed_sha256; " +
                     "potwierdzono SHA256 AutoLoot335.dll i zachowano istniejący dlls.txt.");
             }
+            if (GetString(state, "head_sha") == EpochWorkAutoLootCommit &&
+                (GetLong(state, "run_id") != EpochWorkAutoLootRunId ||
+                 GetString(state, "artifact_name") !=
+                     "WoW335-WORK-CANDIDATE-" + EpochWorkAutoLootCommit ||
+                 hashes == null))
+                throw new InvalidOperationException("Epoch TEST: nowy AutoLoot wymaga kompletnego manifestu work.");
             return order;
+        }
+
+        // Migrates only the exact previously managed work AutoLoot. The new
+        // PE32 DLL was embedded in the self-updated, exact-SHA updater build.
+        // Both local manifests and the old DLL are backed up before any write;
+        // a failed migration restores all three and preserves the backups
+        // when restoration itself encounters a foreign file.
+        private void EpochUpgradeAutoLoot(string root, string[] order)
+        {
+            if (order.Length == 0) return; // no prior managed module: no guessed files
+            if (order.Length != 1 || order[0] != EpochWorkAutoLoot)
+                throw new InvalidOperationException("Epoch TEST: niedozwolona kolejność DLL.");
+            var currentOrder = EpochExistingManagedOrder(root, Path.Combine(root, "dlls.txt"));
+            if (!order.SequenceEqual(currentOrder, StringComparer.Ordinal))
+                throw new InvalidOperationException("Epoch TEST: lista DLL zmieniła się w trakcie aktualizacji.");
+            var epochState = EpochInstalled(root);
+            var workState = ReadInstalledState();
+            if (epochState == null || workState == null)
+                throw new InvalidOperationException("Epoch TEST: brak zarządzanych manifestów.");
+            var oldHash = GetString(epochState, "module_sha256");
+            var oldCommit = GetString(epochState, "source_commit");
+            if (!EpochKnownAutoLoot(oldHash, oldCommit) ||
+                GetString(workState, "head_sha") != oldCommit)
+                throw new InvalidOperationException("Epoch TEST: nieznana wersja AutoLoot.");
+            var target = Path.Combine(root, EpochWorkAutoLoot);
+            EpochCheckFile(target, oldHash);
+            if (oldCommit == EpochWorkAutoLootCommit)
+            {
+                EpochCheckFile(target, EpochWorkAutoLootSha);
+                return;
+            }
+            var approved = EpochApprovedAutoLoot();
+            var workPath = InstalledStatePath(root);
+            var epochPath = EpochStatePath(root);
+            EpochNotLink(workPath); EpochNotLink(epochPath);
+            var folder = Path.Combine(EpochManager(root), "migrate-" + Guid.NewGuid().ToString("N"));
+            EpochNotLink(folder);
+            Directory.CreateDirectory(folder);
+            var backupDll = Path.Combine(folder, EpochWorkAutoLoot);
+            var backupWork = Path.Combine(folder, "work-installed.json");
+            var backupEpoch = Path.Combine(folder, "epoch-installed.json");
+            var nextDll = Path.Combine(folder, "new-AutoLoot335.dll");
+            bool gameTouched = false, workTouched = false, epochTouched = false;
+            bool cleanup = false;
+            try
+            {
+                File.Copy(target, backupDll);
+                File.Copy(workPath, backupWork);
+                File.Copy(epochPath, backupEpoch);
+                EpochCheckFile(backupDll, oldHash);
+                File.WriteAllBytes(nextDll, approved);
+                EpochCheckFile(nextDll, EpochWorkAutoLootSha);
+                if (IsGameRunning(root))
+                    throw new InvalidOperationException("Zamknij WoW przed zmianą AutoLoot.");
+                EpochCheckFile(Path.Combine(root, "Wow.exe"), UpdaterBuildInfo.PinnedClientSha256);
+                EpochCheckFile(target, oldHash);
+                gameTouched = true;
+                EpochStageFile(nextDll, target, EpochWorkAutoLootSha);
+                var hashes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                var oldHashes = GetValue(workState, "managed_sha256") as Dictionary<string, object>;
+                if (GetValue(workState, "managed_sha256") != null && oldHashes == null)
+                    throw new InvalidOperationException("Epoch TEST: nieprawidłowy manifest SHA256 work.");
+                if (oldHashes != null)
+                    foreach (var entry in oldHashes) hashes[entry.Key] = entry.Value;
+                hashes[EpochWorkAutoLoot] = EpochWorkAutoLootSha;
+                hashes["dlls.txt"] = Sha256File(Path.Combine(root, "dlls.txt"));
+                hashes["Wow.exe"] = UpdaterBuildInfo.PinnedClientSha256;
+                workState["managed_sha256"] = hashes;
+                workState["head_sha"] = EpochWorkAutoLootCommit;
+                workState["run_id"] = EpochWorkAutoLootRunId;
+                workState["artifact_name"] = "WoW335-WORK-CANDIDATE-" + EpochWorkAutoLootCommit;
+                workState["updater_version"] = UpdaterBuildInfo.Version;
+                workTouched = true;
+                UpdaterSafety.WriteUtf8Atomic(workPath, json.Serialize(workState),
+                    ".epochstage", ".epochprevious");
+                epochState["module_sha256"] = EpochWorkAutoLootSha;
+                epochState["source_commit"] = EpochWorkAutoLootCommit;
+                epochTouched = true;
+                UpdaterSafety.WriteUtf8Atomic(epochPath, json.Serialize(epochState),
+                    ".epochstage", ".epochprevious");
+                EpochValidateLaunch(root);
+                Log("Epoch TEST: AutoLoot 1.0.1-test zainstalowany, SHA256 " +
+                    EpochWorkAutoLootSha.Substring(0, 16) + "...; loader i gra zgodne.");
+                cleanup = true;
+            }
+            catch
+            {
+                // Restore state before DLL so no manifest ever certifies
+                // unverified bytes. If restore cannot complete, retain folder.
+                if (epochTouched)
+                    EpochStageFile(backupEpoch, epochPath, Sha256File(backupEpoch));
+                if (workTouched)
+                    EpochStageFile(backupWork, workPath, Sha256File(backupWork));
+                if (gameTouched)
+                    EpochStageFile(backupDll, target, oldHash);
+                cleanup = true;
+                throw;
+            }
+            finally
+            {
+                if (cleanup && Directory.Exists(folder)) Directory.Delete(folder, true);
+            }
         }
 
         // Same live-HEAD and latest-success gate used by installation, without
@@ -331,7 +475,11 @@ namespace WoW335Updater
                     string.Equals(GetString(previousEpochState, "epoch_sha256"), epochSha,
                         StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(GetString(previousEpochState, "loader_sha256"), loaderSha,
-                        StringComparison.OrdinalIgnoreCase))
+                        StringComparison.OrdinalIgnoreCase) &&
+                    (activeOrder.Length == 0 ||
+                     (GetString(previousEpochState, "source_commit") == EpochWorkAutoLootCommit &&
+                      string.Equals(GetString(previousEpochState, "module_sha256"),
+                          EpochWorkAutoLootSha, StringComparison.OrdinalIgnoreCase))))
                 {
                     EpochValidateLaunch(root);
                     if (GetString(previousEpochState, "git_sha") != sha)
@@ -366,6 +514,7 @@ namespace WoW335Updater
                 {
                     // Update ONLY the verified TEST pair. Preserve original backup,
                     // managed work AutoLoot and exact dlls.txt; restore prior pair on failure.
+                    var previousEpochManifest = File.ReadAllBytes(EpochStatePath(root));
                     var backupIdExisting = GetString(previousEpochState, "backup_id");
                     var backupOriginal = Path.Combine(manager, "backups", backupIdExisting, EpochDll);
                     EpochCheckFile(backupOriginal, EpochOriginalSha);
@@ -399,7 +548,9 @@ namespace WoW335Updater
                         previousEpochState["loader_sha256"] = loaderSha;
                         UpdaterSafety.WriteUtf8Atomic(EpochStatePath(root),
                             json.Serialize(previousEpochState), ".stage", ".previous");
-                        statusText = "Aktualizacja Epoch TEST: " + sha.Substring(0, 12) +
+                        stage = "migracja AutoLoot po aktualizacji loadera";
+                        EpochUpgradeAutoLoot(root, activeOrder);
+                        statusText = "Aktualizacja Epoch TEST + AutoLoot: " + sha.Substring(0, 12) +
                             " • moduły: " + activeOrder.Length;
                         Log(statusText);
                         completed = true;
@@ -407,6 +558,9 @@ namespace WoW335Updater
                     }
                     catch
                     {
+                        // A migration failure restores the old module/work state
+                        // internally; restore this transaction's original pair
+                        // and its exact pre-update manifest as well.
                         if (epochReplaced)
                         {
                             var target = Path.Combine(root, EpochDll);
@@ -426,6 +580,10 @@ namespace WoW335Updater
                             else
                                 EpochCheckFile(loaderPath, oldHash);
                         }
+                        var oldEpochStateFile = Path.Combine(transactional, "oldEpochState.json");
+                        File.WriteAllBytes(oldEpochStateFile, previousEpochManifest);
+                        EpochStageFile(oldEpochStateFile, EpochStatePath(root),
+                            Sha256(previousEpochManifest));
                         restoreCompleted = true;
                         throw;
                     }
@@ -475,7 +633,9 @@ namespace WoW335Updater
                     };
                     UpdaterSafety.WriteUtf8Atomic(EpochStatePath(root), json.Serialize(installed),
                         ".stage", ".previous");
-                    statusText = "Epoch TEST: " + sha.Substring(0, 12) +
+                    stage = "migracja AutoLoot po instalacji loadera";
+                    EpochUpgradeAutoLoot(root, activeOrder);
+                    statusText = "Epoch TEST + AutoLoot: " + sha.Substring(0, 12) +
                         " • aktywne moduły: " + activeOrder.Length + " • wymagany test w grze.";
                     Log(statusText);
                     completed = true;
@@ -496,6 +656,7 @@ namespace WoW335Updater
                         if (!previousList && File.Exists(listPath) &&
                             string.Equals(Sha256File(listPath), dllSha, StringComparison.OrdinalIgnoreCase))
                             File.Delete(listPath);
+                        if (File.Exists(EpochStatePath(root))) File.Delete(EpochStatePath(root));
                     }
                     throw;
                 }
@@ -598,7 +759,8 @@ namespace WoW335Updater
             var entries = AsArray(GetValue(state, "module_load_order"));
             if (entries.Length == 1)
             {
-                EpochCheckFile(Path.Combine(root, EpochWorkAutoLoot), EpochWorkAutoLootSha);
+                EpochCheckFile(Path.Combine(root, EpochWorkAutoLoot),
+                    GetString(state, "module_sha256"));
                 var current = EpochExistingManagedOrder(root, Path.Combine(root, "dlls.txt"));
                 if (current.Length != 1 ||
                     !string.Equals(current[0], EpochWorkAutoLoot, StringComparison.Ordinal))

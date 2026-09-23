@@ -6,25 +6,26 @@
   "branch": "feature/loader-12340",
   "source": {
     "branch": "work",
-    "commit": "149a2523f8068e407a8fc74e058b4f24c81d21e5",
-    "run_id": 35855470746,
+    "commit": "3cbc14b66aa2ed5687b0132190c4381494c0bdb6",
+    "run_id": 35872640642,
     "module": "AutoLoot335.dll",
-    "sha256": "52bc5100d46c6edaa172ab5342d565454ea6629d7a0ec09bafc044f8f0f2b47e",
+    "sha256": "6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3",
     "owner": "AutoLoot",
     "resources": [
       "wow12340:object-manager observe",
       "wow12340:0x00731260-unit-interact exclusive",
       "wow12340:0x00819210-framescript-execute exclusive",
       "win32:WH_GETMESSAGE exclusive",
+      "win32:WH_CALLWNDPROC exclusive",
       "logical:loot-ui exclusive",
       "logical:interaction exclusive"
     ]
   },
-  "activation": "AL335_HookProc game-window-thread WH_GETMESSAGE + AL335_MessageId on enable",
+  "activation": "AL335_HookProc + AL335_CallWndProc on game-window thread; bounded SendMessageTimeout pulses; enable ON",
   "load_order": [
     "AutoLoot335.dll"
   ],
-  "existing_work_files_policy": "Keep managed AutoLoot335.dll and dlls.txt bytes unchanged; install separate EpochConnection.dll TEST pair only with exact pinned work state and SHA256; revert Epoch alone",
+  "existing_work_files_policy": "Updater-owned migration of exact legacy work/149a2523 AutoLoot to verified work/3cbc14b on TEST, with managed hashes, backup and rollback. Preserve dlls.txt order and unrelated game files; no STABLE.",
   "compatibility": "not_verified_in_game",
   "final_package": "NOT_RUN"
 }

@@ -13,13 +13,15 @@
       ],
       "dependencies": [
         "EpochConnection.dll: user-provided exact SHA 9af04f7afd21b0bc93860d66e6ccdc96ccf1b039ea31871119a3deaa271352c3",
-        "Wow335Loader.dll: standalone x86 experimental loader"
+        "Wow335Loader.dll: standalone x86 experimental loader",
+        "AutoLoot335.dll: exact work/3cbc14b66aa2ed5687b0132190c4381494c0bdb6, PE32 x86 SHA256 6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3 (replaces legacy pinned work/149a2523 on TEST only)"
       ],
       "shared_resources": [
         "logical:startup-loader",
         "logical:dll-load-order",
         "win32:epochconnection-import-directory",
-        "win32:epochconnection-exports-tls-network"
+        "win32:epochconnection-exports-tls-network",
+        "win32:WH_GETMESSAGE+WH_CALLWNDPROC (single owner AutoLoot responsive host)"
       ],
       "observed_head": "18905f8c9d3ebc57588e12b1f2f76416572c2659",
       "verified_commit": null,
