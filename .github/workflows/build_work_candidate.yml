@@ -42,7 +42,7 @@ jobs:
           $versionInfo = (Get-Item -LiteralPath Wow.exe).VersionInfo
           $fileVersion = [string]$versionInfo.FileVersion
           $productVersion = [string]$versionInfo.ProductVersion
-          $is12340 = $fileVersion -match '(^|[^0-9])3\.3\.5\.12340([^0-9]|$)' -or $productVersion -match '(^|[^0-9])3\.3\.5\.12340([^0-9]|$)'
+          $is12340 = ($versionInfo.FileMajorPart -eq 3 -and $versionInfo.FileMinorPart -eq 3 -and $versionInfo.FileBuildPart -eq 5 -and $versionInfo.FilePrivatePart -eq 12340)
           $audit | Add-Member -Force NoteProperty file_version_resource $fileVersion
           $audit | Add-Member -Force NoteProperty product_version_resource $productVersion
           $audit | Add-Member -Force NoteProperty version_resource_matches_12340 ([bool]$is12340)
