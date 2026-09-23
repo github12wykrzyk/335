@@ -113,6 +113,45 @@ def audit_layout(data: bytes) -> dict:
                                   "pointer_to_raw_data":hx(raw_ptr),
                                   "size_of_data":rd32(base+16),
                                   "pointer_inside_file":raw_ptr<len(data)})
+    duplicate_rows=[]
+    for row in rows:
+        src_off=int(row["header_offset"],16)
+        original=data[src_off:src_off+40]
+        at=tail.find(original)
+        if at>=0:
+            duplicate_rows.append({"name":row["name"],"original_header_offset":row["header_offset"],
+                                   "duplicate_header_offset":hx(end+at),"full_40_bytes_identical":True})
+        elif row["name"]==".data":
+            at=tail.find(original[8:40])
+            if at>=0:
+                duplicate_rows.append({"name":row["name"],"original_header_offset":row["header_offset"],
+                                       "duplicate_fields_offset":hx(end+at),
+                                       "matching_field_bytes":32,
+                                       "full_40_bytes_identical":False})
+    security_detail=None
+    if len(directories)>4 and directories[4]["size"]:
+        addr=int(directories[4]["address"],16)
+        length=directories[4]["size"]
+        def cert_probe(pos):
+            if pos+8>len(data): return None
+            size,revision,cert_type=struct.unpack_from("<IHH",data,pos)
+            return {"raw_offset":hx(pos),"first_8_bytes":data[pos:pos+8].hex(),
+                    "declared_win_certificate_size":size,
+                    "revision":hx(revision),"type":hx(cert_type),
+                    "plausible_header":8<=size<=length and revision in (0x100,0x200)
+                    and cert_type in (1,2,3,4)}
+        security_detail={
+            "directory_pointer":hx(addr),"directory_size":length,
+            "points_inside_sections":[row["name"] for row in rows
+                if int(row["raw_size"],16) and
+                int(row["raw_offset"],16)<=addr<int(row["raw_offset"],16)+int(row["raw_size"],16)],
+            "overlaps_declared_raw_section":addr<last_raw and addr+length>0,
+            "overlay_starts_at":hx(last_raw),
+            "overlay_size":len(data)-last_raw,
+            "security_pointer_probe":cert_probe(addr),
+            "overlay_start_probe":cert_probe(last_raw),
+            "note":"A nonzero Security directory does not itself prove a valid Authenticode signature."
+        }
     tls_fields = None
     if len(directories)>9 and directories[9]["size"]:
         addr=int(directories[9]["address"],16)
@@ -135,6 +174,8 @@ def audit_layout(data: bytes) -> dict:
         "checksum":hx(rd32(opt+64)),"data_directory_count":numdirs,
         "sections":rows,"data_directories":directories,
         "debug_raw_pointer_records":debug_records,"tls_fields":tls_fields,
+        "duplicate_section_header_residue":duplicate_rows,
+        "security_directory_detail":security_detail,
         "header_tail_nonzero":bool(occupied),
         "header_tail_nonzero_count":len(occupied),
         "header_tail_first_nonzero":hx(end+occupied[0]) if occupied else None,
