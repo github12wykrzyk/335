@@ -16,6 +16,7 @@ extern "C" {
  */
 typedef struct {
     void *context;
+    /* Optional further veto (e.g. hostility), not a source of NPC identity. */
     int (*eligible_npc)(void *,uintptr_t obj,PpGuid target);
     /* Optional independent veto; native 12340 creature type is authoritative.
      * This callback may not grant eligibility to an unknown/other type. */

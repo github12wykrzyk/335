@@ -27,7 +27,9 @@ class NativeNpcRecognitionTests(unittest.TestCase):
         self.assertIn("sha256(binary)",AUDIT)
         self.assertIn("python src/AutoPickPocket/audit_npc_type_12340.py",BUILD)
     def test_classification_is_not_mistaken_for_complete_pickpocket(self):
+        self.assertIn("!g_policy.eligible_npc ||",HOST)
         self.assertIn("g_policy.eligible_npc(g_policy.context,obj,guid)==1",HOST)
+        self.assertNotIn("!policy->eligible_npc",HOST)
         self.assertIn('if (!verified_policy()) return 0u;',HOST)
         self.assertNotIn("PP335_VerifiedPolicyV1(void)",HOST)
 if __name__=="__main__":

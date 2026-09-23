@@ -198,7 +198,7 @@ static int position(void *ctx,uintptr_t obj,float coords[3]) {
 static int eligible(void *ctx,uintptr_t obj,PpGuid guid) {
     uint32_t type;
     (void)ctx;
-    if (!is_game_thread() || !g_policy.eligible_npc) return 0;
+    if (!is_game_thread()) return 0;
     type=native_creature_type(obj);
     /* An eligible_NPC policy alone must never admit beasts, demons, players
      * or unknown creature types. Rechecked for every scan AND cast. */
@@ -208,7 +208,10 @@ static int eligible(void *ctx,uintptr_t obj,PpGuid guid) {
      * type check. Unknown or conflicting reported values fail closed. */
     if (g_policy.creature_type &&
         g_policy.creature_type(g_policy.context,obj,guid)!=type) return 0;
-    return g_policy.eligible_npc(g_policy.context,obj,guid)==1;
+    /* Only the user's chosen native undead/humanoid NPC filter is mandatory.
+     * Additional hostility/eligibility policy, when present, may only veto. */
+    return !g_policy.eligible_npc ||
+           g_policy.eligible_npc(g_policy.context,obj,guid)==1;
 }
 static int usable(void *ctx,uint32_t spell_id) {
     (void)ctx;
@@ -296,7 +299,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     Pp12340Host h;
     if(g_initialized || !current_thread_owns_game_window() ||
-       !policy || !policy->eligible_npc ||
+       !policy ||
        !policy->spell_usable || !policy->begin_attempt ||
        !policy->cast_result ||
        !policy->world_token)return 0;
@@ -371,7 +374,7 @@ static void pp_message(UINT message, WPARAM command) {
             g_bind_attempted=1u;
             provider=verified_policy();
             policy=provider ? provider() : NULL;
-            if (policy && policy->eligible_npc &&
+            if (policy &&
                 policy->spell_usable && policy->begin_attempt &&
                 policy->cast_result && policy->world_token)
                 (void)PP335_BindOnGameThread(policy);

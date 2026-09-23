@@ -166,3 +166,11 @@ objects by requiring unit-object type 3. Its eligible NPC callback must still
 establish hostility/pickpocketability; the spell and result policies remain
 unimplemented. Native type classification is not proof of working autonomous
 Pick Pocket or a validated in-game package. No active work/main runtime changed.
+
+The user's requested NPC recognition is self-contained: it requires a living
+CGUnit_C (not a player) and exact native creature type 6 or 7. Additional
+`eligible_npc` / `creature_type` providers are optional vetoes, not required
+for classification and cannot admit an unsupported creature type. This does
+NOT assert that every undead/humanoid NPC is pickpocketable or hostile; failed
+server casts remain bounded by GUID attempt limits. Spell usability, world
+lifecycle and authoritative cast-result policies still block game activation.

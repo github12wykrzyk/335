@@ -25,7 +25,8 @@ typedef struct {
     uint32_t (*thread_id)(void *);
     int (*read_u32)(void *, uintptr_t addr, uint32_t *out);
     int (*position)(void *, uintptr_t unit_obj, float xyz[3]);
-    /* Must prove hostile pickpocketable non-player NPC; unknown => 0. */
+    /* Must prove allowed living non-player NPC with native creature type 6/7.
+     * Independent hostile/pickpocketability policies may further veto. */
     int (*eligible_npc)(void *, uintptr_t unit_obj, PpGuid guid);
     /* Rogue, learned spell 921, usable, Stealth, no conflicting loot window. */
     int (*spell_usable)(void *, uint32_t spell_id);

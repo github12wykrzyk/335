@@ -7,6 +7,8 @@ on:
       - 'src/AutoLoot/autoloot_win32_host.c'
       - 'src/AutoPickPocket/**'
       - 'tests/test_shared_loader.py'
+      - 'tests/test_native_npc_recognition.py'
+      - 'tests/test_autopickpocket_work_loader.py'
       - '.github/workflows/build_shared_loader.yml'
   workflow_dispatch:
 permissions:
