@@ -98,7 +98,7 @@ static int pp_can_cast(void *ctx) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
     return a->host.spell_usable(a->host.ctx,PP12340_SPELL_ID)==1;
 }
-static int pp_cast(void *ctx,PpGuid guid) {
+static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
     uint32_t manager=0u,obj=0u,next=0u;
     unsigned i;
@@ -121,23 +121,23 @@ static int pp_cast(void *ctx,PpGuid guid) {
                 a->host.eligible_npc(a->host.ctx,obj,guid)!=1 ||
                 pp_can_cast(a)!=1) return 0;
             return a->host.cast_guid(a->host.ctx,PP12340_CAST_GUID_VA,
-                                      PP12340_SPELL_ID,guid)==1;
+                                      PP12340_SPELL_ID,guid,attempt_id)==1;
         }
         if (!read32(a,(uintptr_t)obj+PP_OBJ_NEXT,&next) || next==obj) break;
         obj=next;
     }
     return 0;
 }
-static PpResult pp_result(void *ctx,PpGuid guid) {
+static PpResult pp_result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
-    PpResult result=a->host.cast_result(a->host.ctx,guid);
+    PpResult result=a->host.cast_result(a->host.ctx,guid,attempt_id);
     if (result<PP_RESULT_PENDING || result>PP_RESULT_PERMANENT)
         return PP_RESULT_PENDING;
     return result;
 }
-static void pp_event(void *ctx,PpEvent event,PpGuid guid) {
+static void pp_event(void *ctx,PpEvent event,PpGuid guid,uint32_t attempt_id) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
-    if (a->host.event) a->host.event(a->host.ctx,event,guid);
+    if (a->host.event) a->host.event(a->host.ctx,event,guid,attempt_id);
 }
 int pp12340_bind(Pp12340Adapter *a,const Pp12340Host *host) {
     PpAdapter api;

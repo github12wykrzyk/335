@@ -6,15 +6,16 @@ typedef struct {
     PpTarget t[4]; size_t n;
     PpResult result;
     PpGuid casted[16]; unsigned cast_n, permitted, scans, events[8], cast_ok;
+    uint32_t last_attempt, expected_result_attempt;
 } Stub;
 static size_t scan(void *p,PpTarget *out,size_t cap) {
     Stub *s=(Stub *)p;size_t n=s->n<cap?s->n:cap;
     memcpy(out,s->t,n*sizeof(*out));++s->scans;return n;
 }
 static int can_cast(void *p){return ((Stub *)p)->permitted;}
-static int cast(void *p,PpGuid g){Stub *s=(Stub *)p;if (!s->cast_ok)return 0;if(s->cast_n<16)s->casted[s->cast_n++]=g;return 1;}
-static PpResult result(void *p,PpGuid g){(void)g;return ((Stub *)p)->result;}
-static void event(void *p,PpEvent e,PpGuid g){(void)g; ++((Stub *)p)->events[e];}
+static int cast(void *p,PpGuid g,uint32_t attempt){Stub *s=(Stub *)p;s->last_attempt=attempt;if (!s->cast_ok)return 0;if(s->cast_n<16)s->casted[s->cast_n++]=g;return 1;}
+static PpResult result(void *p,PpGuid g,uint32_t attempt){Stub *s=(Stub *)p;(void)g;return s->expected_result_attempt && s->expected_result_attempt!=attempt ? PP_RESULT_PENDING : s->result;}
+static void event(void *p,PpEvent e,PpGuid g,uint32_t attempt){(void)g;(void)attempt; ++((Stub *)p)->events[e];}
 static PpAdapter adapter(Stub *s){PpAdapter a;memset(&a,0,sizeof(a));a.ctx=s;a.scan=scan;a.can_cast=can_cast;a.cast_on_guid=cast;a.result=result;a.event=event;return a;}
 static void init(Stub *s){memset(s,0,sizeof(*s));s->permitted=1;s->cast_ok=1;s->t[0].guid.lo=101;s->t[0].eligible=1;s->t[0].distance_sq=4;s->t[1].guid.lo=102;s->t[1].eligible=1;s->t[1].distance_sq=1;s->n=2;}
 static int test_session(void){
@@ -54,6 +55,20 @@ static int test_unconfirmed_results_bounded(void){
  pp_tick(&e,60000);CHECK(s.cast_n==3); /* no unbounded retries on unknown result */
  return 0;
 }
+static int test_late_result_cannot_complete_new_attempt(void){
+ Stub s;PpEngine e;uint32_t first,second;init(&s);s.n=1;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,0);first=s.last_attempt;CHECK(first!=0u);
+ pp_tick(&e,1500);pp_tick(&e,4500);second=s.last_attempt;
+ CHECK(s.cast_n==2 && second!=first);
+ s.result=PP_RESULT_SUCCESS;s.expected_result_attempt=first;
+ pp_tick(&e,4501);CHECK(e.successes==0 && e.active_valid);
+ s.expected_result_attempt=second;pp_tick(&e,4502);
+ CHECK(e.successes==1 && !e.active_valid);
+ pp_reset(&e);s.result=PP_RESULT_PENDING;pp_tick(&e,4700);
+ CHECK(s.last_attempt!=second && s.last_attempt!=first);
+ return 0;
+}
 static int test_filter_and_wrap(void){
  Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
  s.t[1].eligible=0;s.t[0].distance_sq=-1.0f;
@@ -62,4 +77,4 @@ static int test_filter_and_wrap(void){
  s.permitted=1;pp_tick(&e,0xc5u);CHECK(s.cast_n==1 && s.casted[0].lo==101);
  return 0;
 }
-int main(void){if(test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+int main(void){if(test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

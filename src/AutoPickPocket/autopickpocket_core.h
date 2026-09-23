@@ -45,11 +45,11 @@ typedef struct {
     /* Game-thread only: class, learned spell, usable state and stealth checks. */
     int (*can_cast)(void *ctx);
     /* Cast on EXACT GUID without stealing user's target. 1 = submitted only. */
-    int (*cast_on_guid)(void *ctx, PpGuid target);
+    int (*cast_on_guid)(void *ctx, PpGuid target, uint32_t attempt_id);
     /* Correlate exact GUID and attempt to an authoritative result. */
-    PpResult (*result)(void *ctx, PpGuid target);
+    PpResult (*result)(void *ctx, PpGuid target, uint32_t attempt_id);
     /* Optional structured event sink; must not print to WoW chat. */
-    void (*event)(void *ctx, PpEvent event, PpGuid target);
+    void (*event)(void *ctx, PpEvent event, PpGuid target, uint32_t attempt_id);
 } PpAdapter;
 typedef struct {
     PpGuid guid;
@@ -62,6 +62,8 @@ typedef struct {
     PpAdapter api;
     PpHistory history[PP_HISTORY_CAP];
     PpGuid active;
+    /* Monotonic nonce isolates delayed responses from old casts or worlds. */
+    uint32_t active_attempt_id, next_attempt_id;
     uint32_t started_ms, last_scan_ms;
     unsigned history_next, active_valid, enabled, scan_started;
     uint32_t casts, successes, empty, retries, timeouts;

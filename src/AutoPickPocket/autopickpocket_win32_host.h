@@ -18,7 +18,10 @@ typedef struct {
     void *context;
     int (*eligible_npc)(void *,uintptr_t obj,PpGuid target);
     int (*spell_usable)(void *,uint32_t spell_id);
-    PpResult (*cast_result)(void *,PpGuid target);
+    /* Arms authoritative correlation before each native cast. Return 0 if
+     * the observer cannot associate a result with this GUID and nonce. */
+    int (*begin_attempt)(void *,PpGuid target,uint32_t attempt_id);
+    PpResult (*cast_result)(void *,PpGuid target,uint32_t attempt_id);
     uint64_t (*world_token)(void *);
 } Pp335Policy;
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy);

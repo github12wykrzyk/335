@@ -158,34 +158,33 @@ static int usable(void *ctx,uint32_t spell_id) {
         g_policy.spell_usable &&
         g_policy.spell_usable(g_policy.context,spell_id)==1;
 }
-static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target) {
-    typedef int (__cdecl *cast_fn)(uint32_t,uint32_t,uint32_t,uint32_t,uint32_t);
-    int accepted=0;
+static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target,uint32_t attempt_id) {
+    typedef void (__cdecl *cast_fn)(uint32_t,uint32_t,uint32_t,uint32_t,uint32_t);
     (void)ctx;
     if(!is_game_thread() || va!=PP12340_CAST_GUID_VA ||
        spell!=PP12340_SPELL_ID || (target.lo|target.hi)==0u ||
-       !g_policy.spell_usable ||
-       g_policy.spell_usable(g_policy.context,spell)!=1)return 0;
-    /* Native call order independently observed at pinned EXE call sites:
-     * spellId, zero, GUID.low, GUID.high, zero.  A nonzero result means
-     * submitted, NEVER proof of server-side successful Pick Pocket.
-     */
+       !attempt_id || !g_policy.begin_attempt || !g_policy.spell_usable ||
+       g_policy.spell_usable(g_policy.context,spell)!=1 ||
+       g_policy.begin_attempt(g_policy.context,target,attempt_id)!=1)return 0;
+    /* Five cdecl arguments were audited in the pinned EXE, but the native
+     * function's return VALUE was not. Never interpret residual EAX as a
+     * server acknowledgement; submission means no local exception only. */
     __try {
-        accepted=((cast_fn)va)(spell,0u,target.lo,target.hi,0u);
+        ((cast_fn)va)(spell,0u,target.lo,target.hi,0u);
     }__except(EXCEPTION_EXECUTE_HANDLER){return 0;}
-    return accepted!=0;
+    return 1;
 }
-static PpResult result(void *ctx,PpGuid guid) {
+static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     (void)ctx;
     if(!is_game_thread() || !g_policy.cast_result)return PP_RESULT_PENDING;
-    return g_policy.cast_result(g_policy.context,guid);
+    return g_policy.cast_result(g_policy.context,guid,attempt_id);
 }
 static uint64_t world_token(void *ctx) {
     (void)ctx;
     if(!is_game_thread() || !g_policy.world_token)return 0u;
     return g_policy.world_token(g_policy.context);
 }
-static void event(void *ctx,PpEvent kind,PpGuid guid) {
+static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     wchar_t path[MAX_PATH],dir[MAX_PATH],*slash;
     char line[160];
     DWORD ignored;
@@ -211,8 +210,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid) {
         SetEndOfFile(file); /* bounded log; no personal data or chat */
     }else SetFilePointer(file,0,NULL,FILE_END);
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"guid_lo\":%lu,\"guid_hi\":%lu}\n",
-       (unsigned long)GetTickCount(),(unsigned)kind,
+       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu}\n",
+       (unsigned long)GetTickCount(),(unsigned)kind,(unsigned long)attempt_id,
        (unsigned long)guid.lo,(unsigned long)guid.hi);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);
     CloseHandle(file);
@@ -221,7 +220,8 @@ PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     Pp12340Host h;
     if(g_initialized || !current_thread_owns_game_window() ||
        !policy || !policy->eligible_npc ||
-       !policy->spell_usable || !policy->cast_result ||
+       !policy->spell_usable || !policy->begin_attempt ||
+       !policy->cast_result ||
        !policy->world_token)return 0;
     /* The authorized loader must call this from the actual WoW UI/window
      * thread. Never bind from DllMain or an updater worker.

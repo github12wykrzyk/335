@@ -9,7 +9,7 @@ static int deadline_reached(uint32_t now, uint32_t deadline) {
     return (int32_t)(now - deadline) >= 0;
 }
 static void emit(PpEngine *e, PpEvent ev, PpGuid guid) {
-    if (e->api.event) e->api.event(e->api.ctx, ev, guid);
+    if (e->api.event) e->api.event(e->api.ctx, ev, guid, e->active_attempt_id);
 }
 static PpHistory *entry(PpEngine *e, PpGuid guid, int create) {
     unsigned i;
@@ -60,6 +60,7 @@ void pp_enable(PpEngine *engine, int enable) {
     engine->enabled=enable ? 1u : 0u;
     /* Disable forgets pending cast, but not confirmed terminal history. */
     engine->active_valid=0u;
+    engine->active_attempt_id=0u;
     engine->scan_started=0u;
 }
 void pp_reset(PpEngine *engine) {
@@ -67,6 +68,7 @@ void pp_reset(PpEngine *engine) {
     memset(engine->history,0,sizeof(engine->history));
     engine->history_next=0u;
     engine->active_valid=0u;
+    engine->active_attempt_id=0u; /* keep next_attempt_id across world resets */
     engine->scan_started=0u;
 }
 void pp_tick(PpEngine *engine, uint32_t now) {
@@ -78,7 +80,7 @@ void pp_tick(PpEngine *engine, uint32_t now) {
     PpResult outcome;
     if (!engine || !engine->enabled) return;
     if (engine->active_valid) {
-        outcome=engine->api.result(engine->api.ctx,engine->active);
+        outcome=engine->api.result(engine->api.ctx,engine->active,engine->active_attempt_id);
         switch(outcome) {
         case PP_RESULT_SUCCESS:
             block(engine,engine->active,now,0u,1);
@@ -138,7 +140,9 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         return;
     }
     ++h->attempts;
-    if (engine->api.cast_on_guid(engine->api.ctx,best.guid)==1) {
+    if (++engine->next_attempt_id==0u) ++engine->next_attempt_id;
+    engine->active_attempt_id=engine->next_attempt_id;
+    if (engine->api.cast_on_guid(engine->api.ctx,best.guid,engine->active_attempt_id)==1) {
         engine->active=best.guid;
         engine->active_valid=1u;
         engine->started_ms=now;

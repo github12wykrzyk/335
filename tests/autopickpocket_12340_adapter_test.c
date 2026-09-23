@@ -14,6 +14,7 @@ typedef struct {
     uint64_t world;
     PpResult result;
     unsigned casts,cast_spell,callbacks;
+    uint32_t last_attempt,expected_result_attempt;
     PpGuid last_guid;
 } Mock;
 static int digest(void *p,const char *expected){
@@ -70,14 +71,14 @@ static int usable(void *p,uint32_t spell){
     Mock *m=(Mock*)p;
     return m->usable && spell==921u;
 }
-static int cast(void *p,uintptr_t addr,uint32_t spell,PpGuid target){
+static int cast(void *p,uintptr_t addr,uint32_t spell,PpGuid target,uint32_t attempt){
     Mock *m=(Mock*)p;
     if(addr!=PP12340_CAST_GUID_VA || spell!=921u)return 0;
-    ++m->casts;m->cast_spell=spell;m->last_guid=target;
+    ++m->casts;m->cast_spell=spell;m->last_guid=target;m->last_attempt=attempt;
     return 1;
 }
-static PpResult result(void *p,PpGuid g){(void)g;return ((Mock*)p)->result;}
-static void event(void *p,PpEvent ev,PpGuid g){(void)ev;(void)g;++((Mock*)p)->callbacks;}
+static PpResult result(void *p,PpGuid g,uint32_t attempt){Mock *m=(Mock*)p;(void)g;return m->expected_result_attempt && m->expected_result_attempt!=attempt ? PP_RESULT_PENDING : m->result;}
+static void event(void *p,PpEvent ev,PpGuid g,uint32_t attempt){(void)ev;(void)g;(void)attempt;++((Mock*)p)->callbacks;}
 static Pp12340Host host(Mock *m) {
     Pp12340Host h;memset(&h,0,sizeof(h));h.ctx=m;
     h.verify_exe_sha256=digest;h.verify_cast_abi=abi;h.thread_id=tid;
@@ -120,6 +121,18 @@ static int test_scan_cast_history_world(void){
     CHECK(a.engine.enabled && m.casts==4 && m.last_guid.lo==222);
     return 0;
 }
+static int test_attempt_correlation(void){
+    Mock m;Pp12340Adapter a;Pp12340Host h;uint32_t old_id;
+    defaults(&m);h=host(&m);CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+    pp12340_tick(&a,0);old_id=m.last_attempt;CHECK(old_id!=0u);
+    pp12340_tick(&a,1500);pp12340_tick(&a,4500);
+    CHECK(m.casts==2 && m.last_attempt!=old_id);
+    m.result=PP_RESULT_SUCCESS;m.expected_result_attempt=old_id;
+    pp12340_tick(&a,4501);CHECK(a.engine.successes==0 && a.engine.active_valid);
+    m.expected_result_attempt=m.last_attempt;
+    pp12340_tick(&a,4502);CHECK(a.engine.successes==1);
+    return 0;
+}
 static int test_fail_closed_filter(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
     CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
@@ -131,7 +144,7 @@ static int test_fail_closed_filter(void){
 }
 int main(void){
     if(test_bind_guard()||test_scan_cast_history_world()||
-       test_fail_closed_filter())return 1;
+       test_attempt_correlation()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");
     return 0;
 }
