@@ -21,6 +21,8 @@ namespace WoW335Updater
         private readonly Dictionary<string, string> monitorHeads =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly FlowLayoutPanel monitorLayout = new FlowLayoutPanel();
+        private RowStyle monitorStripRow;
+        private const int MonitorBadgeHeight = 38;
         private DateTime monitorBranchesFetchedUtc = DateTime.MinValue;
         private bool monitorBranchListTruncated;
         private bool monitorBusy;
@@ -28,17 +30,22 @@ namespace WoW335Updater
         private RichTextBox monitorOutput;
         private string monitorReport = "Nie pobrano jeszcze informacji z GitHub.";
 
+        private void Bind335MonitorRow(RowStyle row)
+        {
+            monitorStripRow = row;
+        }
+
         private Control Build335MonitorHeader()
         {
-            // Dynamic two-column grid: the current four branches fit without
-            // clipping, and future branches scroll within the same header.
+            // All discovered branches live in one full-width ribbon. When there
+            // are more branches than fit horizontally, expand the ribbon vertically.
             monitorLayout.Dock = DockStyle.Fill;
-            monitorLayout.AutoScroll = true;
+            monitorLayout.AutoScroll = false;
             monitorLayout.WrapContents = true;
             monitorLayout.FlowDirection = FlowDirection.LeftToRight;
             monitorLayout.Margin = Padding.Empty;
-            monitorLayout.Padding = new Padding(1);
-            monitorLayout.BackColor = Color.Transparent;
+            monitorLayout.Padding = new Padding(4);
+            monitorLayout.BackColor = UiSurface;
             monitorLayout.Resize += delegate { Resize335MonitorBadges(); };
             Rebuild335MonitorBadges(new[] { "work", "main" });
             return monitorLayout;
@@ -55,11 +62,20 @@ namespace WoW335Updater
 
         private void Resize335MonitorBadges()
         {
-            // Leave room for a vertical scrollbar when more than four branches exist.
-            int width = Math.Max(135, (monitorLayout.ClientSize.Width - 25) / 2);
+            int available = monitorLayout.ClientSize.Width - monitorLayout.Padding.Horizontal;
+            if (available <= 0 || monitorBadgeFrames.Count == 0) return;
+            // At the standard 1060 px window, all five current branches fit
+            // in one row; future branches wrap without a scrollbar.
+            int columns = Math.Max(1, Math.Min(monitorBadgeFrames.Count, available / 185));
+            int slot = available / columns;
+            int rows = (monitorBadgeFrames.Count + columns - 1) / columns;
+            int height = rows * (MonitorBadgeHeight + 2) + monitorLayout.Padding.Vertical + 2;
+            if (monitorStripRow != null && monitorStripRow.Height != height)
+                monitorStripRow.Height = height;
             foreach (var panel in monitorBadgeFrames.Values)
             {
-                if (panel.Width != width) panel.Width = width;
+                int panelWidth = Math.Max(80, slot - panel.Margin.Horizontal);
+                if (panel.Width != panelWidth) panel.Width = panelWidth;
             }
         }
 
@@ -82,7 +98,7 @@ namespace WoW335Updater
                         TextAlign = ContentAlignment.MiddleLeft
                     };
                     var outline = new Panel {
-                        Height = 31, Width = 210, Margin = new Padding(2, 1, 2, 1),
+                        Height = MonitorBadgeHeight, Width = 175, Margin = new Padding(2, 1, 2, 1),
                         Padding = new Padding(1), Cursor = Cursors.Hand
                     };
                     outline.Controls.Add(badge);
@@ -118,7 +134,7 @@ namespace WoW335Updater
                 : red ? Color.FromArgb(255, 178, 188) : UiMuted;
             var shortHead = string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length));
             badge.Text = Compact335Branch(branch).ToUpperInvariant() +
-                "  |  " + shortHead + "  |  " + state;
+                "\n" + shortHead + "  |  " + state;
             var tooltip = "Branch: " + branch + "\n" + detail +
                 "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss") +
                 "\nKliknij, aby otworzyć pełny monitor.";
