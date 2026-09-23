@@ -7,14 +7,15 @@
       "id": "loader-12340",
       "branch": "feature/loader-12340",
       "status": "in_progress",
-      "goal": "Read-only import and compatibility audit of the exact user-selected 12340 x86 Wow.exe before any loader implementation; module-selection design must follow exact runtime registry and CI provenance.",
+      "goal": "Isolated 12340 x86 startup DLL and exact pinned-EXE import append experiment, without changing canonical Wow.exe or EpochConnection; integrate with verified GitHub module selection only after Windows build, dependency checks and game tests.",
       "modules": [
         "Loader12340"
       ],
       "dependencies": [],
       "shared_resources": [
         "logical:startup-loader",
-        "logical:dll-load-order"
+        "logical:dll-load-order",
+        "win32:pe-import-directory"
       ],
       "observed_head": "18905f8c9d3ebc57588e12b1f2f76416572c2659",
       "verified_commit": null,

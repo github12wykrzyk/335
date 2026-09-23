@@ -1,0 +1,100 @@
+name: Verify 335 startup loader isolated TEST
+
+on:
+  push:
+    branches: [feature/loader-12340]
+    paths:
+      - 'src/Loader12340/**'
+      - 'tools/loader_patch_12340.py'
+      - 'tests/test_loader_12340**'
+      - '.github/workflows/loader_12340_preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loader-335-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview-not-a-game-package:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify selected client
+        shell: pwsh
+        run: |
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_client_exe.py --exe Wow.exe --require-target --report dist/loader_preview/client_audit.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile isolated 12340 loader MSVC x86
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $pf86=[Environment]::GetFolderPath('ProgramFilesX86')
+          $vswhere=Join-Path $pf86 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs=& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Missing MSVC x86 toolchain' }
+          $vcvars=Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          New-Item -ItemType Directory -Force -Path dist/loader_preview | Out-Null
+          $cmd='call "'+$vcvars+'" x86 >nul && cl /nologo /W4 /WX /O2 /MT /LD /Fe:dist\loader_preview\Wow335Loader.dll src\Loader12340\Wow335Loader.c /link /DEF:src\Loader12340\Wow335Loader.def && dumpbin /exports dist\loader_preview\Wow335Loader.dll > dist\loader_preview\loader_exports.txt'
+          & cmd.exe /d /c $cmd
+          if ($LASTEXITCODE -ne 0) { throw "MSVC loader build failed: $LASTEXITCODE" }
+      - name: Verify loader PE32 ordinal 1, append isolated EXE import
+        shell: pwsh
+        run: |
+          @'
+          import hashlib
+          import re
+          import struct
+          from pathlib import Path
+          p=Path("dist/loader_preview/Wow335Loader.dll")
+          d=p.read_bytes()
+          assert d[:2]==b"MZ", "missing MZ header"
+          pe=struct.unpack_from("<I",d,0x3c)[0]
+          assert d[pe:pe+4]==b"PE\0\0", "missing PE header"
+          assert struct.unpack_from("<H",d,pe+4)[0]==0x14c, "loader not i386"
+          assert struct.unpack_from("<H",d,pe+24)[0]==0x10b, "loader not PE32"
+          assert struct.unpack_from("<H",d,pe+22)[0]&0x2000, "not DLL"
+          exports=Path("dist/loader_preview/loader_exports.txt").read_text(encoding="utf-8",errors="replace")
+          assert re.search(r'(?m)^\s*1\s+\S+\s+\S+\s+Wow335LoaderAnchor\s*$',exports), "ordinal 1 anchor export missing"
+          print("LOADER_DLL: PE32 x86 ordinal 1 PASS",hashlib.sha256(d).hexdigest())
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/loader_patch_12340.py --exe Wow.exe --out dist/loader_preview/Wow335_Loader_TEST.exe --report dist/loader_preview/loader_patch_build.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Mark research output; NOT a game package
+        shell: pwsh
+        run: |
+          @'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path("dist/loader_preview")
+          report=json.loads((root/"loader_patch_build.json").read_text(encoding="utf-8"))
+          dll=root/"Wow335Loader.dll"
+          report["loader_dll_sha256"]=hashlib.sha256(dll.read_bytes()).hexdigest()
+          report["loader_dll_size"]=dll.stat().st_size
+          report["branch"]=os.environ["GITHUB_REF_NAME"]
+          report["git_sha"]=os.environ["GITHUB_SHA"]
+          report["final_package"]="NOT_RUN"
+          report["in_game_verified"]=False
+          (root/"loader_preview_build.json").write_text(json.dumps(report,sort_keys=True,indent=2)+"\n",encoding="utf-8")
+          print("LOADER_RESEARCH_ARTIFACT: PASS; no game package")
+          '@ | python -
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wow335Loader-IMPORT-PREVIEW-NOT-GAME-PACKAGE-${{ github.sha }}
+          path: |
+            dist/loader_preview/Wow335Loader.dll
+            dist/loader_preview/Wow335_Loader_TEST.exe
+            dist/loader_preview/loader_preview_build.json
+            dist/loader_preview/client_audit.json
+            dist/loader_preview/loader_exports.txt
+          if-no-files-found: error
+          compression-level: 0

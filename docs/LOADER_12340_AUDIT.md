@@ -26,3 +26,11 @@ Na commit `5af79cd4c01600f18818913510acea68288cd4a7`, workflow `Build 335 work c
 `EpochConnection.dll` jest istniejącą zależnością przypiętego EXE. NIE zastępować, nie usuwać ani nie przemianowywać jej na `twloader.dll`; nie publikować nadpisującej jej biblioteki proxy bez osobnej oceny kompatybilności. Ten etap nie zmienia `Wow.exe`, nie uruchamia kodu użytkownika i nie jest grą gotową do testu. W `runtime/current.json` brak aktywnych modułów; `FINAL_PACKAGE: PASS` i test gry nie zostały uzyskane.
 
 Dalsze ewentualne prace wymagają potwierdzenia zgodnego mechanizmu startu na *dokładnym* build 12340 x86, odseparowania logicznych funkcji tunelu od nowego loadera, deklaracji własności zasobów/dependencies wszystkich modułów oraz testu w grze na konkretnym SHA. Nie kopiować offsetów, ABI ani hooków WoW 1.12.
+
+## Etap 2: izolowany import startup-loader, bez promocji
+
+`src/Loader12340/Wow335Loader.c` — samodzielna biblioteka Windows x86. Odczytuje listę `dlls.txt` wyłącznie w katalogu gry, wymaga prostych nazw plików, odrzuca nazwy z katalogami, duplikaty i wczytywanie `EpochConnection.dll` lub samego loadera. Prowadzi `Wow335Loader.log`. Ładuje w kolejności manifestu po odblokowaniu loader-lock. Nie implementuje updatera, ani nie stanowi dowodu zgodności modułów klientowych z 12340.
+
+`tools/loader_patch_12340.py` tworzy *oddzielną kopię testową* EXE: zachowuje oryginalne importy (w tym `EpochConnection.dll` ordinal 1), dopisując drugą niezależną bibliotekę `Wow335Loader.dll` ordinal 1. Odrzuca niezgodny SHA klienta, pełny nagłówek sekcji, EXE z podpisem lub bound imports; nigdy nie nadpisuje canonical `Wow.exe`. Nie jest ogólnym patcherem klientów WoW — tylko dokładne bajty przypiętego EXE.
+
+Workflow `.github/workflows/loader_12340_preview.yml` w izolowanym branchu buduje DLL MSVC x86, weryfikuje ordinal 1, wykonuje testy i próbę dopisania importu na dokładnym klientcie 12340. Wynik jest wyłącznie materiałem badawczym `NOT_GAME_PACKAGE`; nie jest przeznaczony do ręcznej instalacji ani aktualizacji kanału TEST/STABLE. Nie ma aktywnych DLL gry w runtime/current.json ani zintegrowanego updatera z wyborem i weryfikacją modułów. W następnej iteracji loader powinien wymagać tożsamości każdego modułu (hash, manifest z GitHuba) i startować tylko z kompatybilnym kompletem, zanim zostanie dopuszczony jako paczka gry.
