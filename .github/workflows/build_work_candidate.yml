@@ -38,12 +38,14 @@ jobs:
         run: |
           python tools/autopickpocket_experiment.py build --report dist/pp_core_experiment.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Upload isolated core test attestation (NO GAME PACKAGE)
+      - name: Upload isolated native adapter and attestation (NO GAME PACKAGE)
         if: steps.pp_route.outputs.core_only == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AutoPickPocket-CORE-ONLY-${{ github.sha }}
-          path: dist/pp_core_experiment.json
+          name: AutoPickPocket-ADAPTER-ISOLATED-${{ github.sha }}
+          path: |
+            dist/pp_core_experiment.json
+            dist/pp_core_experiment/AutoPickPocket335_ADAPTER_ISOLATED.dll
           if-no-files-found: error
       - name: Audit uploaded 3.3.5 client EXE (Windows PE32 x86)
         if: steps.pp_route.outputs.core_only != 'true'
