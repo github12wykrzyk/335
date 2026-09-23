@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/AutoPickPocket/audit_spell_abi.py'
       - '.github/workflows/audit_autopickpocket_abi.yml'
+      - 'src/AutoPickPocket/audit_lua_result_abi.py'
 permissions:
   contents: read
 jobs:
@@ -17,4 +18,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Static inspect exact pinned Wow.exe spell and NPC eligibility candidates
-        run: python src/AutoPickPocket/audit_spell_abi.py
+        run: |
+          python src/AutoPickPocket/audit_spell_abi.py
+          python src/AutoPickPocket/audit_lua_result_abi.py
