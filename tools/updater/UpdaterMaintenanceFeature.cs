@@ -343,7 +343,10 @@ namespace WoW335Updater
 
             private async Task<RemoteUpdaterBuild> DownloadLatestUpdaterAsync()
             {
-                var branch = channel != null && channel.SelectedIndex == 1 ? "main" : "work";
+                var branch = UpdaterBuildInfo.Version.EndsWith("-epoch-test", StringComparison.Ordinal) &&
+                    (channel == null || channel.SelectedIndex != 1)
+                    ? "feature/loader-12340"
+                    : (channel != null && channel.SelectedIndex == 1 ? "main" : "work");
                 using (var client = CreateClient())
                 {
                     var runs = AsArray(GetValue(AsDictionary(json.DeserializeObject(await GetStringAsync(client, ApiRoot + "/actions/runs?branch=" + branch + "&per_page=50"))), "workflow_runs"));
