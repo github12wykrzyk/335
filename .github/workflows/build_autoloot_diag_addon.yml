@@ -1,0 +1,30 @@
+name: Build 335 loot-window diagnostic addon
+on:
+  push:
+    branches: ['feature/autoloot-12340']
+    paths:
+      - 'src/AutoLoot/diagnostics/**'
+      - 'tools/package_autoloot_diag.py'
+      - 'tests/test_autoloot_diag_addon.py'
+      - '.github/workflows/build_autoloot_diag_addon.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  addon-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify standalone addon packaging and provenance
+        run: python -m unittest discover -s tests -p test_autoloot_diag_addon.py -v
+      - name: Package exact-SHA diagnostic addon (NOT a runnable game ZIP)
+        run: python tools/package_autoloot_diag.py --sha "${{ github.sha }}" --branch "feature/autoloot-12340"
+      - name: Upload standalone addon diagnostic; never updater candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoW335-LOOT-WINDOW-DIAG-${{ github.sha }}
+          path: dist/WoW335_AutoLoot_DIAG_Addon_12340.zip
+          if-no-files-found: error

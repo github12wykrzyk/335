@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: WoW335 AutoLoot Diagnostic
+## Notes: Build 12340 loot-window diagnostic (manual corpse interaction required)
+## Author: github12wykrzyk/335
+## Version: 0.1.0-diag
+## SavedVariables: WoW335AutoLootDiagLog
+WoW335AutoLootDiag.lua
