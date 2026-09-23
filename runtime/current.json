@@ -35,8 +35,8 @@
     {
       "component": "AutoPickPocket",
       "path": "runtime/AutoPickPocket335.dll",
-      "version": "1.0.0-test+sha.2d9b7031521f",
-      "sha256": "2d9b7031521fbc650bce7c1cf72b13f08b165c88613bd5ba3156f5494232f79b",
+      "version": "1.0.1-test+sha.0c24d26568ba",
+      "sha256": "0c24d26568ba347905b9f978acec3e634df81cb73717208260f4bba9e783acb0",
       "arch": "x86",
       "canonical_source": "src/AutoPickPocket/autopickpocket_win32_host.c",
       "depends_on": [],
