@@ -1,0 +1,99 @@
+name: Shared AutoLoot + AutoPickPocket loader x86 integration build
+on:
+  push:
+    branches: [feature/autopickpocket-12340]
+    paths:
+      - 'src/Loader12340/**'
+      - 'src/AutoLoot/autoloot_win32_host.c'
+      - 'src/AutoPickPocket/**'
+      - 'tests/test_shared_loader.py'
+      - '.github/workflows/build_shared_loader.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-shared-loader:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify source and exact selected 12340 game client
+        shell: pwsh
+        run: |
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_client_exe.py --exe Wow.exe --require-target
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build actual loader AutoLoot and PP Windows PE32 x86 DLLs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $vswhere="${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "MSVC x86 missing" }
+          $vs=& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "MSVC x86 missing" }
+          $vcvars=Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          New-Item -ItemType Directory -Force dist/shared_loader | Out-Null
+          $commands=@(
+            '@echo off',
+            'call "'+$vcvars+'" x86 >nul',
+            'if errorlevel 1 exit /b 1',
+            'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\AutoLoot335.dll src\AutoLoot\autoloot_core.c src\AutoLoot\autoloot_12340_adapter.c src\AutoLoot\autoloot_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib',
+            'if errorlevel 1 exit /b 1',
+            'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\AutoPickPocket335.dll src\AutoPickPocket\autopickpocket_core.c src\AutoPickPocket\autopickpocket_12340_adapter.c src\AutoPickPocket\autopickpocket_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib',
+            'if errorlevel 1 exit /b 1',
+            'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\Wow335Loader.dll src\Loader12340\Wow335Loader.c /link /MACHINE:X86 /Brepro /DEF:src\Loader12340\Wow335Loader.def Advapi32.lib User32.lib',
+            'exit /b %errorlevel%'
+          )
+          [IO.File]::WriteAllLines('dist/shared_loader/build.cmd',$commands,[Text.Encoding]::ASCII)
+          & cmd.exe /d /c "dist\shared_loader\build.cmd"
+          if ($LASTEXITCODE -ne 0) { throw "Windows PE32 x86 shared stack build failed ($LASTEXITCODE)" }
+          dumpbin /exports dist/shared_loader/AutoLoot335.dll | Out-File dist/shared_loader/autoloot_exports.txt
+          dumpbin /exports dist/shared_loader/AutoPickPocket335.dll | Out-File dist/shared_loader/pp_exports.txt
+          dumpbin /exports dist/shared_loader/Wow335Loader.dll | Out-File dist/shared_loader/loader_exports.txt
+          @'
+          import hashlib, json, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools')
+          from build_active import inspect_dll
+          d=Path('dist/shared_loader')
+          files={}
+          for name in ('AutoLoot335.dll','AutoPickPocket335.dll','Wow335Loader.dll'):
+              p=d/name
+              inspect_dll(p)
+              files[name]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'size':p.stat().st_size,'pe':'PE32 x86'}
+          for filename, symbols in (
+              ('autoloot_exports.txt',('AL335_ConfigurePeer','AL335_PeerStatus','AL335_HookProc','AL335_CallWndProc')),
+              ('pp_exports.txt',('PP335_BindOnGameThread','PP335_TickOnGameThread','PP335_CommandOnGameThread')),
+              ('loader_exports.txt',('Wow335LoaderAnchor',))):
+              exports=(d/filename).read_text(errors='replace')
+              for symbol in symbols:
+                  if symbol not in exports: raise SystemExit('MISSING_EXPORT '+symbol)
+          data={'branch':'feature/autopickpocket-12340','sha':'${{ github.sha }}',
+                'result':'SHARED_LOADER_NATIVE_X86_BUILD_PASS',
+                'files':files,'full_game_package':False,
+                'reason':'Policy provider, registered matching DLLs and complete updater delivery still required'}
+          (d/'build_report.json').write_text(json.dumps(data,indent=2)+'\n')
+          print('SHARED_LOADER_NATIVE_X86_BUILD: PASS (source integration only)')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload native build evidence only; NEVER a game TEST package
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHARED-LOADER-NATIVE-X86-UNREGISTERED-${{ github.sha }}
+          path: |
+            dist/shared_loader/AutoLoot335.dll
+            dist/shared_loader/AutoPickPocket335.dll
+            dist/shared_loader/Wow335Loader.dll
+            dist/shared_loader/build_report.json
+            dist/shared_loader/autoloot_exports.txt
+            dist/shared_loader/pp_exports.txt
+            dist/shared_loader/loader_exports.txt
+          if-no-files-found: error
+          compression-level: 0
