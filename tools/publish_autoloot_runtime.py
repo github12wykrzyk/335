@@ -49,8 +49,8 @@ def execute() -> None:
         len(initial) != 40 or git("rev-parse", "HEAD") != initial):
         raise RuntimeError("refusing unsigned or non-work binary publication")
     target = load_json(ROOT / "runtime/client_exe_target.json")
-    if target.get("sha256") != TARGET_SHA256 or
-        sha256_file(ROOT / "Wow.exe") != TARGET_SHA256:
+    if (target.get("sha256") != TARGET_SHA256 or
+        sha256_file(ROOT / "Wow.exe") != TARGET_SHA256):
         raise RuntimeError("selected exact 12340 Wow.exe is unavailable")
     manifest = load_json(ROOT / "runtime/current.json")
     registry = load_json(ROOT / "runtime/module_registry.json")
