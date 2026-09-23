@@ -25,6 +25,14 @@ class UniversalLoaderContractTests(unittest.TestCase):
         self.assertIn("NativeCheckX86(File.ReadAllBytes(dll), true)", updater)
         self.assertNotIn("listed.Length != 1", updater)
 
+    def test_native_loader_start_bypasses_game_only_process_guard(self):
+        updater = (ROOT / "tools/updater/UpdaterAutoLootRuntimeFeature.cs").read_text(encoding="utf-8")
+        guard = (ROOT / "tools/updater/UpdaterProcessGuard.cs").read_text(encoding="utf-8")
+        self.assertIn("using (var running = System.Diagnostics.Process.Start(start))", updater)
+        self.assertNotIn("using (var running = Process.Start(start))", updater)
+        self.assertIn("if (!IsGameExecutableName(requestedName))", guard)
+        self.assertIn("System.Diagnostics.Process.Start(startInfo)", guard)
+
     def test_updater_is_independent_of_single_dll_name(self):
         updater = (ROOT / "tools/updater/UpdaterAutoLootRuntimeFeature.cs").read_text(encoding="utf-8")
         ci = (ROOT / ".github/workflows/build_updater.yml").read_text(encoding="utf-8")

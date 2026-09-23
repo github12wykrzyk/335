@@ -126,7 +126,8 @@ namespace WoW335Updater
                 WorkingDirectory = loaderDir,
                 UseShellExecute = false
             };
-            using (var running = Process.Start(start))
+            // Explicit native process start: the game-only Process guard must not redirect the loader.
+            using (var running = System.Diagnostics.Process.Start(start))
             {
                 if (running == null) throw new IOException("Nie uruchomiono launchera modułów.");
                 Log("Uruchomiono launcher dla " + listed.Length + " DLL pakietu " +

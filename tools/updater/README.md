@@ -190,3 +190,12 @@ loader Epoch, sprawdza dokładnie ten sam aktualny SHA paczki gry i updatera
 `work`, a następnie przekazuje sterowanie kanonicznemu updaterowi. Nie wykonuj
 równocześnie dwóch niezależnych hooków gry. Jedynie `work` jest źródłem prawdy
 dla kolejnych iteracji aktywnego zestawu DLL.
+
+## 0.3.11-335 — naprawa uruchamiania uniwersalnego loadera
+
+Uruchom grę z aktywnymi DLL uruchamia `WoW335RuntimeLoader.exe` przez
+`System.Diagnostics.Process.Start` bez przechodzenia przez guard służący
+wyłącznie do uruchamiania Wow.exe. Wcześniej guard szukał Wow.exe w folderze
+`.wow335_updater/native_loader` i zgłaszał brak pliku mimo poprawnego
+katalogu gry. Bez zmian w manifestach i binarkach DLL; potwierdzenie
+załadowania modułów wymaga testu w grze.
