@@ -94,13 +94,23 @@ def patch(data: bytes, expected_sha256: str) -> tuple[bytes, dict]:
     occupied = source[section_head:min(section_head+40, original_first_raw)]
     if any(occupied):
         first_used = section_head + next(i for i, ch in enumerate(occupied) if ch)
+        section_rows = []
+        for i in range(count):
+            row = table+i*40
+            section_rows.append({
+                "index": i, "name_hex": source[row:row+8].hex(),
+                "virtual_size": hex(rd32(row+8)), "rva": hex(rd32(row+12)),
+                "raw_size": hex(rd32(row+16)), "raw_offset": hex(rd32(row+20)),
+            })
         raise ValueError(
             "occupied bytes in existing PE headers; refusing overwrite: "
             "section_count=%d optional_header_size=0x%x section_header_offset=0x%x "
             "next_section_header_end=0x%x first_raw=0x%x size_headers=0x%x "
-            "occupied_at=0x%x occupied_hex=%s" % (
+            "occupied_at=0x%x header_tail_hex=%s sections=%s" % (
                 count, opt_size, section_head, section_head+40,
-                original_first_raw, size_headers, first_used, occupied.hex()))
+                original_first_raw, size_headers, first_used,
+                source[section_head:original_first_raw].hex(),
+                json.dumps(section_rows, separators=(",", ":"))))
     required_headers = align(max(size_headers, section_head + 40), file_align)
     header_delta = align(max(0, required_headers - original_first_raw), file_align)
     if header_delta:
