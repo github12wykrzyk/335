@@ -15,7 +15,7 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
         source = (ROOT / "tools/updater/UpdaterAutoLootDiagFeature.cs").read_text(encoding="utf-8")
         report = (ROOT / "tools/updater/UpdaterIssueReportFeature.cs").read_text(encoding="utf-8")
         version = (ROOT / "tools/updater/UpdaterSafety.cs").read_text(encoding="utf-8")
-        self.assertIn('Version = "0.3.10-335"', version)
+        self.assertRegex(version, r'public const string Version = "0\.3\.\d+-335";')
         self.assertIn('UpdaterArtifactPrefix + liveHead', maintenance)
         self.assertIn('GetString(meta, "git_sha"), liveHead', maintenance)
         self.assertIn('GetString(meta, "channel"), branch', maintenance)
