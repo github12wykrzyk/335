@@ -73,7 +73,7 @@ jobs:
               files[name]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'size':p.stat().st_size,'pe':'PE32 x86'}
           for filename, symbols in (
               ('autoloot_exports.txt',('AL335_ConfigurePeer','AL335_PeerStatus','AL335_HookProc','AL335_CallWndProc')),
-              ('pp_exports.txt',('PP335_BindOnGameThread','PP335_TickOnGameThread','PP335_CommandOnGameThread')),
+              ('pp_exports.txt',('PP335_BindOnGameThread','PP335_TickOnGameThread','PP335_CommandOnGameThread','W335_MessageId','W335_HookProc','W335_CallWndProc')),
               ('loader_exports.txt',('Wow335LoaderAnchor',))):
               exports=(d/filename).read_text(errors='replace')
               for symbol in symbols:

@@ -134,3 +134,19 @@ https://www.elitepvpers.com/forum/wow-bots/678970-offsets-3-3-5a.html .
 A function sharing a known name or executable address is NOT proof of its ABI,
 semantic hostility check, argument order or safe use on the selected client.
 Only the pinned binary and in-game evidence can close this part of the policy.
+
+## Compatibility with current work loader / narrow creature filter
+
+The native host now exports the existing work loader's `W335_MessageId`,
+`W335_HookProc` and `W335_CallWndProc` and uses its game-window thread pulses.
+This is ABI integration only: no extra loader, no new AutoLoot hook, and no
+claim of a playable package. Creature eligibility is restricted at the host
+boundary to creature type ID 6 (Undead) and 7 (Humanoid), rechecked before
+both scan and cast. An unknown type is never accepted.
+
+The manifest-driven work launcher fails closed if this DLL is registered
+without a concrete, independently audited `PP335_VerifiedPolicyV1` export.
+That provider is NOT yet implemented; its NPC hostility, stealth/spell and
+GUID-attributed server-result callbacks must be verified on the exact client.
+The DLL remains inactive and must NOT be manually added to dlls.txt. The
+current work runtime and its accepted AutoLoot byte hash remain unchanged.

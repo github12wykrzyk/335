@@ -16,10 +16,17 @@
 #define PP_MIN_PTR 0x10000u
 #define PP_MAX_PTR 0x7FFE0000u
 #define PP_LOG_CAP 262144u
+#define PP_WINMSG_NAME "WoW335_AutoPickPocket_12340_GameThread_v1"
+#define PP_CREATURE_UNDEAD 6u
+#define PP_CREATURE_HUMANOID 7u
 static Pp12340Adapter g_adapter;
 static Pp335Policy g_policy;
 static DWORD g_game_thread;
 static int g_initialized;
+static HMODULE g_self;
+static UINT g_message;
+static unsigned g_bind_attempted;
+static unsigned g_pulse_running;
 static int valid_memory(const void *p,SIZE_T length) {
     MEMORY_BASIC_INFORMATION m;
     uintptr_t at=(uintptr_t)p;
@@ -148,9 +155,16 @@ static int position(void *ctx,uintptr_t obj,float coords[3]) {
 #endif
 }
 static int eligible(void *ctx,uintptr_t obj,PpGuid guid) {
+    uint32_t type;
     (void)ctx;
-    return is_game_thread() && g_policy.eligible_npc &&
-        g_policy.eligible_npc(g_policy.context,obj,guid)==1;
+    if (!is_game_thread() || !g_policy.creature_type ||
+        !g_policy.eligible_npc) return 0;
+    type=g_policy.creature_type(g_policy.context,obj,guid);
+    /* An eligible_NPC policy alone must never admit beasts, demons, players
+     * or unknown creature types. Rechecked for every scan AND cast. */
+    if (type!=PP_CREATURE_UNDEAD && type!=PP_CREATURE_HUMANOID)
+        return 0;
+    return g_policy.eligible_npc(g_policy.context,obj,guid)==1;
 }
 static int usable(void *ctx,uint32_t spell_id) {
     (void)ctx;
@@ -238,7 +252,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     Pp12340Host h;
     if(g_initialized || !current_thread_owns_game_window() ||
-       !policy || !policy->eligible_npc ||
+       !policy || !policy->eligible_npc || !policy->creature_type ||
        !policy->spell_usable || !policy->begin_attempt ||
        !policy->cast_result ||
        !policy->world_token)return 0;
@@ -281,8 +295,69 @@ PP335_EXPORT int __stdcall PP335_CommandOnGameThread(const char *arguments) {
     if (!is_game_thread()) return 0;
     return pp12340_command(&g_adapter,arguments);
 }
+/*
+ * Work loader integration: W335_* is the ABI already used by its verified
+ * dlls.txt chain. The trusted, concrete policy must be linked into THIS DLL
+ * and export PP335_VerifiedPolicyV1; the old isolated adapter does not have
+ * such a policy yet. Missing policy => W335_MessageId returns zero, so the
+ * updater launcher refuses to start an accidentally registered incomplete
+ * module, rather than running a silent no-op or guessing NPC types.
+ */
+typedef const Pp335Policy *(__stdcall *pp_verified_policy_fn)(void);
+static pp_verified_policy_fn verified_policy(void) {
+    if (!g_self) return NULL;
+    return (pp_verified_policy_fn)GetProcAddress(g_self,
+                                                 "PP335_VerifiedPolicyV1");
+}
+PP335_EXPORT UINT WINAPI W335_MessageId(void) {
+    if (!verified_policy()) return 0u;
+    return RegisterWindowMessageA(PP_WINMSG_NAME);
+}
+static void pp_message(UINT message, WPARAM command) {
+    pp_verified_policy_fn provider;
+    const Pp335Policy *policy;
+    if (!g_message) g_message=RegisterWindowMessageA(PP_WINMSG_NAME);
+    if (!g_message || message!=g_message ||
+        !current_thread_owns_game_window() || g_pulse_running) return;
+    g_pulse_running=1u;
+    if (command==0u) {
+        if (g_initialized) PP335_EnableOnGameThread(0);
+    } else if (command==1u || command==2u) {
+        if (!g_initialized && !g_bind_attempted) {
+            g_bind_attempted=1u;
+            provider=verified_policy();
+            policy=provider ? provider() : NULL;
+            if (policy && policy->creature_type && policy->eligible_npc &&
+                policy->spell_usable && policy->begin_attempt &&
+                policy->cast_result && policy->world_token)
+                (void)PP335_BindOnGameThread(policy);
+        }
+        if (g_initialized) {
+            if (command==1u) PP335_EnableOnGameThread(1);
+            else PP335_TickOnGameThread((uint32_t)GetTickCount());
+        }
+    }
+    g_pulse_running=0u;
+}
+PP335_EXPORT LRESULT CALLBACK W335_HookProc(int code, WPARAM w, LPARAM l) {
+    if (code>=0 && l) {
+        const MSG *msg=(const MSG *)l;
+        if (msg->message!=WM_QUIT) pp_message(msg->message,msg->wParam);
+    }
+    return CallNextHookEx(NULL,code,w,l);
+}
+PP335_EXPORT LRESULT CALLBACK W335_CallWndProc(int code, WPARAM w, LPARAM l) {
+    if (code>=0 && l) {
+        const CWPSTRUCT *msg=(const CWPSTRUCT *)l;
+        if (msg->message!=WM_QUIT) pp_message(msg->message,msg->wParam);
+    }
+    return CallNextHookEx(NULL,code,w,l);
+}
 BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID reserved) {
     (void)reserved;
-    if(reason==DLL_PROCESS_ATTACH)DisableThreadLibraryCalls(module);
+    if(reason==DLL_PROCESS_ATTACH) {
+        g_self=module;
+        DisableThreadLibraryCalls(module);
+    }
     return TRUE;
 }
