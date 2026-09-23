@@ -105,7 +105,7 @@ namespace WoW335Updater
             StartPosition = FormStartPosition.CenterScreen;
             DoubleBuffered = true;
             Text = "WoW335 Updater v" + UpdaterVersion + " • 3.3.5a / 12340";
-            Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
 
             var root = UiGrid(1, 5);
             root.Padding = new Padding(16);
