@@ -2,5 +2,27 @@
   "schema_version": 1,
   "repository": "github12wykrzyk/335",
   "purpose": "Experiment ownership, dependency and exact-SHA in-game test evidence. Live GitHub HEAD and runtime/current.json remain authoritative.",
-  "experiments": []
+  "experiments": [
+    {
+      "id": "autopickpocket-12340",
+      "goal": "Isolated automated Pick Pocket on nearby NPCs with GUID history, silent commands and loader-report diagnostics; native game adapter not yet verified",
+      "branch": "feature/autopickpocket-12340",
+      "modules": [
+        "AutoPickPocket"
+      ],
+      "dependencies": [
+        "Client12340"
+      ],
+      "shared_resources": [
+        "wow12340:object-manager",
+        "logical:spell-cast",
+        "logical:targeting"
+      ],
+      "status": "in_progress",
+      "observed_head": "2ec3f478cd9113a434036fe454d31a449dc161a9",
+      "verified_commit": null,
+      "tests": [],
+      "package": null
+    }
+  ]
 }
