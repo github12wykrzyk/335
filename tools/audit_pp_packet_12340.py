@@ -58,4 +58,18 @@ for key in [bytes.fromhex("682e010000"),bytes.fromhex("c7002e010000"),bytes.from
             hits.append(start+i);i+=1
     print("OPCODE_PATTERN",key.hex(),"count",len(hits))
     for a in hits[:20]:dump(a,35,110)
+
+# Inspect native spell serialization and client transport entrypoints at instruction-aligned starts.
+for name, address, nbytes in [
+    ("cast_serializer_candidate", 0x0080CCE0, 1450),
+    ("network_send_candidate", 0x0081B530, 950),
+    ("native_spell_send_caller", 0x0080DA40, 100),
+]:
+    for start, buf, section in secs:
+        if not start <= address < start + len(buf):
+            continue
+        print("TARGETED", name, hex(address))
+        for ins in md.disasm(buf[address-start:address-start+nbytes], address):
+            print("INS",hex(ins.address),ins.mnemonic,ins.op_str)
+        break
 print("PACKET_AUDIT: STATIC_ONLY; sender ABI not certified by opcode or xrefs alone")
