@@ -17,7 +17,8 @@ extern "C" {
 typedef struct {
     void *context;
     int (*eligible_npc)(void *,uintptr_t obj,PpGuid target);
-    /* 3.3.5 CreatureType.dbc ID: 6=Undead, 7=Humanoid; 0=unknown. */
+    /* Optional independent veto; native 12340 creature type is authoritative.
+     * This callback may not grant eligibility to an unknown/other type. */
     uint32_t (*creature_type)(void *,uintptr_t obj,PpGuid target);
     int (*spell_usable)(void *,uint32_t spell_id);
     /* Arms authoritative correlation before each native cast. Return 0 if

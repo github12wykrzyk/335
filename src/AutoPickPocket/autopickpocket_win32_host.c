@@ -17,6 +17,7 @@
 #define PP_MAX_PTR 0x7FFE0000u
 #define PP_LOG_CAP 262144u
 #define PP_WINMSG_NAME "WoW335_AutoPickPocket_12340_GameThread_v1"
+#define PP_CREATURE_TYPE_VA ((uintptr_t)0x0071F300u)
 #define PP_CREATURE_UNDEAD 6u
 #define PP_CREATURE_HUMANOID 7u
 static Pp12340Adapter g_adapter;
@@ -116,6 +117,45 @@ static int current_thread_owns_game_window(void) {
 static int is_game_thread(void) {
     return g_initialized && g_game_thread==GetCurrentThreadId();
 }
+
+/* Static audit of exact pinned Wow.exe: 0x0071F300 has 26 direct E8 xrefs.
+ * xref 0x004F7496 passes CGUnit_C in ECX, compares returned EAX with 12.
+ * The method consumes no stack args and returns with C3 (thiscall).
+ * No attempt is made to call other historical unverified NPC offsets.
+ * Full-client SHA is checked at bind; exact code/xref bytes are checked
+ * both at bind and before every native creature classification.
+ */
+static int verify_creature_type_abi(void) {
+    static const BYTE body[]={
+        0x80,0xB9,0xF4,0x09,0x00,0x00,0x00,0x74,0x04,0x33,0xC0,0xEB,0x0D,
+        0x8B,0x81,0xD0,0x00,0x00,0x00,0x0F,0xB6,0x80,0xD3,0x01,0x00,0x00
+    };
+    static const BYTE caller[]={
+        0x8B,0xCE,0xE8,0x65,0x7E,0x22,0x00,0x83,0xF8,0x0C
+    };
+    return byte_match(PP_CREATURE_TYPE_VA,body,sizeof(body)) &&
+           byte_match((uintptr_t)0x004F7494u,caller,sizeof(caller));
+}
+static uint32_t native_creature_type(uintptr_t obj) {
+    uintptr_t fn=PP_CREATURE_TYPE_VA;
+    uint32_t type=0u;
+    /* A non-player CGUnit_C is already required by the adapter's object
+     * type/GUID checks. Require the native method's first object field too. */
+    if (!is_game_thread() || !valid_memory((const void *)obj,0x9F8u) ||
+        !verify_creature_type_abi()) return 0u;
+#if defined(_M_IX86)
+    __try {
+        __asm {
+            mov ecx,obj
+            call fn
+            mov type,eax
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return 0u; }
+#else
+    return 0u;
+#endif
+    return type;
+}
 static int verify_abi(void *ctx,uintptr_t spell,uintptr_t pos) {
     static const BYTE cast_prefix[]={
         0x55,0x8b,0xec,0xe8,0x48,0x5d,0xcc,0xff,
@@ -133,7 +173,8 @@ static int verify_abi(void *ctx,uintptr_t spell,uintptr_t pos) {
         pos==PP12340_POSITION_VA &&
         byte_match(spell,cast_prefix,sizeof(cast_prefix)) &&
         byte_match(pos,pos_prefix,sizeof(pos_prefix)) &&
-        byte_match((uintptr_t)0x00510423u,caller_postfix,sizeof(caller_postfix));
+        byte_match((uintptr_t)0x00510423u,caller_postfix,sizeof(caller_postfix)) &&
+        verify_creature_type_abi();
 }
 static uint32_t thread_id(void *ctx){(void)ctx;return GetCurrentThreadId();}
 static int position(void *ctx,uintptr_t obj,float coords[3]) {
@@ -157,13 +198,16 @@ static int position(void *ctx,uintptr_t obj,float coords[3]) {
 static int eligible(void *ctx,uintptr_t obj,PpGuid guid) {
     uint32_t type;
     (void)ctx;
-    if (!is_game_thread() || !g_policy.creature_type ||
-        !g_policy.eligible_npc) return 0;
-    type=g_policy.creature_type(g_policy.context,obj,guid);
+    if (!is_game_thread() || !g_policy.eligible_npc) return 0;
+    type=native_creature_type(obj);
     /* An eligible_NPC policy alone must never admit beasts, demons, players
      * or unknown creature types. Rechecked for every scan AND cast. */
     if (type!=PP_CREATURE_UNDEAD && type!=PP_CREATURE_HUMANOID)
         return 0;
+    /* Optional independent provider may veto, but cannot bypass the native
+     * type check. Unknown or conflicting reported values fail closed. */
+    if (g_policy.creature_type &&
+        g_policy.creature_type(g_policy.context,obj,guid)!=type) return 0;
     return g_policy.eligible_npc(g_policy.context,obj,guid)==1;
 }
 static int usable(void *ctx,uint32_t spell_id) {
@@ -252,7 +296,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     Pp12340Host h;
     if(g_initialized || !current_thread_owns_game_window() ||
-       !policy || !policy->eligible_npc || !policy->creature_type ||
+       !policy || !policy->eligible_npc ||
        !policy->spell_usable || !policy->begin_attempt ||
        !policy->cast_result ||
        !policy->world_token)return 0;
@@ -327,7 +371,7 @@ static void pp_message(UINT message, WPARAM command) {
             g_bind_attempted=1u;
             provider=verified_policy();
             policy=provider ? provider() : NULL;
-            if (policy && policy->creature_type && policy->eligible_npc &&
+            if (policy && policy->eligible_npc &&
                 policy->spell_usable && policy->begin_attempt &&
                 policy->cast_result && policy->world_token)
                 (void)PP335_BindOnGameThread(policy);

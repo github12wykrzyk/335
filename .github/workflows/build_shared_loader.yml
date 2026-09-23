@@ -30,6 +30,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/verify_client_exe.py --exe Wow.exe --require-target
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python src/AutoPickPocket/audit_npc_type_12340.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build actual loader AutoLoot and PP Windows PE32 x86 DLLs
         shell: pwsh
         run: |

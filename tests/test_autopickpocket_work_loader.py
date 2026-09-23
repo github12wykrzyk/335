@@ -21,8 +21,10 @@ class WorkLoaderBridgeTests(unittest.TestCase):
         self.assertIn("PP_CREATURE_UNDEAD 6u", HOST)
         self.assertIn("PP_CREATURE_HUMANOID 7u", HOST)
         self.assertIn("type!=PP_CREATURE_UNDEAD && type!=PP_CREATURE_HUMANOID", HOST)
-        self.assertIn("!policy->creature_type", HOST)
-        self.assertIn("g_policy.creature_type(g_policy.context,obj,guid)", HOST)
+        self.assertIn("type=native_creature_type(obj)", HOST)
+        self.assertIn("verify_creature_type_abi()", HOST)
+        self.assertIn("g_policy.creature_type(g_policy.context,obj,guid)!=type", HOST)
+        self.assertNotIn("!policy->creature_type", HOST)
 
     def test_missing_policy_prevents_loader_activation(self):
         self.assertIn('GetProcAddress(g_self,', HOST)

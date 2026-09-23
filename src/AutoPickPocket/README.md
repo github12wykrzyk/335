@@ -150,3 +150,19 @@ That provider is NOT yet implemented; its NPC hostility, stealth/spell and
 GUID-attributed server-result callbacks must be verified on the exact client.
 The DLL remains inactive and must NOT be manually added to dlls.txt. The
 current work runtime and its accepted AutoLoot byte hash remain unchanged.
+
+## Native NPC classification on the pinned x86 client (2026-09-23)
+
+Independent exact-EXE static audit checked `CGUnit_C__GetCreatureType` at
+`0x0071F300`, including its first 27 bytes and 26 direct call sites; the
+caller at `0x004F7496` passes `this` in ECX and compares the return in EAX.
+`autopickpocket_win32_host.c` now implements read-only native classification
+of scanned NPC objects by that function on the game window thread. The EXE
+SHA256 and method/caller bytes are checked before calling. Only values 6
+(Undead) and 7 (Humanoid) are admitted, with an optional independent policy
+allowed only to veto, never override the native type. All unknown or broken
+pointers and ABI mismatches are rejected. The adapter already excludes player
+objects by requiring unit-object type 3. Its eligible NPC callback must still
+establish hostility/pickpocketability; the spell and result policies remain
+unimplemented. Native type classification is not proof of working autonomous
+Pick Pocket or a validated in-game package. No active work/main runtime changed.
