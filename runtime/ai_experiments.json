@@ -2,5 +2,25 @@
   "schema_version": 1,
   "repository": "github12wykrzyk/335",
   "purpose": "Experiment ownership, dependency and exact-SHA in-game test evidence. Live GitHub HEAD and runtime/current.json remain authoritative.",
-  "experiments": []
+  "experiments": [
+    {
+      "id": "autoloot-12340",
+      "branch": "feature/autoloot-12340",
+      "status": "in_progress",
+      "goal": "Implement WoW112-style automatic corpse looting in exact WoW 3.3.5a build 12340, starting from a portable fail-closed controller; native adapter and game package require exact-client verification.",
+      "modules": [
+        "AutoLoot"
+      ],
+      "dependencies": [],
+      "shared_resources": [
+        "logical:loot-ui",
+        "logical:object-enumeration",
+        "logical:interaction"
+      ],
+      "observed_head": "f08c885006dd4597467636464adcbb9605553603",
+      "verified_commit": null,
+      "tests": [],
+      "package": null
+    }
+  ]
 }
