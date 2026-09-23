@@ -67,7 +67,7 @@ def main():
         shutil.copyfile(compiled,target)
         if hashlib.sha256(target.read_bytes()).hexdigest()!=digest:
             raise RuntimeError("registered DLL changed during copy")
-        row["version"]="1.0.1-test+sha."+digest[:12]
+        row["version"]="1.0.3-test+sha."+digest[:12]
         row["sha256"]=digest
         errors=validate(runtime,registry)
         if errors:

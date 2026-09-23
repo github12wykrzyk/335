@@ -1,5 +1,6 @@
 name: Activate native AutoPickPocket in universal work loader
 on:
+  workflow_dispatch:
   push:
     branches: [feature/autopickpocket-12340]
     paths:
