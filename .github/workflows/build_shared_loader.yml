@@ -42,7 +42,7 @@ jobs:
           New-Item -ItemType Directory -Force dist/shared_loader | Out-Null
           $commands=@(
             '@echo off',
-            'call "'+$vcvars+'" x86 >nul',
+            ('call "' + $vcvars + '" x86 >nul'),
             'if errorlevel 1 exit /b 1',
             'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\AutoLoot335.dll src\AutoLoot\autoloot_core.c src\AutoLoot\autoloot_12340_adapter.c src\AutoLoot\autoloot_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib',
             'if errorlevel 1 exit /b 1',
