@@ -94,6 +94,7 @@ def windows_core_build(report: str) -> None:
         raise RuntimeError("Windows MSVC x86 is required")
     from build_active import find_vcvars
     from manifest_common import pe_machine, repo_path, sha256_file
+    from build_active import inspect_dll
     vcvars = find_vcvars()
     src = repo_path("src/AutoPickPocket/autopickpocket_core.c")
     test = repo_path("tests/autopickpocket_core_test.c")
@@ -116,21 +117,53 @@ def windows_core_build(report: str) -> None:
             raise RuntimeError("AutoPickPocket native x86 core tests failed")
     if pe_machine(executable) != 0x014c:
         raise RuntimeError("AutoPickPocket test executable is not Windows x86")
+    adapter = repo_path("src/AutoPickPocket/autopickpocket_12340_adapter.c")
+    adapter_test = repo_path("tests/autopickpocket_12340_adapter_test.c")
+    dll_host = repo_path("src/AutoPickPocket/autopickpocket_win32_host.c")
+    native_test = out / "autopickpocket_adapter_test.exe"
+    dll = out / "AutoPickPocket335_ADAPTER_ISOLATED.dll"
+    with tempfile.TemporaryDirectory(prefix="pp335-adapter-") as temp:
+        cmd = Path(temp) / "build.cmd"
+        cmd.write_text(
+            '@echo off\r\ncall "' + str(vcvars) + '" x86\r\n'
+            'if errorlevel 1 exit /b 1\r\n'
+            'cl.exe /nologo /TC /O2 /W4 /WX /Brepro '
+            '/Fe:"' + str(native_test) +
+            '" "' + str(src) + '" "' + str(adapter) + '" "' +
+            str(adapter_test) + '" /link /MACHINE:X86 /Brepro\r\n'
+            'if errorlevel 1 exit /b 1\r\n'
+            '"' + str(native_test) + '"\r\n'
+            'if errorlevel 1 exit /b 1\r\n'
+            'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro '
+            '/Fe:"' + str(dll) +
+            '" "' + str(src) + '" "' + str(adapter) + '" "' +
+            str(dll_host) + '" /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib\r\n'
+            'exit /b %errorlevel%\r\n', encoding="utf-8")
+        compile = subprocess.run(["cmd.exe", "/d", "/c", str(cmd)], cwd=out)
+        if compile.returncode:
+            raise RuntimeError("AutoPickPocket native adapter mock or isolated x86 DLL build failed")
+    if pe_machine(native_test) != 0x014c:
+        raise RuntimeError("AutoPickPocket adapter test is not Windows x86")
+    inspect_dll(dll)
     sha = os.environ.get("GITHUB_SHA", "")
     data = {
         "schema_version": 1,
         "branch": os.environ.get("GITHUB_REF_NAME", ""),
         "git_sha": sha,
         "test_executable_sha256": sha256_file(executable),
-        "result": "PORTABLE_CORE_TESTS_X86_PASS",
-        "game_dll": False,
+        "adapter_test_executable_sha256": sha256_file(native_test),
+        "isolated_adapter_dll_sha256": sha256_file(dll),
+        "result": "PORTABLE_CORE_AND_NATIVE_ADAPTER_MOCK_X86_PASS",
+        "isolated_adapter_compiled_pe32_x86": True,
+        "game_dll_registered": False,
+        "game_ready": False,
         "final_package": False,
-        "reason": "12340 native spell/GUID ABI and loader not verified"
+        "reason": "NPC eligibility, learned-spell and cast-result policies plus shared game-thread loader not integrated"
     }
     dest = repo_path(report)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print("AUTOPICKPOCKET_CORE_X86: PASS; NO GAME DLL; NO GAME PACKAGE.")
+    print("AUTOPICKPOCKET_ADAPTER_X86: PASS; isolated PE32 adapter and mock tests; NO GAME PACKAGE.")
 
 def main() -> int:
     p=argparse.ArgumentParser()

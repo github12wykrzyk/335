@@ -69,3 +69,34 @@ instead of registered
 The previous passing work run used hosted VS 17.14.40. Toolchain drift
 is a plausible cause, NOT yet a proven byte-level diagnosis. Do not
 replace the accepted AutoLoot DLL or bypass its rebuild gate.
+
+
+## Native adapter implementation (isolated experiment)
+
+Canonical source: autopickpocket_12340_adapter.{c,h} and
+autopickpocket_win32_host.{c,h}; native Windows x86 adapter is separately
+compiled and mock-tested. NOT in runtime/current.json or dlls.txt.
+The exact pinned EXE static audit on 2026-09-23 confirmed:
+- address 0x0080DA40 is executable and has 18 direct E8 call sites;
+- native callers push five 32-bit arguments and clean 0x14 bytes in caller;
+- at inspected call sites the argument order is spell ID, zero,
+  target GUID low32, target GUID high32, zero.
+- the first 18 bytes at 0x0080DA40 and the caller cleanup at 0x00510423
+  are checked at runtime IN ADDITION TO the full pinned Wow.exe SHA256.
+
+These are static ABI checks, NOT an in-game successful cast proof.
+The isolated native adapter is a real PE32 x86 DLL with an internal cast
+entrypoint but will NOT activate on its own. PP335_BindOnGameThread requires
+a separately authorized shared loader and non-null, game-thread-safe policy
+callbacks for hostile pickpocketable NPCs, learned/usable spell and Stealth,
+and a verified result for the exact GUID and attempt. All unknown cases
+must fail closed. No fallback to Lua targeting or to a different GUID.
+The loader on work currently supports ONLY the registered AutoLoot,
+and the experimental loader on feature/loader-12340 is a separate
+unaccepted branch. No automatic cross-branch merging is allowed.
+
+The isolated build report is NOT FINAL_PACKAGE: PASS and the DLL is NOT
+a playable test package. Do not put it manually into the client or dlls.txt.
+Standalone PP action never calls AutoLoot, LootSlot, or closes loot windows.
+Diagnostic events are bounded JSONL under .wow335_debug/AutoPickPocket.jsonl
+and sent by the existing reporter once installed in a future verified stack.

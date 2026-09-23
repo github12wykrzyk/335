@@ -1,0 +1,132 @@
+#include "../src/AutoPickPocket/autopickpocket_12340_adapter.h"
+#include <stdio.h>
+#include <string.h>
+#define CHECK(x) do { if (!(x)) { fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;} } while(0)
+#define CONN 0x00100000u
+#define MANAGER 0x00200000u
+#define PLAYER 0x00300000u
+#define NPC_A 0x00400000u
+#define NPC_B 0x00500000u
+#define DESC_A 0x00600000u
+#define DESC_B 0x00700000u
+typedef struct {
+    uint32_t thread,hash_ok,abi_ok,usable,eligible_a,eligible_b;
+    uint64_t world;
+    PpResult result;
+    unsigned casts,cast_spell,callbacks;
+    PpGuid last_guid;
+} Mock;
+static int digest(void *p,const char *expected){
+    return ((Mock*)p)->hash_ok && !strcmp(expected,PP12340_CLIENT_SHA256);
+}
+static int abi(void *p,uintptr_t spell,uintptr_t pos) {
+    return ((Mock*)p)->abi_ok && spell==PP12340_CAST_GUID_VA &&
+           pos==PP12340_POSITION_VA;
+}
+static uint32_t tid(void *p){return ((Mock*)p)->thread;}
+static uint64_t world(void *p){return ((Mock*)p)->world;}
+static int read32(void *p,uintptr_t addr,uint32_t *out){
+    (void)p;
+    switch(addr) {
+    case PP12340_CONNECTION_VA: *out=CONN;break;
+    case CONN+PP12340_MANAGER_OFFSET:*out=MANAGER;break;
+    case MANAGER+0xC0u:*out=0xAABBCCDDu;break;
+    case MANAGER+0xC4u:*out=0x01020304u;break;
+    case MANAGER+0xACu:*out=PLAYER;break;
+    case PLAYER+0x30u:*out=0xAABBCCDDu;break;
+    case PLAYER+0x34u:*out=0x01020304u;break;
+    case PLAYER+0x3Cu:*out=NPC_A;break;
+    case NPC_A+0x30u:*out=111u;break;
+    case NPC_A+0x34u:*out=10u;break;
+    case NPC_A+0x3Cu:*out=NPC_B;break;
+    case NPC_A+0x14u:*out=PP12340_UNIT_TYPE;break;
+    case NPC_A+0x08u:*out=DESC_A;break;
+    case DESC_A+0x18u*4u:*out=120u;break;
+    case NPC_B+0x30u:*out=222u;break;
+    case NPC_B+0x34u:*out=20u;break;
+    case NPC_B+0x3Cu:*out=0u;break;
+    case NPC_B+0x14u:*out=PP12340_UNIT_TYPE;break;
+    case NPC_B+0x08u:*out=DESC_B;break;
+    case DESC_B+0x18u*4u:*out=200u;break;
+    default:return 0;
+    }
+    return 1;
+}
+static int pos(void *p,uintptr_t obj,float out[3]){
+    (void)p;out[1]=0;out[2]=0;
+    if(obj==PLAYER)out[0]=0;
+    else if(obj==NPC_A)out[0]=3;
+    else if(obj==NPC_B)out[0]=2;
+    else return 0;
+    return 1;
+}
+static int eligible(void *p,uintptr_t obj,PpGuid g){
+    Mock *m=(Mock*)p;
+    if (obj==NPC_A)return m->eligible_a && g.lo==111 && g.hi==10;
+    if (obj==NPC_B)return m->eligible_b && g.lo==222 && g.hi==20;
+    return 0;
+}
+static int usable(void *p,uint32_t spell){
+    Mock *m=(Mock*)p;
+    return m->usable && spell==921u;
+}
+static int cast(void *p,uintptr_t addr,uint32_t spell,PpGuid target){
+    Mock *m=(Mock*)p;
+    if(addr!=PP12340_CAST_GUID_VA || spell!=921u)return 0;
+    ++m->casts;m->cast_spell=spell;m->last_guid=target;
+    return 1;
+}
+static PpResult result(void *p,PpGuid g){(void)g;return ((Mock*)p)->result;}
+static void event(void *p,PpEvent ev,PpGuid g){(void)ev;(void)g;++((Mock*)p)->callbacks;}
+static Pp12340Host host(Mock *m) {
+    Pp12340Host h;memset(&h,0,sizeof(h));h.ctx=m;
+    h.verify_exe_sha256=digest;h.verify_cast_abi=abi;h.thread_id=tid;
+    h.read_u32=read32;h.position=pos;h.eligible_npc=eligible;
+    h.spell_usable=usable;h.cast_guid=cast;h.cast_result=result;
+    h.world_token=world;h.event=event;return h;
+}
+static void defaults(Mock *m) {
+    memset(m,0,sizeof(*m));m->thread=1u;m->hash_ok=1u;m->abi_ok=1u;
+    m->usable=1u;m->eligible_a=1u;m->eligible_b=1u;m->world=0x01010101u;
+}
+static int test_bind_guard(void){
+    Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+    m.hash_ok=0;CHECK(!pp12340_bind(&a,&h));
+    m.hash_ok=1;m.abi_ok=0;CHECK(!pp12340_bind(&a,&h));
+    m.abi_ok=1;m.world=0;CHECK(!pp12340_bind(&a,&h));
+    m.world=1u;CHECK(pp12340_bind(&a,&h));
+    CHECK(!a.engine.enabled);return 0;
+}
+static int test_scan_cast_history_world(void){
+    Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+    CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+    pp12340_tick(&a,10);CHECK(m.casts==1 && m.last_guid.lo==222 && m.last_guid.hi==20);
+    pp12340_tick(&a,20);CHECK(m.casts==1 && a.engine.successes==0);
+    m.result=PP_RESULT_SUCCESS;pp12340_tick(&a,30);
+    CHECK(a.engine.successes==1);
+    m.result=PP_RESULT_PENDING;pp12340_tick(&a,110);
+    CHECK(m.casts==2 && m.last_guid.lo==111);
+    m.result=PP_RESULT_EMPTY;pp12340_tick(&a,111);CHECK(a.engine.empty==1);
+    pp12340_tick(&a,400);CHECK(m.casts==2); /* per GUID memory */
+    m.world=2u;pp12340_tick(&a,500);
+    CHECK(m.casts==3 && m.last_guid.lo==222);
+    m.thread=3u;pp12340_tick(&a,2000);CHECK(a.engine.active_valid);
+    pp12340_enable(&a,0);CHECK(a.engine.enabled); /* foreign thread blocked */
+    m.thread=1u;pp12340_enable(&a,0);CHECK(!a.engine.enabled);
+    return 0;
+}
+static int test_fail_closed_filter(void){
+    Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+    CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+    m.usable=0;pp12340_tick(&a,0);CHECK(m.casts==0);
+    m.usable=1;m.eligible_a=0;m.eligible_b=0;
+    pp12340_tick(&a,100);CHECK(m.casts==0);
+    m.eligible_a=1;pp12340_tick(&a,200);CHECK(m.casts==1 && m.last_guid.lo==111);
+    return 0;
+}
+int main(void){
+    if(test_bind_guard()||test_scan_cast_history_world()||
+       test_fail_closed_filter())return 1;
+    puts("PP12340 native adapter mock: PASS");
+    return 0;
+}
