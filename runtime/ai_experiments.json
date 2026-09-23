@@ -7,15 +7,19 @@
       "id": "loader-12340",
       "branch": "feature/loader-12340",
       "status": "in_progress",
-      "goal": "Isolated 12340 x86 startup DLL and exact pinned-EXE import append experiment, without changing canonical Wow.exe or EpochConnection; integrate with verified GitHub module selection only after Windows build, dependency checks and game tests.",
+      "goal": "Isolated pinned EpochConnection.dll startup-loader import experiment based on user-provided PE32 x86 original; preserve its network code, exports, TLS, relocations and canonical Wow.exe; no delivery until exact Windows artifacts, updater backup/rollback and in-game evidence.",
       "modules": [
         "Loader12340"
       ],
-      "dependencies": [],
+      "dependencies": [
+        "EpochConnection.dll: user-provided exact SHA 9af04f7afd21b0bc93860d66e6ccdc96ccf1b039ea31871119a3deaa271352c3",
+        "Wow335Loader.dll: standalone x86 experimental loader"
+      ],
       "shared_resources": [
         "logical:startup-loader",
         "logical:dll-load-order",
-        "win32:pe-import-directory"
+        "win32:epochconnection-import-directory",
+        "win32:epochconnection-exports-tls-network"
       ],
       "observed_head": "18905f8c9d3ebc57588e12b1f2f76416572c2659",
       "verified_commit": null,
