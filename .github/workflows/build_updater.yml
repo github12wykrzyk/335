@@ -8,16 +8,6 @@ on:
       - parallel
       - 'feature/**'
       - 'promote/**'
-    paths:
-      - 'tools/updater/**'
-      - 'src/**'
-      - 'runtime/**'
-      - 'tests/**'
-      - 'tools/verify*.py'
-      - 'AI_INDEX.json'
-      - 'CURRENT.json'
-      - 'Wow.exe'
-      - '.github/workflows/build_updater.yml'
   workflow_dispatch:
 
 permissions:
