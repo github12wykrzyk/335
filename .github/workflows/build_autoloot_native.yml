@@ -54,6 +54,24 @@ jobs:
               assert bool(struct.unpack_from('<H',data,off+22)[0]&0x2000)==dll
               print('AUTOLOOT_NATIVE_BUILD:',name,'PE32 x86 PASS',len(data),hashlib.sha256(data).hexdigest())
           print('FINAL_PACKAGE: NOT_RUN — loader, ABI in-game behavior, registered runtime and uploader delivery unverified')
+      - name: Write exact-SHA native-preview manifest for the updater
+        shell: python
+        run: |
+          import json,hashlib,os
+          from pathlib import Path
+          names=['AutoLoot335_Host_UNREGISTERED.dll','AutoLoot335_Launcher_PREVIEW.exe']
+          entries={}
+          for name in names:
+              data=(Path('dist')/name).read_bytes()
+              entries[name]={'sha256':hashlib.sha256(data).hexdigest(),'size':len(data)}
+          meta={'schema_version':1,'kind':'NATIVE_AUTOLOOT_PREVIEW_NOT_GAME_PACKAGE',
+                'branch':'feature/autoloot-12340','git_sha':'${{ github.sha }}',
+                'target_build':12340,'arch':'x86',
+                'client_exe_sha256':'2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d',
+                'files':entries,'final_package':'NOT_RUN','in_game_verified':False}
+          assert meta['git_sha']==os.getenv('GITHUB_SHA')
+          Path('dist/native_preview_build.json').write_text(json.dumps(meta,indent=2)+'\n',encoding='utf-8')
+          print('AUTOLOOT_NATIVE_PREVIEW_META: PASS',meta['git_sha'])
       - name: Test portable AutoLoot controller and native-adapter fake-client integration
         run: python -m unittest discover -s tests -p "test_autoloot*.py" -v
       - name: Preserve build evidence (NOT a distributable game package)
@@ -62,6 +80,7 @@ jobs:
           name: AutoLoot12340-native-preview-NOT-INSTALLABLE-${{ github.sha }}
           path: |
             dist/autoloot_abi.json
+            dist/native_preview_build.json
             dist/AutoLoot335_Host_UNREGISTERED.dll
             dist/AutoLoot335_Launcher_PREVIEW.exe
           if-no-files-found: error
