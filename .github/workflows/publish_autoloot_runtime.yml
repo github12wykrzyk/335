@@ -9,6 +9,7 @@ on:
       - 'tools/publish_autoloot_runtime.py'
       - 'tools/register_active_runtime.py'
       - 'tools/build_active.py'
+      - 'tools/native_toolchain.py'
       - 'runtime/module_registry.json'
       - 'src/**'
       - '.github/workflows/publish_autoloot_runtime.yml'

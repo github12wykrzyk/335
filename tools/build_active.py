@@ -18,6 +18,7 @@ import tempfile
 from pathlib import Path
 from manifest_common import ROOT, load_json, repo_path, sha256_file
 from verify_module_registry import validate
+from native_toolchain import VCVARS_ARGS, PINNED_VC_VERSION, PINNED_WINDOWS_SDK
 
 def select_modules(registry, base):
     modules = registry["modules"]
@@ -102,7 +103,7 @@ def compile_module(m, runtime_file, vcvars, output_dir, verify_registered=True):
     with tempfile.TemporaryDirectory(prefix="wow335-build-") as td:
         script = Path(td) / "build.cmd"
         # The script lives outside src/ and is never committed.
-        script.write_text("@echo off\r\ncall \"" + str(vcvars) + "\" x86\r\n"
+        script.write_text("@echo off\r\ncall \"" + str(vcvars) + "\" " + VCVARS_ARGS + "\r\n"
             + "if errorlevel 1 exit /b 1\r\n"
             + subprocess.list2cmdline(command) + "\r\n"
             + "exit /b %errorlevel%\r\n", encoding="utf-8")
@@ -149,7 +150,9 @@ def main():
         report = {"schema_version": 1, "project": "335", "build": 12340,
                   "git_sha": os.environ.get("GITHUB_SHA") or subprocess.check_output(
                       ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-                  "selected_components": sorted(selected), "results": results}
+                  "selected_components": sorted(selected), "results": results,
+                  "toolchain": {"vcvars_args": VCVARS_ARGS, "vc_version": PINNED_VC_VERSION,
+                                "windows_sdk": PINNED_WINDOWS_SDK}}
         dest = repo_path(args.report)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

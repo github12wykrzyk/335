@@ -17,6 +17,7 @@ from pathlib import Path
 
 from manifest_common import ROOT, load_json, repo_path, sha256_file
 from build_active import checked_flag, find_vcvars, inspect_dll
+from native_toolchain import VCVARS_ARGS
 
 COMPONENT = "AutoLoot"
 BINARY = "runtime/AutoLoot335.dll"
@@ -70,7 +71,7 @@ def execute() -> None:
     with tempfile.TemporaryDirectory(prefix="wow335-runtime-publish-") as td:
         script = Path(td) / "build.cmd"
         script.write_text(
-            "@echo off\r\ncall \"" + str(find_vcvars()) + "\" x86\r\n"
+            "@echo off\r\ncall \"" + str(find_vcvars()) + "\" " + VCVARS_ARGS + "\r\n"
             "if errorlevel 1 exit /b 1\r\n" +
             subprocess.list2cmdline(cmd) + "\r\nexit /b %errorlevel%\r\n",
             encoding="utf-8",
@@ -229,7 +230,7 @@ def refresh_registered_runtime() -> None:
     with tempfile.TemporaryDirectory(prefix="wow335-runtime-refresh-") as td:
         script = Path(td) / "build.cmd"
         script.write_text(
-            "@echo off\r\ncall \"" + str(find_vcvars()) + "\" x86\r\n"
+            "@echo off\r\ncall \"" + str(find_vcvars()) + "\" " + VCVARS_ARGS + "\r\n"
             "if errorlevel 1 exit /b 1\r\n" +
             subprocess.list2cmdline(cmd) + "\r\nexit /b %errorlevel%\r\n",
             encoding="utf-8",
