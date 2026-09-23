@@ -62,3 +62,5 @@ A user-supplied game report contained consecutive packet submission events follo
 ## Target ownership (CI regression)
 
 Never call ClearTarget(), TargetUnit() or UnitGUID('target') from the packet or fallback policy: a previous experimental native target-release callback violated the branch's existing no-target-mutation invariant and was removed. Native cast target side effects remain subject to actual in-game verification.
+
+Mandatory plain-Python unit test `tests/test_autopickpocket_exact_packet_gate.py` checks every runtime byte gate against the exact pinned PE32 x86 EXE and verifies the original client send-call displacement, preventing the earlier silent bind failure from passing ordinary verify CI.
