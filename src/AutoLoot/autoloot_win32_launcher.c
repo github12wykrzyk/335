@@ -26,7 +26,7 @@ int wmain(int argc, wchar_t **argv) {
     PROCESS_INFORMATION pi = {0};
     HMODULE host = NULL;
     HHOOK hook = NULL;
-    Search s;
+    Search s = {0};
     message_id_fn getmsg;
     hook_fn proc;
     UINT msg = 0u;
