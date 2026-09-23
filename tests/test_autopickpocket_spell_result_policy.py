@@ -15,7 +15,7 @@ class SpellAndResultTests(unittest.TestCase):
                       "LOOT_OPENED","nonce!=current_attempt",
                       "!same(guid,current_target)","read_u32(LOOT_SOURCE,&source.lo)", "loot_attempt==nonce",
                       "same(captured_loot_guid,guid)",
-                      "same(source,guid)","PP_RESULT_PENDING","PP_RESULT_EMPTY",
+                      "same(source,current_target)","PP_RESULT_PENDING","PP_RESULT_EMPTY",
                       "PP_RESULT_RETRYABLE"):
             self.assertIn(value,POLICY)
         self.assertLess(POLICY.index("loot_attempt==nonce"),
