@@ -77,7 +77,7 @@ jobs:
       - name: Preserve build evidence (NOT a distributable game package)
         uses: actions/upload-artifact@v4
         with:
-          name: AutoLoot12340-native-preview-NOT-INSTALLABLE-${{ github.sha }}
+          name: AutoLoot12340-native-preview-TESTONLY-${{ github.sha }}
           path: |
             dist/autoloot_abi.json
             dist/native_preview_build.json
