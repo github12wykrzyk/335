@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "project": "335",
+  "target": {
+    "product": "World of Warcraft",
+    "version": "3.3.5a",
+    "build": 12340,
+    "platform": "Windows",
+    "architecture": "x86"
+  },
+  "read_order": [
+    "AGENTS.md",
+    "AI_START_HERE.md",
+    "AI_INDEX.json",
+    "CURRENT.json",
+    "runtime/current.json"
+  ],
+  "canonical": {
+    "source_root": "src",
+    "current": "CURRENT.json",
+    "runtime": "runtime/current.json",
+    "project_rules": "PROJECT_INSTRUCTIONS.md",
+    "package_builder": "tools/package_candidate.py",
+    "package_gate": "tools/verify_candidate_package.py",
+    "updater": "tools/updater",
+    "experiment_ledger": "runtime/ai_experiments.json"
+  },
+  "branches": {
+    "stable": "main",
+    "development": "work",
+    "experimental": "parallel",
+    "feature": "feature/*",
+    "promotion": "promote/*"
+  },
+  "modules": [],
+  "state": "infrastructure-only"
+}

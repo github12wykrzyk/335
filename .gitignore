@@ -1,0 +1,11 @@
+build/
+dist/
+*.obj
+*.pdb
+*.ilk
+*.log
+*.dmp
+.wow335_debug/
+.wow335_updater/
+__pycache__/
+*.pyc

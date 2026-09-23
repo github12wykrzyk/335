@@ -1,0 +1,23 @@
+name: Build 335 stable candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - run: python tools/verify_repo.py
+      - run: python tools/verify_current.py
+      - run: python tools/package_candidate.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json
+      - run: python tools/verify_candidate_package.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WoW335-STABLE-CANDIDATE-${{ github.sha }}
+          path: |
+            dist/WoW335_STABLE_CANDIDATE.zip
+            dist/candidate_metadata.json
+          if-no-files-found: error
+          compression-level: 0

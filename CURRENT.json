@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "project": "335",
+  "wow_version": "3.3.5a",
+  "wow_build": 12340,
+  "architecture": "x86",
+  "status": "bootstrap-unaccepted",
+  "stable_baseline": null,
+  "stable_branch": "main",
+  "working_branch": "work",
+  "runtime_manifest": "runtime/current.json",
+  "canonical_source_root": "src",
+  "candidate_workflow": ".github/workflows/build_work_candidate.yml",
+  "updater_workflow": ".github/workflows/build_updater.yml",
+  "promotion_workflow": ".github/workflows/pre_promote_stable.yml"
+}

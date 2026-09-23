@@ -1,0 +1,44 @@
+name: Build 335 work candidate
+on:
+  workflow_dispatch:
+  push:
+    branches: [work, 'feature/**', parallel]
+    paths: ['src/**','runtime/**','tools/package_candidate.py','tools/verify_candidate_package.py','.github/workflows/build_work_candidate.yml']
+permissions:
+  contents: read
+concurrency:
+  group: candidate-335-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  package:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify repository and runtime
+        shell: pwsh
+        run: |
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile active game components
+        shell: pwsh
+        run: |
+          if (-not (Test-Path tools/build_active.py)) { throw 'NO_ACTIVE_BUILDER: no Windows x86 game-module build recipe has been verified for 12340. Do not publish a candidate.' }
+          python tools/build_active.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Package verified active stack
+        shell: pwsh
+        run: |
+          python tools/package_candidate.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_candidate_package.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WoW335-WORK-CANDIDATE-${{ github.sha }}
+          path: |
+            dist/WoW335_WORK_CANDIDATE.zip
+            dist/candidate_metadata.json
+          if-no-files-found: error
+          compression-level: 0

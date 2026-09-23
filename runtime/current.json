@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "project": "335",
+  "target": {
+    "product": "World of Warcraft",
+    "version": "3.3.5a",
+    "build": 12340,
+    "platform": "Windows",
+    "architecture": "x86"
+  },
+  "release_id": null,
+  "state": "empty",
+  "canonical_source_policy": "Each active runtime file must point to exact existing src/ lineage or documented external source.",
+  "files": [],
+  "compatibility_sets": []
+}
