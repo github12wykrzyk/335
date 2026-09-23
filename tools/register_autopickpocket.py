@@ -1,4 +1,4 @@
-"""One-time native PP runtime registration on its isolated feature branch only.
+"""Native PP runtime registration and exact-binary refresh on its isolated feature branch only.
 
 Runs on Windows after native code/audits exist. Builds the exact PE32 x86 DLL
 with the SAME pinned recipe/toolchain used by build_active.py. Does not publish
@@ -42,6 +42,40 @@ def main():
     runtime=json.loads(manifest_path.read_text(encoding="utf-8"))
     registry=json.loads(registry_path.read_text(encoding="utf-8"))
     index=json.loads(index_path.read_text(encoding="utf-8"))
+    # A source fix must refresh the already registered DLL and its SHA.
+    # Never publish the previous binary with newly changed source files.
+    names=[x["component"] for x in runtime["files"]]
+    if PP in names:
+        if (names!=["Client12340","AutoLoot",PP] or
+            [m["component"] for m in registry["modules"]]!=["AutoLoot",PP] or
+            [m["component"] for m in index["modules"]]!=["AutoLoot",PP]):
+            raise RuntimeError("inconsistent registered PP ownership")
+        module=registry["modules"][-1]
+        if module["sources"]!=SOURCES or module["build"]["sources"]!=COMPILE:
+            raise RuntimeError("registered PP build recipe differs from current source")
+        row=runtime["files"][-1]
+        if row["path"]!="runtime/"+NAME or row["kind"]!="dll" or row["arch"]!="x86":
+            raise RuntimeError("unexpected existing PP runtime entry")
+        report=compile_module(module,row,find_vcvars(),ROOT/"dist/native",
+                              verify_registered=False)
+        compiled=ROOT/"dist/native"/PP/NAME
+        inspect_dll(compiled)
+        digest=hashlib.sha256(compiled.read_bytes()).hexdigest()
+        if digest!=report["binary_sha256"]:
+            raise RuntimeError("native PP output changed after build")
+        target=ROOT/"runtime"/NAME
+        shutil.copyfile(compiled,target)
+        if hashlib.sha256(target.read_bytes()).hexdigest()!=digest:
+            raise RuntimeError("registered DLL changed during copy")
+        row["version"]="1.0.1-test+sha."+digest[:12]
+        row["sha256"]=digest
+        errors=validate(runtime,registry)
+        if errors:
+            raise RuntimeError("invalid refreshed PP registry: "+"; ".join(errors))
+        dump(manifest_path,runtime)
+        print("PP_NATIVE_PE32_X86_REFRESHED:",digest,
+              "; not verified in game")
+        return 0
     if [x["component"] for x in runtime["files"]] != ["Client12340","AutoLoot"]:
         raise RuntimeError("PP registration requires the canonical work AutoLoot-only runtime")
     if [m["component"] for m in registry["modules"]] != ["AutoLoot"]:

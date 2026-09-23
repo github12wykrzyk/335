@@ -10,18 +10,27 @@ class SpellAndResultTests(unittest.TestCase):
         for value in ("IsSpellKnown(921)","IsStealthed()","IsUsableSpell(name)",
                       "UnitClass('player')","GetSpellCooldown(921)","W335PP_READY"):
             self.assertIn(value,POLICY)
-    def test_results_require_nonce_server_and_exact_loot_guid(self):
-        for value in ("SPELL_CAST_SUCCESS","COMBAT_LOG_EVENT_UNFILTERED",
-                      "LOOT_OPENED","nonce!=current_attempt",
-                      "!same(guid,current_target)","read_u32(LOOT_SOURCE,&source.lo)", "loot_attempt==nonce",
-                      "same(captured_loot_guid,guid)",
-                      "same(source,current_target)","PP_RESULT_PENDING","PP_RESULT_EMPTY",
-                      "PP_RESULT_RETRYABLE"):
+    def test_crashed_lua_c_callback_never_registered(self):
+        # WoW #134: Lua rejects a native DLL C callback in PP335_LootOpened.
+        for unsafe in ('FrameScript_RegisterFunction','PP335_LootOpened',
+                       'lua_loot_opened','register_loot_callback','LUA_REGISTER'):
+            self.assertNotIn(unsafe,POLICY)
+        self.assertIn("f:SetScript('OnEvent'",POLICY)
+        self.assertIn("f:RegisterEvent('LOOT_OPENED')",POLICY)
+        self.assertIn('_G.W335PP_O=n',POLICY)
+    def test_nonce_guid_correlated_server_result_and_bounded_fallback(self):
+        for value in ('SPELL_CAST_SUCCESS','COMBAT_LOG_EVENT_UNFILTERED',
+                      'nonce!=current_attempt','!same(guid,current_target)',
+                      'read_u32(LOOT_SOURCE,&source.lo)','same(source,guid)',
+                      'PP_RESULT_PENDING','PP_RESULT_EMPTY',
+                      'PP_RESULT_RETRYABLE','elapsed>=300u'):
             self.assertIn(value,POLICY)
-        self.assertLess(POLICY.index("loot_attempt==nonce"),
-                        POLICY.index("return PP_RESULT_SUCCESS;"))
-        self.assertIn("FrameScript_RegisterFunction",POLICY)
-        self.assertIn("PP335_LootOpened",POLICY)
+        self.assertLess(POLICY.index('!strcmp(empty,want)'),
+                        POLICY.index('return PP_RESULT_SUCCESS;'))
+        self.assertLess(POLICY.index('!strcmp(fail,want)'),
+                        POLICY.index('return PP_RESULT_SUCCESS;'))
+        self.assertIn('string.upper(dst)==_G.W335PP_G',POLICY)
+        self.assertIn('GetTime()-_G.W335PP_T<=1.5',POLICY)
     def test_pinned_bridge_compiled_and_no_per_tick_reenable(self):
         self.assertIn("0x00819210u",POLICY)
         self.assertIn("0x00818010u",POLICY)
