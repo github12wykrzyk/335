@@ -43,7 +43,8 @@ class EpochUpdaterTests(unittest.TestCase):
         self.assertIn("PostMessageW(game.hwnd,message,1u,0u)",loader)
         self.assertIn("activate_autoloot(autoloot)",loader)
         self.assertIn("najpierw Przywróć Epoch DLL".lower(),app.lower())
-        self.assertIn("runtime/current.json",feature)
+        self.assertEqual(interop["final_package"],"NOT_RUN")
+        self.assertIn("module_load_order",feature)
         self.assertNotIn("github12wykrzyk/wow112",feature)
         self.assertNotIn("github12wykrzyk/frostmourne",feature)
 
