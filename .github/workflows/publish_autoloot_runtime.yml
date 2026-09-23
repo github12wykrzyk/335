@@ -18,9 +18,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: python tools/verify_client_exe.py --exe Wow.exe --require-target
-      - run: python tools/publish_autoloot_runtime.py
+      - name: Skip legacy bootstrap once runtime is registered
+        id: eligibility
+        shell: pwsh
+        run: |
+          $runtime = Get-Content runtime/current.json -Raw | ConvertFrom-Json
+          if ($runtime.state -eq 'empty' -and @($runtime.files).Count -eq 0) {
+            "eligible=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host 'BOOTSTRAP: eligible, no active runtime'
+          } else {
+            "eligible=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host 'BOOTSTRAP: SKIPPED, active registered runtime uses build_work_candidate.yml; no mutation'
+          }
+      - if: steps.eligibility.outputs.eligible == 'true'
+        run: python tools/verify_client_exe.py --exe Wow.exe --require-target
+      - if: steps.eligibility.outputs.eligible == 'true'
+        run: python tools/publish_autoloot_runtime.py
       - name: Dispatch final exact-SHA verification after generated runtime commit
+        if: steps.eligibility.outputs.eligible == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

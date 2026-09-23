@@ -12,7 +12,11 @@ class RegisteredAutoLootTests(unittest.TestCase):
         self.assertIn("#ifdef AL_NORMAL_RUNTIME", src)
         self.assertIn('L"AutoLoot335.dll"', src)
         self.assertIn("gameDir, AL_HOST_FILENAME", src)
-        self.assertIn("PostMessageW(s.hwnd,msg,2u,0u)", src)
+        self.assertIn("SendMessageTimeoutW(hwnd, msg, command", src)
+        self.assertIn("SMTO_ABORTIFHUNG | SMTO_BLOCK", src)
+        self.assertIn("SetWindowsHookExW(WH_CALLWNDPROC", src)
+        self.assertIn("send_control(s.hwnd,msg,2u,200u)", src)
+        self.assertNotIn("PostMessageW(s.hwnd,msg,2u,0u)", src)
         self.assertNotIn("PostThreadMessageW(", src)
 
     def test_updater_auto_load_requires_installed_exact_hashes(self):

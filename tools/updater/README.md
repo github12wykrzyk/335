@@ -144,3 +144,9 @@ The embedded PE32 x86 launcher uses bounded SendMessageTimeout pulses plus
 both game-thread message hooks. The registered AutoLoot335.dll is installed
 only as part of the verified, exact-SHA TEST package and remains uninstallable
 via the updater-managed rollback. STABLE/main remains unchanged.
+
+## Registered runtime CI routing
+The legacy bootstrap registration workflow is explicitly skipped when an
+active DLL is already registered on TEST/work. Only the strict candidate
+workflow builds and verifies updates to the registered runtime. No CI step
+replaces an existing registered DLL with an unreviewed bootstrap build.
