@@ -63,7 +63,7 @@ void pp_reset(PpEngine *engine) {
 }
 void pp_tick(PpEngine *engine, uint32_t now) {
     PpTarget targets[PP_SCAN_CAP];
-    PpTarget best;
+    PpTarget best = {0}; /* MSVC /W4: initialized even on the no-candidate path. */
     size_t i, count;
     int found=0;
     PpHistory *h;
