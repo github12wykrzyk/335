@@ -87,7 +87,9 @@ int main(void) {
     al_tick(&e, 30799);
     assert(m.interacted == 3); /* nearest GUID is still on failure cooldown */
     al_tick(&e, 30801);
-    assert(m.interacted == 4 && m.last.lo == 200); /* retry after 200 ms */
+    assert(m.interacted == 3); /* scan has a separate 40 ms throttle */
+    al_tick(&e, 30840);
+    assert(m.interacted == 4 && m.last.lo == 200); /* retry on first eligible scan */
     puts("AUTOLOOT_CORE: PASS (portable logic only; no 12340 adapter)");
     return 0;
 }

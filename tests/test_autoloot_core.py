@@ -23,8 +23,10 @@ class AutoLootCoreTests(unittest.TestCase):
                 str(ROOT / "tests/autoloot_core_harness.c"),
                 "-o", str(exe),
             ], check=True, capture_output=True, text=True, timeout=60)
-            completed = subprocess.run([str(exe)], check=True, capture_output=True,
+            completed = subprocess.run([str(exe)], capture_output=True,
                                        text=True, timeout=30)
+            self.assertEqual(completed.returncode, 0,
+                             completed.stdout + completed.stderr)
             self.assertIn("AUTOLOOT_CORE: PASS", completed.stdout)
 
 
