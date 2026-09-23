@@ -1,12 +1,12 @@
 #include "autoloot_core.h"
 #include <string.h>
 
-#define AL_SCAN_INTERVAL_MS 80u
+#define AL_SCAN_INTERVAL_MS 40u
 #define AL_OPEN_TIMEOUT_MS 600u
 #define AL_DRAIN_INTERVAL_MS 50u
 #define AL_MAX_DRAIN 20u
 #define AL_SUCCESS_COOLDOWN_MS 15000u
-#define AL_FAILURE_COOLDOWN_MS 1200u
+#define AL_FAILURE_COOLDOWN_MS 200u
 #define AL_FULL_BAG_COOLDOWN_MS 10000u
 
 static int same(AlGuid a, AlGuid b) {

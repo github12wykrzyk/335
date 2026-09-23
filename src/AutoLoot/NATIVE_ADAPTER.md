@@ -58,3 +58,19 @@ that earlier test only; **held-input behavior for this new SHA is not yet
 verified**. These changes cannot execute while the client's game thread is
 completely frozen or pumps no messages at all. Never advertise absolute
 guarantees of background operation when the game is paused.
+
+
+## 2026-09-23 — held-input responsiveness experiment
+The previous WH_GETMESSAGE-only scheduler depended on normal posted messages
+being retrieved. An external bounded SendMessageTimeout pulse now invokes a
+second WH_CALLWNDPROC hook directly on the verified WoW window thread, while
+WH_GETMESSAGE remains a fallback. Neither callback calls WoW from the launcher
+thread. One reentrancy/time guard limits ticks to at most one per 40 ms and
+the launcher keeps at most one pulse in flight, preventing posted-message
+queue growth during long mouse capture. The portable engine retains a 600 ms
+loot-window timeout but reduces the subsequent GUID-specific retry delay
+from 1200 to 200 ms. Held-input behavior and actual game/server response
+are NOT verified until this exact-SHA native preview is tested in game.
+If WoW's window thread stops processing both sent and posted messages, a
+client-verified frame callback is the next isolated architecture experiment;
+do not invoke client memory calls from an arbitrary worker thread.

@@ -83,6 +83,10 @@ int main(void) {
     assert(e.state == AL_WAIT_OPEN);
     al_tick(&e, 30601);
     assert(e.state == AL_IDLE && e.deferred == 1); /* open timeout */
+    al_tick(&e, 30799);
+    assert(m.interacted == 3); /* nearest GUID is still on failure cooldown */
+    al_tick(&e, 30801);
+    assert(m.interacted == 4 && m.last.lo == 200); /* retry after 200 ms */
     puts("AUTOLOOT_CORE: PASS (portable logic only; no 12340 adapter)");
     return 0;
 }
