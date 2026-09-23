@@ -36,7 +36,7 @@ class FailedFrameRollbackTests(unittest.TestCase):
         self.assertNotIn('AL335_FrameStatus',src)
         self.assertIn('EpochWorkAutoLootCommit',app)
         self.assertNotIn('GetString(installedEpoch, "source_commit") == EpochFrameAutoLootCommit',app)
-        self.assertIn('Version = "0.3.18-335-epoch-test"',version)
+        self.assertIn('Version = "0.3.19-335-epoch-test"',version)
 
 if __name__ == "__main__":
     unittest.main()
