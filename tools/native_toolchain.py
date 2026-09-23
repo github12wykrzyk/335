@@ -8,5 +8,5 @@ it deliberately rather than silently compiling with a different "latest".
 """
 PINNED_VC_VERSION = "14.29"
 PINNED_WINDOWS_SDK = "10.0.19041.0"
-VCVARS_ARGS = ("x86 -vcvars_ver=" + PINNED_VC_VERSION +
-               " -winsdk=" + PINNED_WINDOWS_SDK)
+VCVARS_ARGS = ("x86 " + PINNED_WINDOWS_SDK +
+               " -vcvars_ver=" + PINNED_VC_VERSION)

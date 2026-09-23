@@ -12,7 +12,7 @@ class PinnedNativeToolchainTests(unittest.TestCase):
         self.assertEqual(PINNED_VC_VERSION, "14.29")
         self.assertEqual(PINNED_WINDOWS_SDK, "10.0.19041.0")
         self.assertEqual(VCVARS_ARGS,
-                         "x86 -vcvars_ver=14.29 -winsdk=10.0.19041.0")
+                         "x86 10.0.19041.0 -vcvars_ver=14.29")
         for path in ("tools/build_active.py", "tools/publish_autoloot_runtime.py"):
             source = (ROOT / path).read_text(encoding="utf-8")
             self.assertIn("VCVARS_ARGS", source)
