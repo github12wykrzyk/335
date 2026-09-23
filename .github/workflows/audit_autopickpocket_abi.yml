@@ -1,0 +1,20 @@
+name: Audit AutoPickPocket native ABI 12340
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/autopickpocket-12340']
+    paths:
+      - 'src/AutoPickPocket/audit_spell_abi.py'
+      - '.github/workflows/audit_autopickpocket_abi.yml'
+permissions:
+  contents: read
+jobs:
+  pinned-client-static-audit:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Static inspect exact pinned Wow.exe native spell function
+        run: python src/AutoPickPocket/audit_spell_abi.py

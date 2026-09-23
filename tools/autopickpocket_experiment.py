@@ -57,7 +57,8 @@ def core_only(branch: str, changed: set[str], manifest: dict, registry: dict) ->
         or path in {"tools/updater/UpdaterIssueReportFeature.cs",
                     ".github/workflows/build_work_candidate.yml",
                     "tools/autopickpocket_experiment.py",
-                    "runtime/ai_experiments.json"}
+                    "runtime/ai_experiments.json",
+                    ".github/workflows/audit_autopickpocket_abi.yml"}
         for path in changed
     )
 
