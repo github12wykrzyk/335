@@ -33,6 +33,10 @@ namespace WoW335Updater
         private const string Repo = "335";
         private const string ApiRoot = "https://api.github.com/repos/" + Owner + "/" + Repo;
         private const string TestWorkflowName = "Build 335 work candidate";
+        private const string PpTestBranch = "feature/autopickpocket-12340";
+        private const string PpTestWorkflowName = "AutoPickPocket 12340 full TEST delivery";
+        private const string PpTestArtifactPrefix = "WoW335-AUTOPICKPOCKET-TEST-";
+        private const string PpTestInnerZip = "WoW335_AUTOPICKPOCKET_TEST.zip";
         private const string StableWorkflowName = "Build 335 stable candidate";
         private const string TestArtifactPrefix = "WoW335-WORK-CANDIDATE-";
         private const string StableArtifactPrefix = "WoW335-STABLE-CANDIDATE-";
@@ -84,7 +88,7 @@ namespace WoW335Updater
         private void BuildUi()
         {
             channel.DropDownStyle = ComboBoxStyle.DropDownList;
-            channel.Items.AddRange(new object[] { "TEST (work)", "STABLE (main)" });
+            channel.Items.AddRange(new object[] { "TEST (work)", "STABLE (main)", "TEST (AutoPickPocket)" });
             channel.SelectedIndex = 0;
             rollbackChoice.DropDownStyle = ComboBoxStyle.DropDownList;
             token.UseSystemPasswordChar = true;
@@ -148,6 +152,7 @@ namespace WoW335Updater
                 gameDir.Text = GetString(root, "game_dir");
                 var selected = GetString(root, "channel");
                 if (selected == "stable") channel.SelectedIndex = 1;
+                else if (selected == "pp_test") channel.SelectedIndex = 2;
                 var protectedToken = GetString(root, "token_dpapi");
                 if (!string.IsNullOrWhiteSpace(protectedToken))
                 {
@@ -173,7 +178,8 @@ namespace WoW335Updater
                 }
                 var root = new Dictionary<string, object>();
                 root["game_dir"] = gameDir.Text.Trim();
-                root["channel"] = IsStable() ? "stable" : "test";
+                root["channel"] = IsStable() ? "stable" :
+                    IsPickPocketTest() ? "pp_test" : "test";
                 root["token_dpapi"] = protectedToken;
                 File.WriteAllText(configPath, json.Serialize(root), Encoding.UTF8);
                 if (announce) Log("Ustawienia zapisane lokalnie.");
@@ -192,6 +198,11 @@ namespace WoW335Updater
         private bool IsStable()
         {
             return channel.SelectedIndex == 1;
+        }
+
+        private bool IsPickPocketTest()
+        {
+            return channel.SelectedIndex == 2;
         }
 
         private void ValidateInputs()
@@ -297,14 +308,19 @@ namespace WoW335Updater
         private async Task<RemotePackageInfo> FindLatestPackageAsync()
         {
             var stable = IsStable();
-            var branch = stable ? "main" : "work";
-            var workflowName = stable ? StableWorkflowName : TestWorkflowName;
-            var prefix = stable ? StableArtifactPrefix : TestArtifactPrefix;
-            var innerName = stable ? StableInnerZip : TestInnerZip;
+            var ppTest = IsPickPocketTest();
+            var branch = stable ? "main" : ppTest ? PpTestBranch : "work";
+            var workflowName = stable ? StableWorkflowName :
+                ppTest ? PpTestWorkflowName : TestWorkflowName;
+            var prefix = stable ? StableArtifactPrefix :
+                ppTest ? PpTestArtifactPrefix : TestArtifactPrefix;
+            var innerName = stable ? StableInnerZip :
+                ppTest ? PpTestInnerZip : TestInnerZip;
 
             using (var client = CreateClient())
             {
-                var runsUrl = ApiRoot + "/actions/runs?branch=" + branch + "&per_page=50";
+                var runsUrl = ApiRoot + "/actions/runs?branch=" +
+                    Uri.EscapeDataString(branch) + "&per_page=50";
                 var runsRoot = AsDictionary(json.DeserializeObject(await GetStringAsync(client, runsUrl)));
                 var runs = AsArray(GetValue(runsRoot, "workflow_runs"));
                 Dictionary<string, object> chosen;
@@ -320,7 +336,8 @@ namespace WoW335Updater
                 }
 
                 var branchRoot = AsDictionary(json.DeserializeObject(
-                    await GetStringAsync(client, ApiRoot + "/branches/" + branch)));
+                    await GetStringAsync(client, ApiRoot + "/branches/" +
+                        Uri.EscapeDataString(branch))));
                 var liveHead = GetString(AsDictionary(GetValue(branchRoot, "commit")), "sha");
                 if (string.IsNullOrWhiteSpace(liveHead) ||
                     !string.Equals(GetString(chosen, "head_sha"), liveHead, StringComparison.OrdinalIgnoreCase))
@@ -346,7 +363,7 @@ namespace WoW335Updater
 
                 return new RemotePackageInfo
                 {
-                    Channel = stable ? "stable" : "test",
+                    Channel = stable ? "stable" : ppTest ? "pp_test" : "test",
                     RunId = runId,
                     HeadSha = GetString(chosen, "head_sha"),
                     ArtifactName = GetString(artifact, "name"),
@@ -409,7 +426,8 @@ namespace WoW335Updater
                     throw new InvalidOperationException("Artefakt nie zawiera candidate_metadata.json; instalacja została zablokowana.");
                 var metaText = Encoding.UTF8.GetString(ReadEntry(metaEntry));
                 var meta = AsDictionary(json.DeserializeObject(metaText));
-                var expectedBranch = remote.Channel == "stable" ? "main" : "work";
+                var expectedBranch = remote.Channel == "stable" ? "main" :
+                    remote.Channel == "pp_test" ? PpTestBranch : "work";
                 if (GetString(meta, "git_sha") != remote.HeadSha ||
                     GetString(meta, "branch") != expectedBranch ||
                     GetLong(meta, "wow_build") != 12340 ||
@@ -769,6 +787,15 @@ namespace WoW335Updater
                     exe = candidates.FirstOrDefault();
                 }
                 if (exe == null) throw new InvalidOperationException("Nie znalazłem WoW*.exe w wybranym katalogu.");
+                /* A two-DLL PP package must never silently fall back to the
+                 * AutoLoot-only launcher or an unmodified direct Wow.exe start.
+                 * Native multi-module activation is required before delivery. */
+                if (state != null && AsArray(GetValue(state, "managed_files"))
+                    .Any(name => string.Equals(Convert.ToString(name),
+                        "AutoPickPocket335.dll", StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException(
+                        "AutoPickPocket TEST: wymagany jest zweryfikowany wspólny loader. " +
+                        "Nie uruchamiam klienta bez aktywacji obu DLL.");
                 if (!TryLaunchInstalledAutoLoot(root, exe, state))
                 {
                     Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = root, UseShellExecute = true });
