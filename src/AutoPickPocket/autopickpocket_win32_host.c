@@ -423,7 +423,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\\"transport\\":\\"%s\\",\\"no_ack_count\\":%u}\n",
+       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"transport\":\"%s\",\"no_ack_count\":%u}\n",
        (unsigned long)now,(unsigned)kind,reason,
        (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi,
        (unsigned long)g_adapter.last_scan_duration_ms,
