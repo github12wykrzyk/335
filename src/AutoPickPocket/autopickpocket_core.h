@@ -18,7 +18,7 @@ extern "C" {
 #define PP_MAX_ATTEMPTS_PER_GUID 3u
 #define PP_BURST_MIN_CAST_GAP_MS 100u
 #define PP_MAX_PENDING 4u
-#define PP_BURST_MIN_TARGETS 3u
+/* Autonomous PP always uses the bounded burst queue; no mob-count gate. */
 
 typedef struct { uint32_t lo, hi; } PpGuid;
 typedef struct {

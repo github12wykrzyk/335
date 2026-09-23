@@ -127,7 +127,7 @@ static int test_scan_cast_history_world(void){
     pp12340_tick(&a,400);CHECK(m.casts==2); /* per GUID memory */
     m.world=2u;pp12340_tick(&a,500);
     CHECK(m.casts==3 && m.last_guid.lo==222);
-    m.thread=3u;pp12340_tick(&a,2000);CHECK(a.engine.active_valid);
+    m.thread=3u;pp12340_tick(&a,2000);CHECK(a.engine.pending[0].valid);
     pp12340_enable(&a,0);CHECK(a.engine.enabled); /* foreign thread blocked */
     m.thread=1u;pp12340_enable(&a,0);CHECK(!a.engine.enabled);
     pp12340_enable(&a,1);
@@ -147,7 +147,7 @@ static int test_attempt_correlation(void){
     pp12340_tick(&a,1500);
     CHECK(m.casts==2 && m.last_attempt!=old_id);
     m.result=PP_RESULT_SUCCESS;m.expected_result_attempt=old_id;
-    pp12340_tick(&a,1501);CHECK(a.engine.successes==0 && a.engine.active_valid);
+    pp12340_tick(&a,1501);CHECK(a.engine.successes==0 && a.engine.pending[0].valid);
     m.expected_result_attempt=m.last_attempt;
     pp12340_tick(&a,1502);CHECK(a.engine.successes==1);
     return 0;
@@ -238,7 +238,19 @@ static int test_discover_new_npc_while_previous_result_pending(void){
  pp12340_tick(&a,80u);
  CHECK(m.casts==1u && a.engine.queue_count==2u);
  m.result=PP_RESULT_SUCCESS;pp12340_tick(&a,81u);
+ CHECK(m.casts==1u && a.engine.successes==1u);
+ m.result=PP_RESULT_PENDING;pp12340_tick(&a,100u);
  CHECK(m.casts==2u && m.last_guid.lo==111u);
+ return 0;
+}
+static int test_two_targets_default_burst_without_first_result(void){
+ Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+ CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ pp12340_tick(&a,10u);CHECK(m.casts==1u && a.engine.burst_mode==1u);
+ pp12340_tick(&a,109u);CHECK(m.casts==1u && a.engine.successes==0u);
+ pp12340_tick(&a,110u);
+ CHECK(m.casts==2u && a.engine.pending[0].valid &&
+       a.engine.pending[1].valid && a.engine.successes==0u);
  return 0;
 }
 static int test_native_bridge_releases_policy_before_next_cast(void){
@@ -252,7 +264,7 @@ static int test_native_bridge_releases_policy_before_next_cast(void){
  return 0;
 }
 int main(void){
-    if(test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
+    if(test_two_targets_default_burst_without_first_result()||test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
        test_attempt_correlation()||test_silent_commands()||
        test_moving_player_rechecked_before_cast()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");

@@ -82,10 +82,10 @@ class SpellAndResultTests(unittest.TestCase):
         core=(ROOT/"src/AutoPickPocket/autopickpocket_core.c").read_text()
         header=(ROOT/"src/AutoPickPocket/autopickpocket_core.h").read_text()
         for token in ("PP_MAX_PENDING 4u","PP_BURST_MIN_CAST_GAP_MS 100u",
-                      "PP_BURST_MIN_TARGETS 3u","PpInFlight pending[PP_MAX_PENDING]"):
+                      "PpInFlight pending[PP_MAX_PENDING]"):
             self.assertIn(token,header)
         for token in ("static void tick_burst(","static void poll_burst(",
-                      "ready_for_burst(engine,now)","is_pending(e,t.guid)",
+                      "if(!engine->probe_mode){","is_pending(e,t.guid)",
                       "(uint32_t)(now-e->last_burst_cast_ms)<PP_BURST_MIN_CAST_GAP_MS",
                       "e->api.result(e->api.ctx,p->guid,p->attempt_id)",
                       "e->api.end_attempt(e->api.ctx,p->guid,p->attempt_id)",
@@ -104,6 +104,8 @@ class SpellAndResultTests(unittest.TestCase):
                       "if r.f=='1'","elseif r.s=='1'",
                       "p[g].n=='%lu' then p[g]=nil"):
             self.assertIn(token,POLICY)
+        self.assertNotIn("ready_for_burst(",core)
+        self.assertIn("engine->burst_mode=1u;",core)
         self.assertLess(POLICY.index("if(burst_overlap || !active"),
                         POLICY.index("!strcmp(money,want) && !strcmp(loot,want)"))
         adapter_source=(ROOT/"src/AutoPickPocket/autopickpocket_12340_adapter.c").read_text()

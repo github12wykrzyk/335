@@ -172,10 +172,11 @@ static void refresh_snapshot(PpEngine *e,uint32_t now) {
     count=e->api.scan(e->api.ctx,e->queue,PP_SCAN_CAP);
     e->queue_count=count>PP_SCAN_CAP ? PP_SCAN_CAP : count;
 }
-/* Cluster-specific pipeline: only a bounded set of truly in-range GUIDs
- * enters burst mode. One new native submission per pulse and >=100 ms apart;
- * outcomes remain independently GUID/nonce-scoped, never inferred from a
- * wallet change while multiple attempts are pending. */
+/* Autonomous PP always uses this bounded queue, even for one visible NPC.
+ * As soon as another eligible GUID enters range, the next native cast may
+ * proceed after 100 ms without awaiting the previous result. Outcomes stay
+ * independently GUID/nonce-scoped, never inferred from unscoped wallet
+ * changes when multiple attempts overlap. */
 static unsigned pending_count(const PpEngine *e){
     unsigned i,n=0u;
     for(i=0u;i<PP_MAX_PENDING;++i)if(e->pending[i].valid)++n;
@@ -186,22 +187,6 @@ static int is_pending(const PpEngine *e,PpGuid guid){
     for(i=0u;i<PP_MAX_PENDING;++i)
         if(e->pending[i].valid && same(e->pending[i].guid,guid))return 1;
     return 0;
-}
-static int ready_for_burst(PpEngine *e,uint32_t now){
-    size_t i; unsigned ready=0u;
-    for(i=0u;i<e->queue_count;++i){
-        PpTarget t=e->queue[i];
-        PpHistory *h;
-        if(t.eligible!=1u || !nonzero(t.guid) ||
-           !(t.distance_sq>=0.0f && t.distance_sq<FLT_MAX) ||
-           is_pending(e,t.guid) ||
-           (e->active_valid && same(e->active,t.guid)))continue;
-        h=entry(e,t.guid,0);
-        if(h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
-                 !deadline_reached(now,h->blocked_until_ms)))continue;
-        ++ready;
-    }
-    return ready>=PP_BURST_MIN_TARGETS;
 }
 static void poll_burst(PpEngine *e,uint32_t now){
     unsigned i;
@@ -259,6 +244,9 @@ static void tick_burst(PpEngine *e,uint32_t now){
     if(e->last_burst_cast_valid &&
        (uint32_t)(now-e->last_burst_cast_ms)<PP_BURST_MIN_CAST_GAP_MS)return;
     if(pending_count(e)>=PP_MAX_PENDING)return;
+    if(!e->queue_count){
+        idle_event(e,PP_EVENT_NO_CANDIDATES,now);return;
+    }
     if(e->api.can_cast(e->api.ctx)!=1){
         idle_event(e,PP_EVENT_NOT_CASTABLE,now);return;
     }
@@ -273,7 +261,14 @@ static void tick_burst(PpEngine *e,uint32_t now){
                  !deadline_reached(now,h->blocked_until_ms)))continue;
         if(!found || t.distance_sq<best.distance_sq){best=t;found=1;}
     }
-    if(!found){idle_event(e,PP_EVENT_NO_CANDIDATES,now);return;}
+    if(!found){
+        unsigned prefetch=0u;
+        for(j=0u;j<e->queue_count;++j)
+            if(e->queue[j].eligible==2u)prefetch=1u;
+        idle_event(e,prefetch ? PP_EVENT_NO_CANDIDATES :
+                   PP_EVENT_ALL_BLOCKED,now);
+        return;
+    }
     for(i=0u;i<PP_MAX_PENDING;++i)if(!e->pending[i].valid){free_slot=i;break;}
     if(free_slot==PP_MAX_PENDING)return;
     {PpHistory *h=entry(e,best.guid,1);++h->attempts;}
@@ -300,17 +295,13 @@ void pp_tick(PpEngine *engine, uint32_t now) {
     PpResult outcome;
     if (!engine || !engine->enabled) return;
     refresh_snapshot(engine,now); /* also while waiting for result */
-    if(!engine->probe_mode &&
-       (engine->burst_mode || pending_count(engine)>0u ||
-        ready_for_burst(engine,now))){
+    if(!engine->probe_mode){
+        /* Default autonomous mode. Never route a one/two-target scenario
+         * into the legacy result-gated single-target dispatcher. */
         engine->burst_mode=1u;
         tick_burst(engine,now);
-        if(pending_count(engine)>0u)return;
-        engine->burst_mode=0u;
         return; /* at most one native cast per delivered game pulse */
     }
-    if(!engine->probe_mode && engine->last_burst_cast_valid &&
-       (uint32_t)(now-engine->last_burst_cast_ms)<PP_BURST_MIN_CAST_GAP_MS)return;
     if (engine->active_valid) {
         outcome=engine->api.result(engine->api.ctx,engine->active,engine->active_attempt_id);
         switch(outcome) {

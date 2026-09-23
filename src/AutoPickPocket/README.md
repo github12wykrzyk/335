@@ -199,3 +199,19 @@ spell-921 events, cast gaps, client FPS and stability. A 100 ms interval
 between native submissions is an experimental goal, **not** evidence the
 server accepted four thefts or awarded their loot. The canonical loader,
 AutoLoot, client binary and main/work branches are not changed.
+
+## 1.0.10 TEST — burst is the default autonomous mode
+
+The autonomous `on` flow always uses the bounded four-slot burst scheduler,
+including when only one NPC is initially in range. There is **no minimum
+three-mob activation gate** and no separate setting to enable burst. If the
+second GUID becomes eligible while the first is awaiting a result, the engine
+may submit it after the 100 ms minimum cast gap, without waiting for money or
+loot from the first. The engine still checks each live GUID, position, 4-yard
+range and spell usability just before every cast. Only one new submission is
+allowed per game-thread pulse; 100 ms is a lower bound, not a forced send.
+
+Single explicit one-shot probe remains separate. AutoLoot, loader, and
+main/work branches are unchanged. Compare `cast_gap_ms`, `pending_count`,
+real loot and `verified_result` versus `result_timeout` on two and four
+concurrent in-range NPCs. A submitted cast is not proof of server acceptance.
