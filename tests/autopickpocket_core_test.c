@@ -5,7 +5,7 @@
 typedef struct {
     PpTarget t[4]; size_t n;
     PpResult result;
-    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[7], cast_ok;
+    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[8], cast_ok;
 } Stub;
 static size_t scan(void *p,PpTarget *out,size_t cap) {
     Stub *s=(Stub *)p;size_t n=s->n<cap?s->n:cap;
@@ -37,7 +37,21 @@ static int test_retry_and_timeout(void){
  pp_tick(&e,2300);CHECK(e.timeouts==1 && e.successes==0);
  pp_tick(&e,2400);CHECK(s.cast_n==1);pp_tick(&e,5300);CHECK(s.cast_n==2);
  s.result=PP_RESULT_RETRYABLE;pp_tick(&e,5301);CHECK(e.retries==2);
- pp_tick(&e,6000);CHECK(s.cast_n==2);pp_tick(&e,6200);CHECK(s.cast_n==3);
+ pp_tick(&e,6000);CHECK(s.cast_n==2);pp_tick(&e,6200);CHECK(s.cast_n==2);
+ CHECK(s.events[PP_EVENT_GAVE_UP]==1); /* third attempted cast exhausted budget */
+ pp_reset(&e);s.result=PP_RESULT_PENDING;pp_tick(&e,6300);
+ CHECK(s.cast_n==3); /* explicit reset makes GUID eligible again */
+ return 0;
+}
+static int test_unconfirmed_results_bounded(void){
+ Stub s;PpEngine e;init(&s);s.n=1;CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,0);CHECK(s.cast_n==1);
+ pp_tick(&e,1500);CHECK(e.timeouts==1);
+ pp_tick(&e,4500);CHECK(s.cast_n==2);
+ pp_tick(&e,6000);CHECK(e.timeouts==2);
+ pp_tick(&e,9000);CHECK(s.cast_n==3);
+ pp_tick(&e,10500);CHECK(e.timeouts==3 && s.events[PP_EVENT_GAVE_UP]==1);
+ pp_tick(&e,60000);CHECK(s.cast_n==3); /* no unbounded retries on unknown result */
  return 0;
 }
 static int test_filter_and_wrap(void){
@@ -48,4 +62,4 @@ static int test_filter_and_wrap(void){
  s.permitted=1;pp_tick(&e,0xc5u);CHECK(s.cast_n==1 && s.casted[0].lo==101);
  return 0;
 }
-int main(void){if(test_session()||test_retry_and_timeout()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+int main(void){if(test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

@@ -183,7 +183,9 @@ void pp12340_tick(Pp12340Adapter *a,uint32_t now_ms) {
         a->host.thread_id(a->host.ctx)!=a->owner_thread) return;
     world=a->host.world_token(a->host.ctx);
     if (!world) {
-        pp_enable(&a->engine,0);
+        /* Loading screens are transient; pause and drop any ambiguous
+         * in-flight attempt, but preserve the user's enabled setting. */
+        if (a->current_world) pp_reset(&a->engine);
         a->current_world=0u;
         return;
     }

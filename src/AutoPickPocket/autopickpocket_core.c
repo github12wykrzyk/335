@@ -40,6 +40,14 @@ static void block(PpEngine *e, PpGuid guid, uint32_t now, uint32_t delay, int te
     h->terminal=terminal ? 1u : 0u;
     h->blocked_until_ms=now+delay;
 }
+/* A rejected cast or missing server result must never retry indefinitely. */
+static void failure(PpEngine *e, PpGuid guid, uint32_t now, uint32_t delay, PpEvent reason) {
+    PpHistory *h=entry(e,guid,1);
+    int exhausted=h->attempts>=PP_MAX_ATTEMPTS_PER_GUID;
+    block(e,guid,now,exhausted ? 0u : delay,exhausted);
+    emit(e,reason,guid);
+    if (exhausted) emit(e,PP_EVENT_GAVE_UP,guid);
+}
 int pp_init(PpEngine *engine, PpAdapter api) {
     if (!engine || !api.scan || !api.can_cast || !api.cast_on_guid || !api.result)
         return 0;
@@ -90,18 +98,16 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             engine->active_valid=0u;
             return;
         case PP_RESULT_RETRYABLE:
-            block(engine,engine->active,now,PP_RETRY_DELAY_MS,0);
+            failure(engine,engine->active,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
             ++engine->retries;
-            emit(engine,PP_EVENT_RETRY,engine->active);
             engine->active_valid=0u;
             return;
         case PP_RESULT_PENDING: break;
         default: return; /* unknown result fails closed */
         }
         if ((uint32_t)(now-engine->started_ms) < PP_RESULT_TIMEOUT_MS) return;
-        block(engine,engine->active,now,PP_TIMEOUT_DELAY_MS,0);
+        failure(engine,engine->active,now,PP_TIMEOUT_DELAY_MS,PP_EVENT_TIMEOUT);
         ++engine->timeouts;
-        emit(engine,PP_EVENT_TIMEOUT,engine->active);
         engine->active_valid=0u;
         return;
     }
@@ -124,6 +130,14 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         }
     }
     if (!found) return;
+    /* Record every submission attempt, including native rejection. */
+    h=entry(engine,best.guid,1);
+    if (h->attempts>=PP_MAX_ATTEMPTS_PER_GUID) {
+        h->terminal=1u;
+        emit(engine,PP_EVENT_GAVE_UP,best.guid);
+        return;
+    }
+    ++h->attempts;
     if (engine->api.cast_on_guid(engine->api.ctx,best.guid)==1) {
         engine->active=best.guid;
         engine->active_valid=1u;
@@ -131,8 +145,7 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         ++engine->casts;
         emit(engine,PP_EVENT_CAST,best.guid);
     } else {
-        block(engine,best.guid,now,PP_RETRY_DELAY_MS,0);
+        failure(engine,best.guid,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
         ++engine->retries;
-        emit(engine,PP_EVENT_RETRY,best.guid);
     }
 }

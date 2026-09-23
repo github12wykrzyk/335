@@ -14,6 +14,7 @@ extern "C" {
 #define PP_RESULT_TIMEOUT_MS 1500u
 #define PP_RETRY_DELAY_MS 800u
 #define PP_TIMEOUT_DELAY_MS 3000u
+#define PP_MAX_ATTEMPTS_PER_GUID 3u
 
 typedef struct { uint32_t lo, hi; } PpGuid;
 typedef struct {
@@ -34,7 +35,8 @@ typedef enum {
     PP_EVENT_EMPTY = 3,
     PP_EVENT_RETRY = 4,
     PP_EVENT_TIMEOUT = 5,
-    PP_EVENT_INELIGIBLE = 6
+    PP_EVENT_INELIGIBLE = 6,
+    PP_EVENT_GAVE_UP = 7 /* bounded retry budget exhausted for GUID */
 } PpEvent;
 typedef struct {
     void *ctx;
@@ -54,6 +56,7 @@ typedef struct {
     uint32_t blocked_until_ms;
     unsigned terminal;
     unsigned present;
+    unsigned attempts; /* includes refused submissions and timed-out casts */
 } PpHistory;
 typedef struct {
     PpAdapter api;

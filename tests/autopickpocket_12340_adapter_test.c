@@ -113,6 +113,11 @@ static int test_scan_cast_history_world(void){
     m.thread=3u;pp12340_tick(&a,2000);CHECK(a.engine.active_valid);
     pp12340_enable(&a,0);CHECK(a.engine.enabled); /* foreign thread blocked */
     m.thread=1u;pp12340_enable(&a,0);CHECK(!a.engine.enabled);
+    pp12340_enable(&a,1);
+    m.world=0u;pp12340_tick(&a,2100);
+    CHECK(a.engine.enabled && !a.engine.active_valid && m.casts==3);
+    m.world=3u;pp12340_tick(&a,2200);
+    CHECK(a.engine.enabled && m.casts==4 && m.last_guid.lo==222);
     return 0;
 }
 static int test_fail_closed_filter(void){
