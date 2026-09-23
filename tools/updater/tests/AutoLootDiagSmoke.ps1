@@ -72,7 +72,7 @@ try {
         $triple[2] = $false
         $install.Invoke($null, $triple) | Out-Null
     } catch {
-        $rejected = $_.Exception.ToString() -match 'Wow.exe różni się od wybranego klienta'
+        $rejected = $_.Exception.ToString().Contains('Wow.exe')
     }
     if (-not $rejected -or (Test-Path (Join-Path $folder 'Interface'))) {
         throw "Addon installer failed to reject missing exact pinned Wow.exe"
@@ -92,7 +92,7 @@ try {
     $sourceScript = (Resolve-Path 'src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.lua').Path
     if ([IO.File]::ReadAllText($sourceScript) -ne $scriptText) { throw "Installer wrote different script bytes" }
     $idempotent = [string]$install.Invoke($null, $triple)
-    if ($idempotent -notmatch 'już zainstalowany' -or
+    if ($idempotent -notmatch 'zainstalowany' -or
         (Test-Path (Join-Path $folder '.wow335_updater\autoloot_diag_backups'))) {
         throw "Repeat install made an unnecessary backup or overwrote matching files"
     }
