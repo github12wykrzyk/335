@@ -132,6 +132,61 @@ cleanup:
     return result;
 }
 
+/* Preflight the COMPLETE module list before loading its first DLL. A stale,
+ * truncated, substituted or x64 DLL cannot leave a half-loaded runtime.
+ * SHA256/provenance remains the managed updater's separate prerequisite;
+ * this local check also protects direct launches that bypass that GUI. */
+static int preflight_module(const wchar_t *name) {
+    wchar_t path[MAX_PATH];
+    HANDLE file = INVALID_HANDLE_VALUE;
+    DWORD got = 0, attrs;
+    LARGE_INTEGER size, offset;
+    IMAGE_DOS_HEADER dos;
+    IMAGE_NT_HEADERS32 nt;
+    int ok = 0;
+    if (_wcsicmp(name, L"EpochConnection.dll") == 0 ||
+        _wcsicmp(name, L"Wow335Loader.dll") == 0) {
+        log_event(name, L"RESERVED", 5);
+        return 0;
+    }
+    if (swprintf_s(path, MAX_PATH, L"%ls\\%ls", g_root, name) < 0)
+        return 0;
+    attrs = GetFileAttributesW(path);
+    if (attrs == INVALID_FILE_ATTRIBUTES ||
+        (attrs & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) {
+        log_event(name, L"PRECHECK_PATH", GetLastError());
+        return 0;
+    }
+    file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) {
+        log_event(name, L"PRECHECK_OPEN", GetLastError());
+        return 0;
+    }
+    if (!GetFileSizeEx(file, &size) ||
+        size.QuadPart < (LONGLONG)sizeof(dos) ||
+        !ReadFile(file, &dos, sizeof(dos), &got, NULL) ||
+        got != sizeof(dos) || dos.e_magic != IMAGE_DOS_SIGNATURE ||
+        dos.e_lfanew < (LONG)sizeof(dos) ||
+        (LONGLONG)dos.e_lfanew + (LONGLONG)sizeof(nt) > size.QuadPart)
+        goto done;
+    offset.QuadPart = dos.e_lfanew;
+    if (!SetFilePointerEx(file, offset, NULL, FILE_BEGIN) ||
+        !ReadFile(file, &nt, sizeof(nt), &got, NULL) || got != sizeof(nt))
+        goto done;
+    if (nt.Signature != IMAGE_NT_SIGNATURE ||
+        nt.FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
+        !(nt.FileHeader.Characteristics & IMAGE_FILE_DLL) ||
+        nt.FileHeader.SizeOfOptionalHeader < sizeof(IMAGE_OPTIONAL_HEADER32) ||
+        nt.OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC)
+        goto done;
+    ok = 1;
+done:
+    CloseHandle(file);
+    if (!ok) log_event(name, L"PRECHECK_PE32_X86_FAILED", ERROR_BAD_EXE_FORMAT);
+    return ok;
+}
+
 static DWORD WINAPI load_modules(LPVOID unused) {
     wchar_t path[MAX_PATH], line[256], names[WOW_MAX_MODULES][WOW_MAX_NAME + 1];
     unsigned int count = 0;
@@ -176,7 +231,11 @@ static DWORD WINAPI load_modules(LPVOID unused) {
     fclose(f);
 
     /* The managed updater must have verified exact SHA256 identities and dependencies
-       before starting the client. A DLL name alone is never GH provenance. */
+       before starting the client. A DLL name alone is never GH provenance.
+       Preflight the entire set before loading ANY member. */
+    for (unsigned int i = 0; i < count; ++i) {
+        if (!preflight_module(names[i])) return 1;
+    }
     for (unsigned int i = 0; i < count; ++i) {
         HMODULE loaded;
         if (_wcsicmp(names[i], L"EpochConnection.dll") == 0 ||
