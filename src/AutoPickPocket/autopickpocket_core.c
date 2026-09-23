@@ -178,6 +178,13 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             /* A terminal GUID is excluded from the very next scan.
              * Reuse this pulse for a different nearby target. */
             goto scan_next;
+        case PP_RESULT_MONEY_SUCCESS:
+            block(engine,engine->active,now,0u,1);
+            ++engine->successes;
+            emit(engine,PP_EVENT_MONEY_SUCCESS,engine->active);
+            engine->active_valid=0u;
+            if (engine->probe_mode) {engine->enabled=0u;return;}
+            goto scan_next;
         case PP_RESULT_EMPTY:
             block(engine,engine->active,now,0u,1);
             ++engine->empty;
