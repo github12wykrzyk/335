@@ -4,6 +4,8 @@ on:
     branches: ['feature/autoloot-12340']
     paths:
       - 'src/AutoLoot/**'
+      - 'tests/autoloot_core_harness.c'
+      - 'tests/test_autoloot_message_delivery.py'
       - 'tools/audit_autoloot_abi.py'
       - '.github/workflows/build_autoloot_native.yml'
   workflow_dispatch:

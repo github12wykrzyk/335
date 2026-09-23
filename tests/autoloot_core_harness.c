@@ -78,6 +78,7 @@ int main(void) {
     assert(m.interacted == 2); /* no verified range: fail closed */
     al_init(&e, cb, 25.0f);
     m.ui = AL_UI_CLOSED;
+    m.corpses[0].can_loot = 0; /* isolate failed-open retry for GUID 200 */
     al_enable(&e, 1);
     al_tick(&e, 30000);
     assert(e.state == AL_WAIT_OPEN);
