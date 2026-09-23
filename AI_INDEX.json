@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "project": "335",
+  "target": {
+    "product": "World of Warcraft",
+    "version": "3.3.5a",
+    "build": 12340,
+    "platform": "Windows",
+    "architecture": "x86"
+  },
+  "read_order": [
+    "AGENTS.md",
+    "AI_START_HERE.md",
+    "AI_INDEX.json",
+    "CURRENT.json",
+    "runtime/current.json"
+  ],
+  "canonical": {
+    "source_root": "src",
+    "current": "CURRENT.json",
+    "runtime": "runtime/current.json",
+    "project_rules": "PROJECT_INSTRUCTIONS.md",
+    "package_builder": "tools/package_candidate.py",
+    "package_gate": "tools/verify_candidate_package.py",
+    "updater": "tools/updater",
+    "experiment_ledger": "runtime/ai_experiments.json",
+    "module_registry": "runtime/module_registry.json",
+    "module_registry_verifier": "tools/verify_module_registry.py",
+    "active_builder": "tools/build_active.py",
+    "exact_runtime_verifier": "tools/verify_exact_runtime_artifacts.py",
+    "exact_stable_packager": "tools/package_exact_current.py",
+    "experiment_router": "tools/ai_experiments.py",
+    "experiment_workflow": ".github/workflows/ai_experiments.yml",
+    "client_exe_target": "runtime/client_exe_target.json"
+  },
+  "branches": {
+    "stable": "main",
+    "development": "work",
+    "experimental": "parallel",
+    "feature": "feature/*",
+    "promotion": "promote/*"
+  },
+  "modules": [],
+  "state": "infrastructure-only"
+}

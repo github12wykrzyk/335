@@ -1,0 +1,51 @@
+name: Pre-promote 335 stable
+on:
+  push:
+    branches: ['promote/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gate:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require current main ancestry and infrastructure-only or accepted STABLE
+        id: mode
+        shell: pwsh
+        run: |
+          git fetch origin main
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch current main' }
+          git merge-base --is-ancestor origin/main HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Promotion does not contain current main' }
+          $state = Get-Content CURRENT.json -Raw | ConvertFrom-Json
+          $runtime = Get-Content runtime/current.json -Raw | ConvertFrom-Json
+          $registry = Get-Content runtime/module_registry.json -Raw | ConvertFrom-Json
+          $index = Get-Content AI_INDEX.json -Raw | ConvertFrom-Json
+          if ($state.status -eq 'infrastructure-only' -and -not $state.stable_baseline -and
+              $runtime.state -eq 'empty' -and @($runtime.files).Count -eq 0 -and
+              @($runtime.compatibility_sets).Count -eq 0 -and
+              @($registry.modules).Count -eq 0 -and @($index.modules).Count -eq 0) {
+            "ready=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host 'STABLE_INFRA_ONLY: PASS; NO_GAME_PACKAGE'
+          } elseif ($state.status -eq 'stable' -and $state.stable_baseline -and
+                    $runtime.state -ne 'empty' -and @($runtime.files).Count -ge 2) {
+            "ready=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            throw 'Incomplete STABLE status or missing accepted active runtime'
+          }
+      - run: python tools/verify_repo.py
+      - run: python tools/verify_current.py
+      - run: python tools/verify_module_registry.py
+      - run: python -m unittest discover -s tests -v
+      - name: Verify recoverable exact STABLE DLLs
+        if: steps.mode.outputs.ready == 'true'
+        run: python tools/verify_exact_runtime_artifacts.py
+      - name: Package exact accepted STABLE bytes
+        if: steps.mode.outputs.ready == 'true'
+        run: python tools/package_exact_current.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json
+      - name: Verify final STABLE package provenance
+        if: steps.mode.outputs.ready == 'true'
+        run: python tools/verify_candidate_package.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize

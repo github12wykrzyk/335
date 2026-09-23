@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "project": "335",
+  "target_build": 12340,
+  "architecture": "x86",
+  "name": "Wow.exe",
+  "path": "Wow.exe",
+  "sha256": "2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d",
+  "size": 7717528,
+  "file_version": "3.3.5.12340",
+  "provenance": "User-selected PE32 x86 client; Win32 VS_FIXEDFILEINFO 3.3.5.12340; gameplay compatibility unverified. Exact bytes required."
+}

@@ -1,0 +1,19 @@
+name: Audit exact 12340 frame callback (read-only)
+on:
+  push:
+    branches: ['feature/loader-12340']
+    paths:
+      - 'src/Loader12340/audit_native_frame.py'
+      - '.github/workflows/audit_native_frame.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-frame-audit:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm exact pinned client
+        run: python tools/verify_client_exe.py --exe Wow.exe --require-target
+      - name: Find world frame call-sites without patching game bytes
+        run: python src/Loader12340/audit_native_frame.py

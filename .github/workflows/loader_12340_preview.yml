@@ -1,0 +1,88 @@
+name: Build EpochConnection 12340 isolated TEST
+
+on:
+  push:
+    branches: [feature/loader-12340]
+    paths:
+      - 'EpochConnection.dll'
+      - 'src/Loader12340/**'
+      - 'runtime/epoch_loader_interop.json'
+      - 'runtime/ai_experiments.json'
+      - 'tools/epoch_connection_loader_patch.py'
+      - 'tools/verify_epoch_test_pair.py'
+      - 'tests/test_epoch_connection_loader_patch.py'
+      - 'tests/test_epoch_test_pair_real.py'
+      - 'tests/test_updater_autoloot_delivery.py'
+      - 'tests/test_updater_dynamic_branches.py'
+      - 'tests/test_updater_epoch_loader.py'
+      - 'tests/test_loader_preflight.py'
+      - 'tests/test_loader_module_lock.py'
+      - 'tests/test_updater_native_preview.py'
+      - 'tools/updater/**'
+      - '.github/workflows/loader_12340_preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: epoch-335-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verified-static-test-pair-not-game-package:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify repository and original 12340 client
+        shell: pwsh
+        run: |
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/ai_experiments.py validate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_client_exe.py --exe Wow.exe --require-target --report dist/epoch_test/client_audit.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Wow335Loader.dll with real MSVC x86 compiler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $pf86=[Environment]::GetFolderPath('ProgramFilesX86')
+          $vswhere=Join-Path $pf86 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs=& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Missing MSVC x86 compiler' }
+          $vcvars=Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          New-Item -ItemType Directory -Force -Path dist/epoch_test | Out-Null
+          $cmd='call "'+$vcvars+'" x86 >nul && cl /nologo /W4 /WX /O2 /MT /LD /Fe:dist\epoch_test\Wow335Loader.dll src\Loader12340\Wow335Loader.c /link /DEF:src\Loader12340\Wow335Loader.def && dumpbin /exports dist\epoch_test\Wow335Loader.dll > dist\epoch_test\loader_exports.txt && dumpbin /dependents dist\epoch_test\Wow335Loader.dll > dist\epoch_test\loader_dependents.txt'
+          & cmd.exe /d /c $cmd
+          if ($LASTEXITCODE -ne 0) { throw "MSVC x86 DLL build / dumpbin failed: $LASTEXITCODE" }
+      - name: Patch only the exact GitHub EpochConnection.dll copy
+        shell: pwsh
+        run: |
+          python tools/epoch_connection_loader_patch.py --input EpochConnection.dll --output dist/epoch_test/EpochConnection.dll --report dist/epoch_test/epoch_patch.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify both PE32 x86 DLLs, ordinals, imports, sections and SHA256
+        shell: pwsh
+        run: |
+          python tools/verify_epoch_test_pair.py --original EpochConnection.dll --patched dist/epoch_test/EpochConnection.dll --loader dist/epoch_test/Wow335Loader.dll --branch feature/loader-12340 --commit '${{ github.sha }}' --report dist/epoch_test/epoch_test_pair.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import json; from pathlib import Path; j=json.loads(Path('dist/epoch_test/epoch_test_pair.json').read_text()); assert j['test_pair_gate']=='PASS' and j['final_package']=='NOT_RUN' and not j['in_game_verified']"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host 'EPOCH_TEST_PAIR: PASS; FINAL_PACKAGE: NOT_RUN; in-game network/login/world test outstanding'
+      - name: Upload static-gated TEST pair (not a full game package)
+        uses: actions/upload-artifact@v4
+        with:
+          name: EpochConnection-TEST-PAIR-${{ github.sha }}
+          path: |
+            dist/epoch_test/EpochConnection.dll
+            dist/epoch_test/Wow335Loader.dll
+            dist/epoch_test/epoch_patch.json
+            dist/epoch_test/epoch_test_pair.json
+          if-no-files-found: error
+          compression-level: 0

@@ -1,0 +1,88 @@
+name: Build 335 work candidate
+on:
+  workflow_dispatch:
+  push:
+    branches: [work, 'feature/**', parallel]
+permissions:
+  contents: read
+concurrency:
+  group: candidate-335-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  audit-and-package:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify repository, runtime and tests
+        shell: pwsh
+        run: |
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_module_registry.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Audit uploaded 3.3.5 client EXE (Windows PE32 x86)
+        shell: pwsh
+        run: |
+          python tools/verify_client_exe.py --exe Wow.exe --require-target --report dist/client_exe_audit.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $audit = Get-Content dist/client_exe_audit.json -Raw | ConvertFrom-Json
+          $versionInfo = (Get-Item -LiteralPath Wow.exe).VersionInfo
+          $fileVersion = [string]$versionInfo.FileVersion
+          $productVersion = [string]$versionInfo.ProductVersion
+          $is12340 = ($versionInfo.FileMajorPart -eq 3 -and $versionInfo.FileMinorPart -eq 3 -and $versionInfo.FileBuildPart -eq 5 -and $versionInfo.FilePrivatePart -eq 12340)
+          $audit | Add-Member -Force NoteProperty file_version_resource $fileVersion
+          $audit | Add-Member -Force NoteProperty product_version_resource $productVersion
+          $audit | Add-Member -Force NoteProperty version_resource_matches_12340 ([bool]$is12340)
+          $audit | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath dist/client_exe_audit.json -Encoding UTF8
+          Write-Host "Client EXE: PE32 x86 verified; file version: $fileVersion; product version: $productVersion; 12340 resource matches: $is12340"
+          if (-not $is12340) { Write-Warning "3.3.5.12340 cannot be confirmed from available version resource; game packaging will remain blocked." }
+      - name: Determine whether an actual game candidate can be built
+        id: readiness
+        shell: pwsh
+        run: |
+          python tools/candidate_readiness.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build all registered game DLLs (only when runtime is ready)
+        if: steps.readiness.outputs.ready == 'true'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path tools/build_active.py)) { throw 'NO_ACTIVE_BUILDER: provide a verified Windows x86 builder for the active 12340 modules.' }
+          $base = '${{ github.event.before }}'
+          if (-not $base -or $base -match '^0+$') { $base = (git rev-parse HEAD^) }
+          if (-not $base) { throw 'Missing incremental build base commit' }
+          python tools/build_active.py --base "$base" --report dist/native_build.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Package and strictly verify runnable client (only with DLLs)
+        if: steps.readiness.outputs.ready == 'true'
+        shell: pwsh
+        run: |
+          python tools/package_candidate.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --native-build-report dist/native_build.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_candidate_package.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload EXE audit and package readiness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoW335-EXE-AUDIT-${{ github.sha }}
+          path: |
+            dist/client_exe_audit.json
+            dist/candidate_readiness.json
+          if-no-files-found: error
+      - name: Upload runnable package only after FINAL_PACKAGE PASS
+        if: steps.readiness.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoW335-WORK-CANDIDATE-${{ github.sha }}
+          path: |
+            dist/WoW335_WORK_CANDIDATE.zip
+            dist/candidate_metadata.json
+          if-no-files-found: error
+          compression-level: 0

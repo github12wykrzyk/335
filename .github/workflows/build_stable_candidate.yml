@@ -1,0 +1,53 @@
+name: Build 335 stable candidate
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - run: python tools/verify_repo.py
+      - run: python tools/verify_current.py
+      - run: python tools/verify_module_registry.py
+      - run: python -m unittest discover -s tests -v
+      - name: Separate stable infrastructure from accepted runnable STABLE
+        id: mode
+        shell: pwsh
+        run: |
+          $state = Get-Content CURRENT.json -Raw | ConvertFrom-Json
+          $runtime = Get-Content runtime/current.json -Raw | ConvertFrom-Json
+          $registry = Get-Content runtime/module_registry.json -Raw | ConvertFrom-Json
+          $index = Get-Content AI_INDEX.json -Raw | ConvertFrom-Json
+          if ($state.status -eq 'infrastructure-only' -and -not $state.stable_baseline -and
+              $runtime.state -eq 'empty' -and @($runtime.files).Count -eq 0 -and
+              @($runtime.compatibility_sets).Count -eq 0 -and
+              @($registry.modules).Count -eq 0 -and @($index.modules).Count -eq 0) {
+            "ready=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host 'STABLE_INFRA_ONLY: PASS; NO_GAME_PACKAGE; no game artifact published'
+          } elseif ($state.status -eq 'stable' -and $state.stable_baseline -and
+                    $runtime.state -ne 'empty' -and @($runtime.files).Count -ge 2) {
+            "ready=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            throw 'Invalid STABLE runtime; incomplete modules cannot be published'
+          }
+      - name: Require accepted stable state and recoverable exact DLLs
+        if: steps.mode.outputs.ready == 'true'
+        run: python tools/verify_exact_runtime_artifacts.py
+      - if: steps.mode.outputs.ready == 'true'
+        run: python tools/package_exact_current.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json
+      - if: steps.mode.outputs.ready == 'true'
+        run: python tools/verify_candidate_package.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
+      - uses: actions/upload-artifact@v4
+        if: steps.mode.outputs.ready == 'true'
+        with:
+          name: WoW335-STABLE-CANDIDATE-${{ github.sha }}
+          path: |
+            dist/WoW335_STABLE_CANDIDATE.zip
+            dist/candidate_metadata.json
+          if-no-files-found: error
+          compression-level: 0

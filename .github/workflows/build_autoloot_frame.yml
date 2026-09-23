@@ -1,0 +1,96 @@
+name: Build isolated native frame AutoLoot 12340 x86
+on:
+  push:
+    branches: ['feature/loader-12340']
+    paths:
+      - 'src/AutoLoot/autoloot_core.*'
+      - 'src/AutoLoot/autoloot_12340_adapter.*'
+      - 'src/AutoLoot/autoloot_win32_host.c'
+      - 'src/AutoLoot/FRAME_EXPERIMENT.md'
+      - 'src/Loader12340/audit_native_frame.py'
+      - 'tests/test_autoloot_native_frame.py'
+      - '.github/workflows/build_autoloot_frame.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  native-frame-x86:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact 12340 client and source tree
+        shell: pwsh
+        run: |
+          python tools/verify_client_exe.py --exe Wow.exe --require-target
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -p 'test_autoloot_native_frame.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile native frame callback and AutoLoot engine PE32 x86
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x86
+          if errorlevel 1 exit /b 1
+          if not exist dist\frame mkdir dist\frame
+          cl /nologo /LD /O2 /W4 /TC /I:src\AutoLoot /Fo:dist\frame\ /Fe:dist\frame\AutoLoot335.dll src\AutoLoot\autoloot_core.c src\AutoLoot\autoloot_12340_adapter.c src\AutoLoot\autoloot_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib
+          if errorlevel 1 exit /b 1
+          dumpbin /EXPORTS dist\frame\AutoLoot335.dll > dist\frame\exports.txt
+          if errorlevel 1 exit /b 1
+          findstr /C:"AL335_FrameStatus" dist\frame\exports.txt
+          if errorlevel 1 exit /b 1
+          findstr /C:"AL335_FrameTicks" dist\frame\exports.txt
+          if errorlevel 1 exit /b 1
+          findstr /C:"AL335_CallWndProc" dist\frame\exports.txt
+          if errorlevel 1 exit /b 1
+      - name: Check binary machine and publish exact identity
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib, json, struct
+          p=Path("dist/frame/AutoLoot335.dll")
+          b=p.read_bytes()
+          off=struct.unpack_from("<I",b,0x3c)[0]
+          assert b[:2]==b"MZ" and b[off:off+4]==b"PE\\0\\0".replace(b"\\0",bytes([0]))
+          assert struct.unpack_from("<H",b,off+4)[0]==0x14c
+          assert struct.unpack_from("<H",b,off+24)[0]==0x10b
+          assert struct.unpack_from("<H",b,off+22)[0]&0x2000
+          digest=hashlib.sha256(b).hexdigest()
+          m=dict(kind="ISOLATED_FRAME_BINARY_NOT_GAME_PACKAGE",source_sha="${{ github.sha }}",
+                 client_build=12340,architecture="PE32 x86",sha256=digest,
+                 size=len(b),final_package="NOT_RUN",game_test="NOT_RUN")
+          Path("dist/frame/manifest.json").write_text(json.dumps(m,indent=2)+"\\n")
+          print("FRAME_PE32_X86_BUILD: PASS",digest)
+          print("FINAL_PACKAGE: NOT_RUN (isolated experiment)")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve exact PE32 DLL bytes as an orphan Git blob (no channel activation)
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bytes=[IO.File]::ReadAllBytes('dist/frame/AutoLoot335.dll')
+          $hash=(Get-FileHash 'dist/frame/AutoLoot335.dll' -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'e2bf85df42ca8c434db5a99a7606a7d3cf82995ea525fa8acec2c8cc7587579a') {
+            throw "Compiled DLL differs from verified isolated experiment: $hash"
+          }
+          $headers=@{Authorization="Bearer $env:GITHUB_TOKEN"; Accept='application/vnd.github+json'; 'X-GitHub-Api-Version'='2022-11-28'}
+          $payload=@{content=[Convert]::ToBase64String($bytes); encoding='base64'} | ConvertTo-Json -Compress
+          $blob=Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/${{ github.repository }}/git/blobs" -Headers $headers -ContentType 'application/json' -Body $payload
+          if ($blob.sha -notmatch '^[0-9a-f]{40}$') { throw 'GitHub did not return valid orphan blob SHA' }
+          Write-Host "FRAME_DLL_GIT_BLOB_SHA: $($blob.sha)"
+          Write-Host "FRAME_DLL_SHA256: $hash"
+          Write-Host 'FRAME_BLOB_ONLY: no branch ref, no managed DLL installed'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoLoot335-FRAME-ISOLATED-${{ github.sha }}
+          path: |
+            dist/frame/AutoLoot335.dll
+            dist/frame/manifest.json
+            dist/frame/exports.txt
+          if-no-files-found: error
+          compression-level: 0

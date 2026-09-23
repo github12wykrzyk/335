@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "repository": "github12wykrzyk/335",
+  "purpose": "Experiment ownership, dependency and exact-SHA in-game test evidence. Live GitHub HEAD and runtime/current.json remain authoritative.",
+  "experiments": []
+}
