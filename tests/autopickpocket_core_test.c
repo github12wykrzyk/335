@@ -1,0 +1,51 @@
+#include "../src/AutoPickPocket/autopickpocket_core.h"
+#include <stdio.h>
+#include <string.h>
+#define CHECK(expr) do { if (!(expr)) { fprintf(stderr,"FAIL %s:%d: %s\n",__FILE__,__LINE__,#expr); return 1; } } while (0)
+typedef struct {
+    PpTarget t[4]; size_t n;
+    PpResult result;
+    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[7], cast_ok;
+} Stub;
+static size_t scan(void *p,PpTarget *out,size_t cap) {
+    Stub *s=(Stub *)p;size_t n=s->n<cap?s->n:cap;
+    memcpy(out,s->t,n*sizeof(*out));++s->scans;return n;
+}
+static int can_cast(void *p){return ((Stub *)p)->permitted;}
+static int cast(void *p,PpGuid g){Stub *s=(Stub *)p;if (!s->cast_ok)return 0;if(s->cast_n<16)s->casted[s->cast_n++]=g;return 1;}
+static PpResult result(void *p,PpGuid g){(void)g;return ((Stub *)p)->result;}
+static void event(void *p,PpEvent e,PpGuid g){(void)g; ++((Stub *)p)->events[e];}
+static PpAdapter adapter(Stub *s){PpAdapter a;memset(&a,0,sizeof(a));a.ctx=s;a.scan=scan;a.can_cast=can_cast;a.cast_on_guid=cast;a.result=result;a.event=event;return a;}
+static void init(Stub *s){memset(s,0,sizeof(*s));s->permitted=1;s->cast_ok=1;s->t[0].guid.lo=101;s->t[0].eligible=1;s->t[0].distance_sq=4;s->t[1].guid.lo=102;s->t[1].eligible=1;s->t[1].distance_sq=1;s->n=2;}
+static int test_session(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));
+ pp_tick(&e,0);CHECK(!s.scans);pp_enable(&e,1);
+ pp_tick(&e,10);CHECK(s.cast_n==1 && s.casted[0].lo==102 && e.successes==0);
+ pp_tick(&e,20);CHECK(s.cast_n==1); /* submission is NOT success */
+ s.result=PP_RESULT_SUCCESS;pp_tick(&e,30);CHECK(e.successes==1 && s.events[PP_EVENT_SUCCESS]==1);
+ s.result=PP_RESULT_PENDING;pp_tick(&e,110);CHECK(s.cast_n==2 && s.casted[1].lo==101);
+ s.result=PP_RESULT_EMPTY;pp_tick(&e,111);CHECK(e.empty==1);
+ pp_tick(&e,300);CHECK(s.cast_n==2); /* both GUIDs terminal */
+ pp_reset(&e);pp_tick(&e,401);CHECK(s.cast_n==3 && s.casted[2].lo==102);
+ pp_enable(&e,0);pp_tick(&e,1000);CHECK(s.cast_n==3);
+ return 0;
+}
+static int test_retry_and_timeout(void){
+ Stub s;PpEngine e;init(&s);s.n=1;CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ s.cast_ok=0;pp_tick(&e,0);CHECK(s.cast_n==0 && e.retries==1);
+ s.cast_ok=1;pp_tick(&e,100);CHECK(s.cast_n==0);pp_tick(&e,800);CHECK(s.cast_n==1);
+ pp_tick(&e,2300);CHECK(e.timeouts==1 && e.successes==0);
+ pp_tick(&e,2400);CHECK(s.cast_n==1);pp_tick(&e,5300);CHECK(s.cast_n==2);
+ s.result=PP_RESULT_RETRYABLE;pp_tick(&e,5301);CHECK(e.retries==2);
+ pp_tick(&e,6000);CHECK(s.cast_n==2);pp_tick(&e,6200);CHECK(s.cast_n==3);
+ return 0;
+}
+static int test_filter_and_wrap(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ s.t[1].eligible=0;s.t[0].distance_sq=-1.0f;
+ pp_tick(&e,0xfffffff0u);CHECK(s.cast_n==0);
+ s.t[0].distance_sq=2.0f;s.permitted=0;pp_tick(&e,0x60u);CHECK(s.cast_n==0);
+ s.permitted=1;pp_tick(&e,0xc5u);CHECK(s.cast_n==1 && s.casted[0].lo==101);
+ return 0;
+}
+int main(void){if(test_session()||test_retry_and_timeout()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
