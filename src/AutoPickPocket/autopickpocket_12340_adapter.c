@@ -75,12 +75,15 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
     unsigned i;
     a->last_scan_duration_ms=0u;
     a->last_scan_candidates=0u;
+    a->object_cache_count=0u;
+    a->object_cache_manager=0u;
     if (!out || !cap || !mgr(a,&manager) ||
         !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID,&player_guid.lo) ||
         !read32(a,(uintptr_t)manager+PP_MGR_LOCAL_GUID+4u,&player_guid.hi) ||
         !locate_player(a,manager,player_guid,&player_obj) ||
         a->host.position(a->host.ctx,player_obj,me)!=1 ||
         !read32(a,(uintptr_t)manager+PP_MGR_FIRST,&obj)) return 0u;
+    a->object_cache_manager=manager;
     for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
         uint32_t type=0u,health=0u;
         if (!guid_at(a,obj,&guid)) break;
@@ -103,6 +106,8 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
                 size_t far=0u,n;
                 if (count<cap) {
                     out[count].guid=guid;
+                    a->object_cache[count].guid=guid;
+                    a->object_cache[count].obj=obj;
                     out[count].distance_sq=d2;
                     out[count].eligible=(d2<=PP12340_REACH*PP12340_REACH) ? 1u : 2u;
                     ++count;
@@ -111,6 +116,8 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
                         if(out[n].distance_sq>out[far].distance_sq) far=n;
                     if(d2<out[far].distance_sq) {
                         out[far].guid=guid;
+                        a->object_cache[far].guid=guid;
+                        a->object_cache[far].obj=obj;
                         out[far].distance_sq=d2;
                         out[far].eligible=(d2<=PP12340_REACH*PP12340_REACH) ? 1u : 2u;
                     }
@@ -120,6 +127,7 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
         if (!read32(a,(uintptr_t)obj+PP_OBJ_NEXT,&next) || next==obj) break;
         obj=next;
     }
+    a->object_cache_count=count;
     a->last_scan_candidates=(uint32_t)count;
     if(a->host.clock_ms)
         a->last_scan_duration_ms=(uint32_t)(a->host.clock_ms(a->host.ctx)-scan_started);
@@ -142,9 +150,21 @@ static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
         (player_guid.lo|player_guid.hi)==0u || same(player_guid,guid) ||
         !locate_player(a,manager,player_guid,&player_obj) ||
         !read32(a,(uintptr_t)manager+PP_MGR_FIRST,&obj)) return 0;
-    /* Resolve the target's GUID afresh; re-read both positions just before
-     * casting. Never act on a stale range sample from the earlier scan. */
-    for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
+    /* Fast cluster route: reuse the scanned object pointer only after
+     * validating live manager and exact GUID; always recheck positions. */
+    if(a->object_cache_manager==manager){
+        size_t n;
+        for(n=0u;n<a->object_cache_count;++n){
+            if(same(a->object_cache[n].guid,guid) &&
+               ptr_ok(a->object_cache[n].obj)){
+                PpGuid cached;
+                if(guid_at(a,a->object_cache[n].obj,&cached) &&
+                   same(cached,guid))target_obj=a->object_cache[n].obj;
+                break;
+            }
+        }
+    }
+    if(!target_obj)for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
         PpGuid current;
         if (!guid_at(a,obj,&current)) return 0;
         if (same(current,guid)) {target_obj=obj;break;}
@@ -225,6 +245,7 @@ void pp12340_enable(Pp12340Adapter *a,int enable) {
 void pp12340_reset(Pp12340Adapter *a) {
     if (a && a->bound && a->host.thread_id(a->host.ctx)==a->owner_thread) {
         a->cached_manager=0u;a->cached_player_obj=0u;
+        a->object_cache_count=0u;a->object_cache_manager=0u;
         pp_reset(&a->engine);
     }
 }
@@ -269,12 +290,14 @@ void pp12340_tick(Pp12340Adapter *a,uint32_t now_ms) {
         }
         a->current_world=0u;
         a->cached_manager=0u;a->cached_player_obj=0u;
+        a->object_cache_count=0u;a->object_cache_manager=0u;
         return;
     }
     if (world!=a->current_world) {
         pp_reset(&a->engine);
         a->current_world=world;
         a->cached_manager=0u;a->cached_player_obj=0u;
+        a->object_cache_count=0u;a->object_cache_manager=0u;
         pp_status(a,PP_EVENT_WORLD_RESET);
     }
     pp_tick(&a->engine,now_ms);

@@ -193,6 +193,56 @@ static int test_prefetched_outside_range_never_submitted(void){
  CHECK(s.cast_n==1u && s.casted[0].lo==101u);
  return 0;
 }
+static int test_four_nearby_npcs_burst_100ms_without_waiting_for_money(void){
+ Stub s;PpEngine e;uint32_t nonce[4];unsigned i;init(&s);
+ s.n=4u;
+ for(i=0u;i<4u;++i){
+    s.t[i].guid.lo=101u+i;s.t[i].eligible=1u;
+    s.t[i].distance_sq=1.0f+(float)i;
+ }
+ s.result=PP_RESULT_PENDING;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,10u);nonce[0]=s.last_attempt;
+ CHECK(s.cast_n==1u && s.casted[0].lo==101u && e.pending[0].valid);
+ pp_tick(&e,109u);CHECK(s.cast_n==1u);
+ pp_tick(&e,110u);nonce[1]=s.last_attempt;
+ CHECK(s.cast_n==2u && s.casted[1].lo==102u);
+ pp_tick(&e,210u);nonce[2]=s.last_attempt;
+ CHECK(s.cast_n==3u && s.casted[2].lo==103u);
+ pp_tick(&e,310u);nonce[3]=s.last_attempt;
+ CHECK(s.cast_n==4u && s.casted[3].lo==104u);
+ CHECK(s.scans>=4u && e.timeouts==0u && e.successes==0u);
+ CHECK(e.pending[0].valid && e.pending[1].valid &&
+       e.pending[2].valid && e.pending[3].valid);
+ s.result=PP_RESULT_SUCCESS;s.expected_result_attempt=nonce[2];
+ pp_tick(&e,320u);CHECK(e.successes==1u && e.timeouts==0u);
+ CHECK(s.events[PP_EVENT_SUCCESS]==1u && s.cast_n==4u);
+ s.expected_result_attempt=nonce[0];pp_tick(&e,321u);
+ CHECK(e.successes==2u && s.cast_n==4u);
+ s.expected_result_attempt=nonce[1];pp_tick(&e,322u);
+ CHECK(e.successes==3u && s.cast_n==4u);
+ s.expected_result_attempt=nonce[3];pp_tick(&e,323u);
+ CHECK(e.successes==4u && s.cast_n==4u);
+ pp_tick(&e,510u);CHECK(e.successes==4u && e.timeouts==0u);
+ return 0;
+}
+static int test_burst_timeout_exact_guid_and_reset_release(void){
+ Stub s;PpEngine e;unsigned i;init(&s);
+ s.n=4u;
+ for(i=0u;i<4u;++i){
+    s.t[i].guid.lo=101u+i;s.t[i].eligible=1u;
+    s.t[i].distance_sq=1.0f+(float)i;
+ }
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,0u);pp_tick(&e,100u);pp_tick(&e,200u);pp_tick(&e,300u);
+ CHECK(s.cast_n==4u && s.end_count==0u);
+ pp_tick(&e,400u);CHECK(e.timeouts==1u && s.end_count==1u);
+ CHECK(s.end_guid.lo==101u);
+ pp_enable(&e,0);CHECK(s.end_count==4u && !e.pending[0].valid);
+ pp_enable(&e,1);pp_tick(&e,500u);
+ CHECK(s.cast_n==5u && s.casted[4].lo==102u); /* other GUIDs stay eligible */
+ return 0;
+}
 static int test_money_loot_signal_finishes_attempt_before_timeout(void){
  Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
  pp_tick(&e,10u);CHECK(s.cast_n==1u && s.casted[0].lo==102u);
@@ -232,4 +282,4 @@ static int test_reset_and_refusal_release_only_own_nonce(void){
  CHECK(s.end_count==3u && s.end_guid.lo==102u && !e.active_valid);
  return 0;
 }
-int main(void){if(test_money_loot_signal_finishes_attempt_before_timeout()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+int main(void){if(test_four_nearby_npcs_burst_100ms_without_waiting_for_money()||test_burst_timeout_exact_guid_and_reset_release()||test_money_loot_signal_finishes_attempt_before_timeout()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

@@ -159,3 +159,43 @@ this accelerated heuristic from exact-GUID `reason=verified_result`.
 Compare elapsed `result_wait_ms`, overall `cast_gap_ms`, timeout counts,
 and actual received gold/items with the 1.0.7 report. No movement spoofing,
 chat spam, mouseover substitution, extra loot calls or changes to AutoLoot.
+
+## 1.0.9 TEST — bounded cluster burst (target: ~100 ms between submissions)
+
+When at least three **unblocked** NPCs are concurrently within the real
+4-yard cast radius, the engine switches to a four-slot GUID+nonce queue.
+One native PP submission per game-thread loader pulse and a minimum 100 ms
+interval between cast submissions are enforced; a cast is not counted as a
+success simply because the native call returned. Existing exact-GUID
+eligibility, player/target position, health and spell-readiness checks still
+run before every cast. If the client or server applies a cooldown, the next
+cast waits until spell 921 is usable. The 400 ms response timeout, bounded
+retry budget and GUID history remain, now per outstanding attempt. The
+usual single-target engine is retained outside a cluster.
+
+The native observer maintains a fixed four-slot pending table and a Lua
+spell-event record keyed by full target GUID and attempt nonce. Delayed
+spell success/failure cannot confirm another NPC. During overlapping
+casts, unscoped money and LOOT_OPENED are **not** used to mark a particular
+NPC successful; the heuristic continues in ordinary nonoverlapping mode.
+A missing GUID-tagged server acknowledgement is classified as unconfirmed
+and yields a timeout even when money reached the wallet. Native Lua event
+callbacks are **never** registered; the existing in-game Lua frame is used.
+The observer's old GUID records are released after the matching attempt;
+loading a different world clears the fixed pending table and Lua table.
+
+The 60 ms spatial snapshot now caches GUID-to-object pointer pairs. Each
+cast validates manager and exact GUID before using the pointer, and always
+checks actual type, health, spell usability and both live positions again.
+Cache misses fall back to the earlier full GUID scan. This avoids repeated
+object-manager walks for an already detected four-mob cluster without
+accepting stale range or identity.
+
+The log's new `pending_count` tracks submitted but unresolved attempts;
+`result_wait_ms` uses the exact nonce timestamp even if results arrive out
+of order. TEST with four closely grouped stationary mobs, then sprinting,
+and compare real gold/items, no-pockets errors, actual server-confirmed
+spell-921 events, cast gaps, client FPS and stability. A 100 ms interval
+between native submissions is an experimental goal, **not** evidence the
+server accepted four thefts or awarded their loot. The canonical loader,
+AutoLoot, client binary and main/work branches are not changed.

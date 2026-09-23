@@ -68,6 +68,13 @@ void pp_enable(PpEngine *engine, int enable) {
     if (!engine) return;
     if (engine->active_valid && engine->api.end_attempt)
         engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
+    {unsigned i;for(i=0u;i<PP_MAX_PENDING;++i){
+        if(engine->pending[i].valid && engine->api.end_attempt)
+            engine->api.end_attempt(engine->api.ctx,engine->pending[i].guid,engine->pending[i].attempt_id);
+        engine->pending[i].valid=0u;
+    }}
+    engine->burst_mode=0u;
+    engine->last_burst_cast_valid=0u;
     engine->enabled=enable ? 1u : 0u;
     /* Disable forgets pending cast, but not confirmed terminal history. */
     engine->active_valid=0u;
@@ -80,6 +87,13 @@ void pp_reset(PpEngine *engine) {
     if (!engine) return;
     if (engine->active_valid && engine->api.end_attempt)
         engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
+    {unsigned i;for(i=0u;i<PP_MAX_PENDING;++i){
+        if(engine->pending[i].valid && engine->api.end_attempt)
+            engine->api.end_attempt(engine->api.ctx,engine->pending[i].guid,engine->pending[i].attempt_id);
+        engine->pending[i].valid=0u;
+    }}
+    engine->burst_mode=0u;
+    engine->last_burst_cast_valid=0u;
     memset(engine->history,0,sizeof(engine->history));
     engine->history_next=0u;
     engine->diagnostic_started=0u;
@@ -158,6 +172,126 @@ static void refresh_snapshot(PpEngine *e,uint32_t now) {
     count=e->api.scan(e->api.ctx,e->queue,PP_SCAN_CAP);
     e->queue_count=count>PP_SCAN_CAP ? PP_SCAN_CAP : count;
 }
+/* Cluster-specific pipeline: only a bounded set of truly in-range GUIDs
+ * enters burst mode. One new native submission per pulse and >=100 ms apart;
+ * outcomes remain independently GUID/nonce-scoped, never inferred from a
+ * wallet change while multiple attempts are pending. */
+static unsigned pending_count(const PpEngine *e){
+    unsigned i,n=0u;
+    for(i=0u;i<PP_MAX_PENDING;++i)if(e->pending[i].valid)++n;
+    return n;
+}
+static int is_pending(const PpEngine *e,PpGuid guid){
+    unsigned i;
+    for(i=0u;i<PP_MAX_PENDING;++i)
+        if(e->pending[i].valid && same(e->pending[i].guid,guid))return 1;
+    return 0;
+}
+static int ready_for_burst(PpEngine *e,uint32_t now){
+    size_t i; unsigned ready=0u;
+    for(i=0u;i<e->queue_count;++i){
+        PpTarget t=e->queue[i];
+        PpHistory *h;
+        if(t.eligible!=1u || !nonzero(t.guid) ||
+           !(t.distance_sq>=0.0f && t.distance_sq<FLT_MAX) ||
+           is_pending(e,t.guid) ||
+           (e->active_valid && same(e->active,t.guid)))continue;
+        h=entry(e,t.guid,0);
+        if(h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
+                 !deadline_reached(now,h->blocked_until_ms)))continue;
+        ++ready;
+    }
+    return ready>=PP_BURST_MIN_TARGETS;
+}
+static void poll_burst(PpEngine *e,uint32_t now){
+    unsigned i;
+    for(i=0u;i<PP_MAX_PENDING;++i){
+        PpInFlight *p=&e->pending[i];
+        PpResult outcome;
+        if(!p->valid)continue;
+        e->active_attempt_id=p->attempt_id; /* log exact attempt, not newest */
+        outcome=e->api.result(e->api.ctx,p->guid,p->attempt_id);
+        if(outcome==PP_RESULT_PENDING &&
+           (uint32_t)(now-p->started_ms)<PP_RESULT_TIMEOUT_MS)continue;
+        if(outcome==PP_RESULT_PENDING){
+            if(e->api.end_attempt)e->api.end_attempt(e->api.ctx,p->guid,p->attempt_id);
+            failure(e,p->guid,now,PP_TIMEOUT_DELAY_MS,PP_EVENT_TIMEOUT);
+            ++e->timeouts;
+        }else if(outcome==PP_RESULT_SUCCESS){
+            block(e,p->guid,now,0u,1);++e->successes;
+            emit(e,PP_EVENT_SUCCESS,p->guid);
+        }else if(outcome==PP_RESULT_MONEY_SUCCESS){
+            /* Only native policy may decide money+loot belongs to this
+             * nonce; it suppresses the heuristic if overlapping. */
+            block(e,p->guid,now,0u,1);++e->successes;
+            emit(e,PP_EVENT_MONEY_SUCCESS,p->guid);
+        }else if(outcome==PP_RESULT_EMPTY){
+            block(e,p->guid,now,0u,1);++e->empty;
+            emit(e,PP_EVENT_EMPTY,p->guid);
+        }else if(outcome==PP_RESULT_PERMANENT){
+            block(e,p->guid,now,0u,1);
+            emit(e,PP_EVENT_INELIGIBLE,p->guid);
+        }else if(outcome==PP_RESULT_RETRYABLE){
+            failure(e,p->guid,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
+            ++e->retries;
+        }else return; /* unknown result: fail closed */
+        p->valid=0u;
+    }
+}
+static void tick_burst(PpEngine *e,uint32_t now){
+    unsigned i,free_slot=PP_MAX_PENDING;
+    PpTarget best={0};
+    size_t j;
+    int found=0;
+    if(e->active_valid){
+        /* Transition the single pending cast without discarding its result. */
+        for(i=0u;i<PP_MAX_PENDING;++i)if(!e->pending[i].valid){free_slot=i;break;}
+        if(free_slot==PP_MAX_PENDING)return;
+        e->pending[free_slot].guid=e->active;
+        e->pending[free_slot].attempt_id=e->active_attempt_id;
+        e->pending[free_slot].started_ms=e->started_ms;
+        e->pending[free_slot].valid=1u;
+        e->active_valid=0u;
+        e->last_burst_cast_ms=e->started_ms;
+        e->last_burst_cast_valid=1u;
+    }
+    poll_burst(e,now);
+    if(e->last_burst_cast_valid &&
+       (uint32_t)(now-e->last_burst_cast_ms)<PP_BURST_MIN_CAST_GAP_MS)return;
+    if(pending_count(e)>=PP_MAX_PENDING)return;
+    if(e->api.can_cast(e->api.ctx)!=1){
+        idle_event(e,PP_EVENT_NOT_CASTABLE,now);return;
+    }
+    for(j=0u;j<e->queue_count;++j){
+        PpTarget t=e->queue[j];
+        PpHistory *h;
+        if(t.eligible!=1u || !nonzero(t.guid) ||
+           !(t.distance_sq>=0.0f && t.distance_sq<FLT_MAX) ||
+           is_pending(e,t.guid))continue;
+        h=entry(e,t.guid,0);
+        if(h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
+                 !deadline_reached(now,h->blocked_until_ms)))continue;
+        if(!found || t.distance_sq<best.distance_sq){best=t;found=1;}
+    }
+    if(!found){idle_event(e,PP_EVENT_NO_CANDIDATES,now);return;}
+    for(i=0u;i<PP_MAX_PENDING;++i)if(!e->pending[i].valid){free_slot=i;break;}
+    if(free_slot==PP_MAX_PENDING)return;
+    {PpHistory *h=entry(e,best.guid,1);++h->attempts;}
+    if(++e->next_attempt_id==0u)++e->next_attempt_id;
+    e->active_attempt_id=e->next_attempt_id;
+    if(e->api.cast_on_guid(e->api.ctx,best.guid,e->active_attempt_id)==1){
+        PpInFlight *p=&e->pending[free_slot];
+        p->guid=best.guid;p->attempt_id=e->active_attempt_id;
+        p->started_ms=now;p->valid=1u;
+        e->last_burst_cast_ms=now;e->last_burst_cast_valid=1u;
+        ++e->casts;emit(e,PP_EVENT_CAST,best.guid);
+    }else{
+        if(e->api.end_attempt)
+            e->api.end_attempt(e->api.ctx,best.guid,e->active_attempt_id);
+        failure(e,best.guid,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
+        ++e->retries;
+    }
+}
 void pp_tick(PpEngine *engine, uint32_t now) {
     PpTarget best = {0}; /* MSVC /W4: initialized even on the no-candidate path. */
     size_t i;
@@ -166,6 +300,17 @@ void pp_tick(PpEngine *engine, uint32_t now) {
     PpResult outcome;
     if (!engine || !engine->enabled) return;
     refresh_snapshot(engine,now); /* also while waiting for result */
+    if(!engine->probe_mode &&
+       (engine->burst_mode || pending_count(engine)>0u ||
+        ready_for_burst(engine,now))){
+        engine->burst_mode=1u;
+        tick_burst(engine,now);
+        if(pending_count(engine)>0u)return;
+        engine->burst_mode=0u;
+        return; /* at most one native cast per delivered game pulse */
+    }
+    if(!engine->probe_mode && engine->last_burst_cast_valid &&
+       (uint32_t)(now-engine->last_burst_cast_ms)<PP_BURST_MIN_CAST_GAP_MS)return;
     if (engine->active_valid) {
         outcome=engine->api.result(engine->api.ctx,engine->active,engine->active_attempt_id);
         switch(outcome) {

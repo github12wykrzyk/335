@@ -48,6 +48,11 @@ typedef struct {
     uint32_t owner_thread;
     uint64_t current_world;
     uint32_t cached_manager,cached_player_obj;
+    /* 60 ms scan snapshot: accelerated GUID -> object lookup. Never use
+     * without verifying manager, GUID and live range on the cast thread. */
+    struct {PpGuid guid;uint32_t obj;} object_cache[PP_SCAN_CAP];
+    uint32_t object_cache_manager;
+    size_t object_cache_count;
     uint32_t last_scan_duration_ms,last_scan_candidates;
     unsigned bound;
 } Pp12340Adapter;

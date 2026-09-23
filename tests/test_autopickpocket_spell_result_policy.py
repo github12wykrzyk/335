@@ -63,7 +63,8 @@ class SpellAndResultTests(unittest.TestCase):
         host_header=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.h").read_text()
         core_header=(ROOT/"src/AutoPickPocket/autopickpocket_core.h").read_text()
         self.assertIn("PP_RESULT_TIMEOUT_MS 400u",core_header)
-        self.assertIn("GetTickCount()-started_ms)<PP_RESULT_TIMEOUT_MS",POLICY)
+        self.assertIn("pending_size()>=PP_MAX_PENDING",POLICY)
+        self.assertIn("GetTickCount()-pending[idx].started",POLICY)
         self.assertIn("if(elapsed>PP_RESULT_TIMEOUT_MS)",POLICY)
         self.assertNotIn("GetTickCount()-started_ms)<1500u",POLICY)
         self.assertIn("nonce==current_attempt",POLICY)
@@ -76,6 +77,45 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn("engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id)",core)
         self.assertIn("e->api.end_attempt(e->api.ctx,selected,e->active_attempt_id)",core)
         self.assertIn("void (*end_attempt)",host_header)
+    def test_four_guid_burst_is_bounded_and_correlated(self):
+        core=(ROOT/"src/AutoPickPocket/autopickpocket_core.c").read_text()
+        header=(ROOT/"src/AutoPickPocket/autopickpocket_core.h").read_text()
+        for token in ("PP_MAX_PENDING 4u","PP_BURST_MIN_CAST_GAP_MS 100u",
+                      "PP_BURST_MIN_TARGETS 3u","PpInFlight pending[PP_MAX_PENDING]"):
+            self.assertIn(token,header)
+        for token in ("static void tick_burst(","static void poll_burst(",
+                      "ready_for_burst(engine,now)","is_pending(e,t.guid)",
+                      "(uint32_t)(now-e->last_burst_cast_ms)<PP_BURST_MIN_CAST_GAP_MS",
+                      "e->api.result(e->api.ctx,p->guid,p->attempt_id)",
+                      "e->api.end_attempt(e->api.ctx,p->guid,p->attempt_id)",
+                      "p->valid=0u"):
+            self.assertIn(token,core)
+        for token in ("PpGuid guid;uint32_t nonce,started;int valid;",
+                      "pending_index(guid,nonce)","if(pending_size()>=PP_MAX_PENDING)",
+                      "burst_overlap=1","if(burst_overlap || !active",
+                      "return burst_result(guid,nonce,elapsed);",
+                      "rec=_G.W335PP_BURST and dst",
+                      "_G.W335PP_BURST[_G.W335PP_G]={n=_G.W335PP_N",
+                      "GetTime()-rec.t<=0.4","string.upper(src)==string.upper(UnitGUID('player'))",
+                      "rec.s='1'","rec.f='1'",
+                      "_G.W335PP_BURST['0X%08lX%08lX']",
+                      "r.n=='%lu'",
+                      "if r.f=='1'","elseif r.s=='1'",
+                      "p[g].n=='%lu' then p[g]=nil"):
+            self.assertIn(token,POLICY)
+        self.assertLess(POLICY.index("if(burst_overlap || !active"),
+                        POLICY.index("!strcmp(money,want) && !strcmp(loot,want)"))
+        adapter_source=(ROOT/"src/AutoPickPocket/autopickpocket_12340_adapter.c").read_text()
+        adapter_header=(ROOT/"src/AutoPickPocket/autopickpocket_12340_adapter.h").read_text()
+        self.assertIn("object_cache[PP_SCAN_CAP]",adapter_header)
+        self.assertIn("a->object_cache_manager==manager",adapter_source)
+        self.assertIn("guid_at(a,a->object_cache[n].obj,&cached)",adapter_source)
+        self.assertIn("if(!target_obj)for(i=0u;i<PP_SCAN_LIMIT",adapter_source)
+        self.assertIn("a->host.position(a->host.ctx,target_obj,target)",adapter_source)
+        self.assertIn("pending_count",HOST)
+        self.assertIn("g_timings[i].nonce==attempt_id",HOST)
+        self.assertIn("result_wait=(uint32_t)(now-g_timings[i].started)",HOST)
+        self.assertNotIn("GetTickCount()-started_ms)<1500u",POLICY)
     def test_pinned_bridge_compiled_and_no_per_tick_reenable(self):
         self.assertIn("0x00819210u",POLICY)
         self.assertIn("0x00818010u",POLICY)

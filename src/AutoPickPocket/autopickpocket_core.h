@@ -16,6 +16,9 @@ extern "C" {
 #define PP_RETRY_DELAY_MS 800u
 #define PP_TIMEOUT_DELAY_MS 3000u
 #define PP_MAX_ATTEMPTS_PER_GUID 3u
+#define PP_BURST_MIN_CAST_GAP_MS 100u
+#define PP_MAX_PENDING 4u
+#define PP_BURST_MIN_TARGETS 3u
 
 typedef struct { uint32_t lo, hi; } PpGuid;
 typedef struct {
@@ -75,9 +78,17 @@ typedef struct {
     unsigned attempts; /* includes refused submissions and timed-out casts */
 } PpHistory;
 typedef struct {
+    PpGuid guid;
+    uint32_t attempt_id,started_ms;
+    unsigned valid;
+} PpInFlight;
+typedef struct {
     PpAdapter api;
     PpHistory history[PP_HISTORY_CAP];
     PpGuid active;
+    PpInFlight pending[PP_MAX_PENDING];
+    uint32_t last_burst_cast_ms;
+    unsigned burst_mode,last_burst_cast_valid;
     /* Monotonic nonce isolates delayed responses from old casts or worlds. */
     uint32_t active_attempt_id, next_attempt_id;
     uint32_t started_ms, last_scan_ms;

@@ -32,6 +32,8 @@ static unsigned g_desired_enable;
 static unsigned g_pulse_running;
 static uint32_t g_last_pulse_ms,g_pulse_delta_ms;
 static uint32_t g_last_cast_ms,g_last_result_ms,g_inflight_attempt;
+typedef struct {uint32_t nonce,started;} PpTiming;
+static PpTiming g_timings[PP_MAX_PENDING];
 static int valid_memory(const void *p,SIZE_T length) {
     MEMORY_BASIC_INFORMATION m;
     uintptr_t at=(uintptr_t)p;
@@ -261,13 +263,14 @@ static uint64_t world_token(void *ctx) {
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     wchar_t path[MAX_PATH],dir[MAX_PATH],*slash;
-    char line[432];
+    char line[512];
     const char *reason="attempt";
     DWORD ignored;
     HANDLE file;
     LARGE_INTEGER length;
     int n;
     uint32_t now,cast_gap=0u,result_wait=0u,next_wait=0u,queue_age=0u;
+    unsigned i,pending_now=0u;
     (void)ctx;
     if(!is_game_thread())return;
     now=(uint32_t)GetTickCount();
@@ -276,15 +279,26 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
         if(g_last_result_ms)next_wait=(uint32_t)(now-g_last_result_ms);
         g_last_cast_ms=now;
         g_inflight_attempt=attempt_id;
-    } else if((kind==PP_EVENT_SUCCESS || kind==PP_EVENT_MONEY_SUCCESS ||
-               kind==PP_EVENT_EMPTY ||
-               kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
-               kind==PP_EVENT_INELIGIBLE) &&
-              g_inflight_attempt && attempt_id==g_inflight_attempt){
-        result_wait=(uint32_t)(now-g_last_cast_ms);
-        g_last_result_ms=now;
-        g_inflight_attempt=0u;
+        for(i=0u;i<PP_MAX_PENDING;++i){
+            if(!g_timings[i].nonce){g_timings[i].nonce=attempt_id;
+                g_timings[i].started=now;break;}
+        }
+    } else if(kind==PP_EVENT_SUCCESS || kind==PP_EVENT_MONEY_SUCCESS ||
+              kind==PP_EVENT_EMPTY || kind==PP_EVENT_RETRY ||
+              kind==PP_EVENT_TIMEOUT || kind==PP_EVENT_INELIGIBLE){
+        /* Bursts complete out of order; use this exact attempt's timestamp,
+         * never the most recently submitted cast's timestamp. */
+        for(i=0u;i<PP_MAX_PENDING;++i){
+            if(g_timings[i].nonce==attempt_id && attempt_id){
+                result_wait=(uint32_t)(now-g_timings[i].started);
+                g_timings[i].nonce=0u;g_last_result_ms=now;break;
+            }
+        }
+        if(g_inflight_attempt==attempt_id)g_inflight_attempt=0u;
     }
+    for(i=0u;i<PP_MAX_PENDING;++i)if(g_adapter.engine.pending[i].valid)
+        ++pending_now;
+    if(g_adapter.engine.active_valid)++pending_now;
     if(g_adapter.engine.scan_started)
         queue_age=(uint32_t)(now-g_adapter.engine.queue_built_ms);
     if(!GetModuleFileNameW(NULL,dir,MAX_PATH))return;
@@ -323,7 +337,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu}\n",
+       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"pending_count\":%u}\n",
        (unsigned long)now,(unsigned)kind,reason,
        (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi,
        (unsigned long)g_adapter.last_scan_duration_ms,
@@ -331,7 +345,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
        (unsigned long)g_adapter.engine.queue_count,
        (unsigned long)queue_age,(unsigned long)g_pulse_delta_ms,
        (unsigned long)cast_gap,(unsigned long)result_wait,
-       (unsigned long)next_wait);
+       (unsigned long)next_wait,pending_now);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);
     CloseHandle(file);
 }
