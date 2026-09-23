@@ -12,7 +12,8 @@ class EpochUpdaterTests(unittest.TestCase):
         app=(ROOT/"tools/updater/WoW335Updater.cs").read_text(encoding="utf-8")
         feature=(ROOT/"tools/updater/UpdaterEpochLoaderFeature.cs").read_text(encoding="utf-8")
         self.assertIn("feature/loader-12340",wf)
-        self.assertIn("src/Loader12340/**",wf)
+        self.assertNotIn("    paths:\n",wf)  # exact-HEAD artifact on every branch push
+        self.assertIn("src\\\\Loader12340\\\\approved\\\\AutoLoot335.dll",wf)
         self.assertIn("runtime/epoch_loader_interop.json",wf)
         maintenance=(ROOT/"tools/updater/UpdaterMaintenanceFeature.cs").read_text(encoding="utf-8")
         self.assertIn('UpdaterBuildInfo.Version.EndsWith("-epoch-test"',maintenance)
