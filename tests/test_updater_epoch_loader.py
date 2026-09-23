@@ -28,7 +28,9 @@ class EpochUpdaterTests(unittest.TestCase):
                     'Natywny AutoLoot TEST', '"Rollback"', '"Uruchom grę"'):
             self.assertNotIn(old,ui)
         self.assertIn('UseEpochTestFlow()',app)
-        self.assertIn('return await EpochInstallAsync()',app)
+        self.assertIn('var epochUpdated = await EpochInstallAsync();', app)
+        self.assertIn('return epochUpdated;', app)
+        self.assertIn('AutoLootDiagSupport.RefreshManagedIfPresent(', app)
         self.assertIn('var latest = await EpochLatestAsync();',app)
         self.assertIn('if (await UpdateAsync())',app)
         self.assertIn('private async Task<bool> EpochInstallAsync()',feature)

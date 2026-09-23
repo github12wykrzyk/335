@@ -47,7 +47,9 @@ class DynamicBranchMonitorTests(unittest.TestCase):
         self.assertIn("!seenWorkflows.Add(workflow)", source)
         self.assertIn("monitorBranchListTruncated", source)
         self.assertIn('private bool UseEpochTestFlow()', app)
-        self.assertIn('return await EpochInstallAsync();', app)
+        self.assertIn('var epochUpdated = await EpochInstallAsync();', app)
+        self.assertIn('return epochUpdated;', app)
+        self.assertIn('AutoLootDiagSupport.RefreshManagedIfPresent(', app)
         self.assertNotIn('return await EpochInstallAsync();', source)
 
     def test_displayed_status_is_not_equated_to_runnable_package(self):
