@@ -18,17 +18,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Skip legacy bootstrap once runtime is registered
+      - name: Permit only isolated AutoLoot TEST registration or repair
         id: eligibility
         shell: pwsh
         run: |
           $runtime = Get-Content runtime/current.json -Raw | ConvertFrom-Json
-          if ($runtime.state -eq 'empty' -and @($runtime.files).Count -eq 0) {
+          if (($runtime.state -eq 'empty' -and @($runtime.files).Count -eq 0) -or
+              ($runtime.state -eq 'test-candidate' -and @($runtime.files).Count -eq 2 -and
+               @($runtime.files | Where-Object { $_.kind -eq 'dll' -and $_.component -eq 'AutoLoot' }).Count -eq 1)) {
             "eligible=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            Write-Host 'BOOTSTRAP: eligible, no active runtime'
           } else {
-            "eligible=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            Write-Host 'BOOTSTRAP: SKIPPED, active registered runtime uses build_work_candidate.yml; no mutation'
+            throw 'Refuse native publication outside isolated AutoLoot TEST stack'
           }
       - if: steps.eligibility.outputs.eligible == 'true'
         run: python tools/verify_client_exe.py --exe Wow.exe --require-target
@@ -41,6 +41,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $head = (git rev-parse HEAD).Trim()
+          if ($head -eq '${{ github.sha }}') { Write-Host 'Native bytes already match; no commit'; exit 0 }
           git fetch origin work
           if ((git rev-parse FETCH_HEAD).Trim() -ne $head) { throw "work moved after runtime commit" }
           foreach ($workflow in @('verify.yml', 'build_work_candidate.yml', 'build_updater.yml')) {
