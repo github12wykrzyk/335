@@ -138,7 +138,7 @@ static int verify_creature_type_abi(void) {
 }
 static uint32_t native_creature_type(uintptr_t obj) {
     uintptr_t fn=PP_CREATURE_TYPE_VA;
-    uint32_t type=0u;
+    uint32_t creature_id=0u;
     /* A non-player CGUnit_C is already required by the adapter's object
      * type/GUID checks. Require the native method's first object field too. */
     if (!is_game_thread() || !valid_memory((const void *)obj,0x9F8u) ||
@@ -148,13 +148,13 @@ static uint32_t native_creature_type(uintptr_t obj) {
         __asm {
             mov ecx,obj
             call fn
-            mov type,eax
+            mov creature_id,eax
         }
     } __except(EXCEPTION_EXECUTE_HANDLER) { return 0u; }
 #else
     return 0u;
 #endif
-    return type;
+    return creature_id;
 }
 static int verify_abi(void *ctx,uintptr_t spell,uintptr_t pos) {
     static const BYTE cast_prefix[]={
