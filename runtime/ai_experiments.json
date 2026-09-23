@@ -28,8 +28,24 @@
       "observed_head": "18905f8c9d3ebc57588e12b1f2f76416572c2659",
       "verified_commit": null,
       "tests": [
-        "static pinned client audit run 35879764556: exact x86 prolog and one read-only OnLayerUpdate vtable reference",
-        "native frame DLL PE32 x86 build run 35880781469, game-test NOT_RUN"
+        {
+          "sha": "ce83fe40b59b3e73721941d9e2bd1a5b255ed391",
+          "result": "pass",
+          "scope": "read-only exact-client native callback PE audit; not in-game",
+          "run_id": 35879764556
+        },
+        {
+          "sha": "f1372bfa30f9fbe62fe8e10e8de444ae38bc406e",
+          "result": "pass",
+          "scope": "isolated MSVC PE32 x86 AutoLoot frame compilation; not in-game",
+          "run_id": 35880232801
+        },
+        {
+          "sha": "1b783fbfa6d8c0d0bc5a9d3c69effe82d19686e6",
+          "result": "pass",
+          "scope": "byte-identical MSVC frame DLL rebuild and orphan SHA256 Git blob; not final package",
+          "run_id": 35880781469
+        }
       ],
       "package": null
     }
