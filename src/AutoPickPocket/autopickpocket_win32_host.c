@@ -276,7 +276,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
         if(g_last_result_ms)next_wait=(uint32_t)(now-g_last_result_ms);
         g_last_cast_ms=now;
         g_inflight_attempt=attempt_id;
-    } else if((kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
+    } else if((kind==PP_EVENT_SUCCESS || kind==PP_EVENT_MONEY_SUCCESS ||
+               kind==PP_EVENT_EMPTY ||
                kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
                kind==PP_EVENT_INELIGIBLE) &&
               g_inflight_attempt && attempt_id==g_inflight_attempt){
@@ -305,6 +306,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     switch(kind) {
     case PP_EVENT_CAST: reason="cast_submitted";break;
     case PP_EVENT_SUCCESS: reason="verified_result";break;
+    case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_signal";break;
     case PP_EVENT_EMPTY: reason="no_pockets";break;
     case PP_EVENT_RETRY: reason="temporary_failure";break;
     case PP_EVENT_TIMEOUT: reason="result_timeout";break;

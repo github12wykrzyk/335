@@ -169,6 +169,15 @@ void pp_tick(PpEngine *engine, uint32_t now) {
     if (engine->active_valid) {
         outcome=engine->api.result(engine->api.ctx,engine->active,engine->active_attempt_id);
         switch(outcome) {
+        case PP_RESULT_MONEY_SUCCESS:
+            /* A positive wallet delta plus nonce-scoped loot event is an
+             * experimental accelerated signal, not a server GUID ACK. */
+            block(engine,engine->active,now,0u,1);
+            ++engine->successes;
+            emit(engine,PP_EVENT_MONEY_SUCCESS,engine->active);
+            engine->active_valid=0u;
+            if (engine->probe_mode) {engine->enabled=0u;return;}
+            goto scan_next;
         case PP_RESULT_SUCCESS:
             block(engine,engine->active,now,0u,1);
             ++engine->successes;

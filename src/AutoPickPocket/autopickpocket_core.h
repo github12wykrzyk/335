@@ -12,7 +12,7 @@ extern "C" {
 #define PP_HISTORY_CAP 256u
 #define PP_SCAN_INTERVAL_MS 60u
 #define PP_QUEUE_TTL_MS 160u
-#define PP_RESULT_TIMEOUT_MS 900u
+#define PP_RESULT_TIMEOUT_MS 400u
 #define PP_RETRY_DELAY_MS 800u
 #define PP_TIMEOUT_DELAY_MS 3000u
 #define PP_MAX_ATTEMPTS_PER_GUID 3u
@@ -28,7 +28,8 @@ typedef enum {
     PP_RESULT_SUCCESS = 1, /* positively confirmed Pick Pocket result; NOT loot completion */
     PP_RESULT_EMPTY = 2,   /* positively confirmed no pockets / already pickpocketed */
     PP_RESULT_RETRYABLE = 3, /* temporary range, LOS, stealth, or cast failure */
-    PP_RESULT_PERMANENT = 4 /* positively confirmed ineligible for this session */
+    PP_RESULT_PERMANENT = 4, /* positively confirmed ineligible for this session */
+    PP_RESULT_MONEY_SUCCESS = 5 /* wallet increase + nonce-scoped loot event; indicative, not GUID proof */
 } PpResult;
 typedef enum {
     PP_EVENT_CAST = 1,
@@ -46,7 +47,8 @@ typedef enum {
     PP_EVENT_ENABLED = 13,
     PP_EVENT_DISABLED = 14,
     PP_EVENT_RESET = 15,
-    PP_EVENT_PROBE_REJECTED = 16
+    PP_EVENT_PROBE_REJECTED = 16,
+    PP_EVENT_MONEY_SUCCESS = 17
 } PpEvent;
 typedef struct {
     void *ctx;

@@ -193,19 +193,31 @@ static int test_prefetched_outside_range_never_submitted(void){
  CHECK(s.cast_n==1u && s.casted[0].lo==101u);
  return 0;
 }
+static int test_money_loot_signal_finishes_attempt_before_timeout(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,10u);CHECK(s.cast_n==1u && s.casted[0].lo==102u);
+ s.result=PP_RESULT_MONEY_SUCCESS;
+ pp_tick(&e,110u);CHECK(e.successes==1u && e.timeouts==0u);
+ CHECK(s.events[PP_EVENT_MONEY_SUCCESS]==1u && s.events[PP_EVENT_SUCCESS]==0u);
+ CHECK(s.cast_n==2u && s.casted[1].lo==101u);
+ s.result=PP_RESULT_PENDING;
+ pp_tick(&e,509u);CHECK(e.timeouts==0u);
+ pp_tick(&e,510u);CHECK(e.timeouts==1u);
+ return 0;
+}
 static int test_timeout_releases_matching_attempt_before_next_guid(void){
  Stub s;PpEngine e;uint32_t first;init(&s);
  CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
  pp_tick(&e,10u);first=s.last_attempt;
  CHECK(s.cast_n==1u && s.casted[0].lo==102u && s.end_count==0u);
- pp_tick(&e,910u); /* exact core deadline; do not wait for policy's 1500 ms */
+ pp_tick(&e,410u); /* exact 400 ms timeout: release before next GUID */
  CHECK(e.timeouts==1u && s.end_count==1u);
  CHECK(s.end_guid.lo==102u && s.end_attempt_id==first);
  CHECK(s.cast_n==2u && s.casted[1].lo==101u && s.last_attempt!=first);
  s.result=PP_RESULT_SUCCESS;s.expected_result_attempt=first;
- pp_tick(&e,911u);CHECK(e.successes==0u && e.active_valid);
+ pp_tick(&e,411u);CHECK(e.successes==0u && e.active_valid);
  s.expected_result_attempt=s.last_attempt;
- pp_tick(&e,912u);CHECK(e.successes==1u);
+ pp_tick(&e,412u);CHECK(e.successes==1u);
  return 0;
 }
 static int test_reset_and_refusal_release_only_own_nonce(void){
@@ -220,4 +232,4 @@ static int test_reset_and_refusal_release_only_own_nonce(void){
  CHECK(s.end_count==3u && s.end_guid.lo==102u && !e.active_valid);
  return 0;
 }
-int main(void){if(test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+int main(void){if(test_money_loot_signal_finishes_attempt_before_timeout()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

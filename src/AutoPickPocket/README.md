@@ -131,3 +131,31 @@ confirmed PP success; the established GUID/nonce result and timeout
 handling remains unchanged. This is a TEST-only user-requested UI
 behavior change; verify that loot and GUID cast correctness remain intact
 in the installed exact-SHA package.
+
+## 1.0.8 TEST: 400 ms attempt budget and positive-money fast path
+
+A 400 ms engine timeout replaces the previous 900 ms bound. The game-thread
+policy uses the **same** shared constant and an explicit GUID+nonce release
+before the next cast. This is an experimental timeout: a late server result
+may now be classified as unconfirmed more frequently. The per-GUID 3000 ms
+backoff on timeout and existing attempt budget remain unchanged.
+
+Immediately before a native cast, the Lua observer stores the player's
+`GetMoney()` baseline and arms a new nonce. Its normal `PLAYER_MONEY`
+event records a strictly positive copper delta only within 400 ms and
+only while the matching attempt is armed; decreases and unchanged money
+are ignored. The core can advance on an **experimental wallet+loot signal**
+only when both this money event and `LOOT_OPENED` belong to the same active
+nonce and the native loot-source GUID, if readable and nonzero, does not
+contradict the attempted GUID. Explicit no-pockets and spell/range failures
+have priority. Money alone never completes PP. Item-only PP continues through
+its independent cast/loot confirmation or bounded timeout. If native loot
+source is already cleared, simultaneous money+loot is an indicative signal,
+**not proof of which NPC paid**; a different money source could be mistaken
+for PP. Game tests should avoid other simultaneous gold income.
+
+Structured loader reports use `reason=wallet_loot_signal` to distinguish
+this accelerated heuristic from exact-GUID `reason=verified_result`.
+Compare elapsed `result_wait_ms`, overall `cast_gap_ms`, timeout counts,
+and actual received gold/items with the 1.0.7 report. No movement spoofing,
+chat spam, mouseover substitution, extra loot calls or changes to AutoLoot.

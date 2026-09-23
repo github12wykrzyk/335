@@ -246,7 +246,7 @@ static int test_native_bridge_releases_policy_before_next_cast(void){
  CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
  pp12340_tick(&a,10u);old=m.last_attempt;
  CHECK(m.casts==1u && m.last_guid.lo==222u);
- pp12340_tick(&a,910u);
+ pp12340_tick(&a,410u);
  CHECK(m.end_count==1u && m.end_guid.lo==222u && m.end_nonce==old);
  CHECK(m.casts==2u && m.last_guid.lo==111u && m.last_attempt!=old);
  return 0;
