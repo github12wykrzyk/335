@@ -10,7 +10,7 @@ on:
       - '.github/workflows/build_autoloot_native.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   native-host-x86:
     runs-on: windows-2022
@@ -63,6 +63,64 @@ jobs:
               assert bool(struct.unpack_from('<H',data,off+22)[0]&0x2000)==dll
               print('AUTOLOOT_NATIVE_BUILD:',name,'PE32 x86 PASS',len(data),hashlib.sha256(data).hexdigest())
           print('FINAL_PACKAGE: NOT_RUN — loader, ABI in-game behavior, registered runtime and uploader delivery unverified')
+      - name: Build exact normal-runtime AutoLoot DLL as an unreferenced Git blob
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x86
+          if errorlevel 1 exit /b 1
+          if not exist dist\native\AutoLoot mkdir dist\native\AutoLoot
+          cl /nologo /LD /O2 /W4 /Fo:dist\native\AutoLoot\ /Fe:dist\native\AutoLoot\AutoLoot335.dll /I:src\AutoLoot /TC /Brepro src\AutoLoot\autoloot_core.c src\AutoLoot\autoloot_12340_adapter.c src\AutoLoot\autoloot_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib
+          if errorlevel 1 exit /b 1
+      - name: Save normal-runtime PE32 bytes as an orphan blob for exact TEST integration
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = 'dist/native/AutoLoot/AutoLoot335.dll'
+          $data = [IO.File]::ReadAllBytes($p)
+          $pe = [BitConverter]::ToInt32($data, 0x3c)
+          if ($data[0] -ne 77 -or $data[1] -ne 90 -or [BitConverter]::ToUInt16($data, $pe+4) -ne 0x14c -or [BitConverter]::ToUInt16($data, $pe+24) -ne 0x10b -or (([BitConverter]::ToUInt16($data, $pe+22) -band 0x2000) -eq 0)) { throw 'Not a PE32 x86 DLL' }
+          $digest = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant()
+          $payload = @{ content = [Convert]::ToBase64String($data); encoding = 'base64' } | ConvertTo-Json -Compress
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $response = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/${{ github.repository }}/git/blobs" -Headers $headers -Body $payload -ContentType 'application/json'
+          if ($response.sha -notmatch '^[0-9a-f]{40}        shell: python
+        run: |
+          import json,hashlib,os
+          from pathlib import Path
+          names=['AutoLoot335_Host_UNREGISTERED.dll','AutoLoot335_Launcher_PREVIEW.exe']
+          entries={}
+          for name in names:
+              data=(Path('dist')/name).read_bytes()
+              entries[name]={'sha256':hashlib.sha256(data).hexdigest(),'size':len(data)}
+          meta={'schema_version':1,'kind':'NATIVE_AUTOLOOT_PREVIEW_NOT_GAME_PACKAGE',
+                'branch':'feature/autoloot-12340','git_sha':'${{ github.sha }}',
+                'target_build':12340,'arch':'x86',
+                'client_exe_sha256':'2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d',
+                'files':entries,'final_package':'NOT_RUN','in_game_verified':False}
+          assert meta['git_sha']==os.getenv('GITHUB_SHA')
+          Path('dist/native_preview_build.json').write_text(json.dumps(meta,indent=2)+'\n',encoding='utf-8')
+          print('AUTOLOOT_NATIVE_PREVIEW_META: PASS',meta['git_sha'])
+      - name: Test portable AutoLoot controller and native-adapter fake-client integration
+        run: python -m unittest discover -s tests -p "test_autoloot*.py" -v
+      - name: Preserve build evidence (NOT a distributable game package)
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoLoot12340-native-preview-TESTONLY-${{ github.sha }}
+          path: |
+            dist/autoloot_abi.json
+            dist/native_preview_build.json
+            dist/AutoLoot335_Host_UNREGISTERED.dll
+            dist/AutoLoot335_Launcher_PREVIEW.exe
+          if-no-files-found: error
+) { throw 'Blob write did not return Git SHA' }
+          Write-Host "NORMAL_AUTOLOOT_DLL_BLOB_SHA: $($response.sha)"
+          Write-Host "NORMAL_AUTOLOOT_DLL_SHA256: $digest"
+          Write-Host "NORMAL_AUTOLOOT_DLL_SIZE: $($data.Length)"
+          Write-Host 'ORPHAN_BLOB_ONLY: no branch ref or runtime manifest changed by this step'
       - name: Write exact-SHA native-preview manifest for the updater
         shell: python
         run: |
