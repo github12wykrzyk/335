@@ -12,7 +12,7 @@ class NativeNpcRecognitionTests(unittest.TestCase):
         self.assertIn("0x0071F300u",HOST)
         self.assertIn("mov ecx,obj",HOST)
         self.assertIn("call fn",HOST)
-        self.assertIn("mov type,eax",HOST)
+        self.assertIn("mov creature_id,eax",HOST)
         self.assertIn("!is_game_thread()",HOST)
         self.assertIn("valid_memory((const void *)obj,0x9F8u)",HOST)
         self.assertIn("EXCEPTION_EXECUTE_HANDLER",HOST)
