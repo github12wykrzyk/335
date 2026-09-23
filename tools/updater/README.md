@@ -80,3 +80,13 @@ sprawdź w czacie `/al335 status`, włącz go przez `/al335 on`,
 otwórz ręcznie zwłoki i użyj `/reload` lub wyloguj się. Jeśli
 grę uruchamiasz z innej instalacji niż wybrany katalog updatera,
 zapis będzie w katalogu `WTF` tamtej instalacji.
+
+## 0.3.6-335 — obsługa rzeczywistych logów z WoW
+
+Parser wpisów SavedVariables akceptuje końcowe komentarze Lua `-- [1]`
+po każdej pozycji tablicy, które standardowy klient dopisuje podczas
+zapisywania `WoW335AutoLootDiag.lua`. Poprzednia wersja 0.3.5
+odrzucała wszystkie takie wiersze pomimo poprawnego pliku.
+Ręczne wskazanie kopii `WoW335AutoLootDiag(1).lua` także jest obsługiwane.
+Aktualizacja wyłącznie przyciskiem **Aktualizuj updater** z kanału TEST
+(work); do GitHub wysyłane są jedynie zaakceptowane zdarzenia po podglądzie.

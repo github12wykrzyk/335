@@ -48,10 +48,12 @@ $savedFile = Join-Path $save 'WoW335AutoLootDiag.lua'
 $fixture = @'
 WoW335AutoLootDiagLog = {
     ["entries"] = {
-        [1] = "2026-09-23 10:00:00 LOOT_OPENED num=2",
-        ["2"] = "2026-09-23 10:00:01 UI_ERROR contact@example.com 192.168.1.2",
-        "2026-09-23 10:00:02 LOOT_CLOSED attempts=1",
-        [4] = "IGNORED_SECRET password=NEVER_INCLUDE_ME",
+        "2026-09-23 10:00:00 LOGIN diagnostic addon; default OFF", -- [1]
+        "2026-09-23 10:00:00 LOOT_OPENED num=2", -- [2]
+        "2026-09-23 10:00:00 DRAIN attempt=1 slots=2 pending=2 submitted=2 failed=0", -- [3]
+        [4] = "2026-09-23 10:00:01 UI_ERROR contact@example.com 192.168.1.2",
+        ["5"] = "2026-09-23 10:00:02 LOOT_CLOSED attempts=1", -- [5]
+        "IGNORED_SECRET password=NEVER_INCLUDE_ME", -- [6]
     },
     ["client"] = "REALM_PRIVATE",
 }
@@ -64,6 +66,7 @@ try {
     if ($events -notmatch 'LOOT_OPENED' -or $events -notmatch 'LOOT_CLOSED') { throw "Failed to collect expected diagnostic lines" }
     if ($events -match 'DO_NOT_UPLOAD_ME|NEVER_INCLUDE_ME|REALM_PRIVATE') { throw "Raw account or SavedVariables data leaked" }
     if ($events -notmatch 'UI_ERROR') { throw "Numbered Blizzard SavedVariables entries were not recognized" }
+    if ($events -notmatch 'LOGIN|DRAIN') { throw "Real WoW serialized entries with trailing Lua index comments were not recognized" }
     $backup = $savedFile + '.bak'
     [IO.File]::Copy($savedFile, $backup)
     [IO.File]::Delete($savedFile)
@@ -77,6 +80,14 @@ try {
     if ($chosenEvents -notmatch 'LOOT_OPENED' -or $chosenEvents -match 'NEVER_INCLUDE_ME') {
         throw "Manually selected backup did not extract whitelisted event data"
     }
+    $copied = Join-Path $save 'WoW335AutoLootDiag(1).lua'
+    [IO.File]::Copy($backup, $copied)
+    $single[0] = [string]$copied
+    $copyEvents = [string]$collectFile.Invoke($null, $single)
+    if ($copyEvents -notmatch 'LOOT_OPENED|DRAIN') {
+        throw "Copied WoW SavedVariables file with (1) suffix was rejected"
+    }
+    $single[0] = [string]$backup
     $wrong = Join-Path $save 'unrelated.lua'
     [IO.File]::Copy($backup, $wrong)
     $single[0] = [string]$wrong

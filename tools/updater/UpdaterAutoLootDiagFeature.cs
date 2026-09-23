@@ -167,7 +167,7 @@ namespace WoW335Updater
         // Never send the raw SavedVariables file, account-directory names or
         // arbitrary addon data. Only fixed event types with bounded text.
         private static readonly Regex Entry = new Regex(
-            @"^\s*(?:\[\s*(?:\d+|""\d+"")\s*\]\s*=\s*)?""((?:\\.|[^""\\])*)""\s*,?\s*$",
+            @"^\s*(?:\[\s*(?:\d+|""\d+"")\s*\]\s*=\s*)?""((?:\\.|[^""\\])*)""\s*,?\s*(?:--\s*\[\d+\]\s*)?$",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex EntriesStart = new Regex(
             @"^\s*(?:\[\s*""entries""\s*\]|entries)\s*=\s*\{",
@@ -240,9 +240,9 @@ namespace WoW335Updater
         private static bool IsSavedVariableName(string file)
         {
             var name = Path.GetFileName(file);
-            return new[] { "WoW335AutoLootDiag.lua", "WoW335AutoLootDiag.lua.bak",
-                           "WoW335AutoLootDiagLog.lua", "WoW335AutoLootDiagLog.lua.bak" }
-                .Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+            return Regex.IsMatch(name,
+                @"^WoW335AutoLootDiag(?:Log)?(?:\(\d{1,3}\))?\.lua(?:\.bak)?$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
 
         internal static string CollectLogFile(string file)
