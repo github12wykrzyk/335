@@ -23,12 +23,6 @@ jobs:
         run: python tools/verify_current.py
       - name: Unit tests
         run: python -m unittest discover -s tests -v
-      - name: Rebuild deterministic runtime package
-        run: python tools/make_runtime_package.py --output dist/frostmourne-runtime.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: runtime-manifest-package
-          path: dist/frostmourne-runtime.zip
 
   windows-x86-toolchain:
     runs-on: windows-latest
