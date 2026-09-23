@@ -33,3 +33,39 @@ eligible unblocked GUID, and does not count submission as success.
 Success, no pockets, and terminal errors are cached per GUID for the session;
 temporary failures are retried. pp_reset clears cache after a world change.
 Proposed /appp commands are NOT available until a native adapter exists.
+
+
+## Online research leads (2026-09-23; NOT verified on pinned Wow.exe)
+
+- WotLK Pick Pocket spell ID 921; published 3.3.5a data says melee/combat
+  reach 5 yards and Stealth required: https://wotlkdb.com/?spell=921 .
+  Server reach, mob eligibility and conditions still need in-game validation.
+- Standard Lua CastSpellByName accepts a unit token, not an arbitrary scanned
+  NPC GUID. It is protected for ordinary addon code:
+  https://warcraft.wiki.gg/wiki/API:CastSpellByName .
+- A historical 3.3.5a community discussion mentions internal
+  CastSpell(SpellID, Guid) at VA 0x0080DA40:
+  https://wrobot.eu/forums/topic/5621-castspell-improvement/ .
+  This is an **UNVERIFIED LEAD**, not an audited address, function
+  signature, calling convention or permission to inject on build 12340.
+  Never call it before validating the exact pinned PE bytes, disassembly,
+  ABI, thread, argument memory ownership, result correlation and crash safety.
+
+## Isolated x86 experiment build
+
+Before native activation, feature/autopickpocket-12340 runs a dedicated
+Windows MSVC x86 portable-core test executable. No in-game adapter exists,
+so the isolated branch does NOT publish the unchanged AutoLoot-only candidate
+as a purported AutoPickPocket game package. The regular full-game candidate
+rebuild and all manifest/SHA256 gates remain mandatory if the feature
+registers a native module, changes active game sources, or changes build
+infrastructure. The existing work release remains untouched.
+
+The prior feature build failure was unrelated to the PP core: the strict
+full candidate recompiled AutoLoot on hosted VS 17.14.41 but obtained
+SHA256 ffb27461272b191595520d2f4fb3ad095d429a4c818564e78b0e2f44b835b98a
+instead of registered
+6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3.
+The previous passing work run used hosted VS 17.14.40. Toolchain drift
+is a plausible cause, NOT yet a proven byte-level diagnosis. Do not
+replace the accepted AutoLoot DLL or bypass its rebuild gate.
