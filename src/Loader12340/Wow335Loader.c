@@ -7,7 +7,10 @@
 #include <stdio.h>
 #include <wchar.h>
 #include <stdint.h>
+#include <wincrypt.h>
+#include <string.h>
 #pragma comment(lib, "User32.lib")
+#pragma comment(lib, "Advapi32.lib")
 
 #define WOW_MAX_MODULES 64
 #define WOW_MAX_NAME 120
@@ -132,6 +135,114 @@ cleanup:
     return result;
 }
 
+/* modules.lock is written by the managed updater from the verified package.
+ * It is a local consistency seal, NOT an authentication signature: updater
+ * must still verify GitHub artifact provenance before creating it. */
+static int local_sha256(const wchar_t *path, char result[65]) {
+    DWORD attrs = GetFileAttributesW(path);
+    HANDLE file = INVALID_HANDLE_VALUE;
+    HCRYPTPROV provider = 0;
+    HCRYPTHASH hash = 0;
+    BYTE buffer[16384], digest[32];
+    DWORD got = 0, length = sizeof(digest);
+    LARGE_INTEGER size;
+    static const char hex[] = "0123456789abcdef";
+    int ok = 0;
+    if (attrs == INVALID_FILE_ATTRIBUTES ||
+        (attrs & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)))
+        return 0;
+    file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) return 0;
+    if (!GetFileSizeEx(file, &size) || size.QuadPart > 128 * 1024 * 1024)
+        goto done;
+    if (!CryptAcquireContextW(&provider, NULL, NULL, PROV_RSA_AES,
+                             CRYPT_VERIFYCONTEXT) ||
+        !CryptCreateHash(provider, CALG_SHA_256, 0, 0, &hash))
+        goto done;
+    for (;;) {
+        if (!ReadFile(file, buffer, sizeof(buffer), &got, NULL))
+            goto done;
+        if (!got) break;
+        if (!CryptHashData(hash, buffer, got, 0)) goto done;
+    }
+    if (!CryptGetHashParam(hash, HP_HASHVAL, digest, &length, 0) ||
+        length != sizeof(digest)) goto done;
+    for (unsigned int i = 0; i < sizeof(digest); ++i) {
+        result[i * 2] = hex[digest[i] >> 4];
+        result[i * 2 + 1] = hex[digest[i] & 15];
+    }
+    result[64] = 0;
+    ok = 1;
+done:
+    if (hash) CryptDestroyHash(hash);
+    if (provider) CryptReleaseContext(provider, 0);
+    CloseHandle(file);
+    return ok;
+}
+
+static int lock_line(FILE *file, char *line, size_t capacity) {
+    size_t n;
+    if (!fgets(line, (int)capacity, file)) return 0;
+    n = strlen(line);
+    if (!n || (line[n - 1] != '\n' && !feof(file))) return 0;
+    while (n && (line[n - 1] == '\n' || line[n - 1] == '\r'))
+        line[--n] = 0;
+    return 1;
+}
+static int is_lower_sha(const char *value) {
+    if (strlen(value) != 64) return 0;
+    for (unsigned int i = 0; i < 64; ++i)
+        if (!((value[i] >= '0' && value[i] <= '9') ||
+              (value[i] >= 'a' && value[i] <= 'f'))) return 0;
+    return 1;
+}
+static int preflight_module_lock(
+    wchar_t names[WOW_MAX_MODULES][WOW_MAX_NAME + 1],
+    unsigned int count) {
+    wchar_t lock_path[MAX_PATH], dll_list[MAX_PATH], dll_path[MAX_PATH];
+    char line[256], list_digest[65], module_digest[65];
+    FILE *file = NULL;
+    int ok = 0;
+    if (!count) return 1; /* An empty list cannot load arbitrary modules. */
+    if (swprintf_s(lock_path, MAX_PATH,
+                   L"%ls\\.wow335_updater\\epoch_test\\modules.lock", g_root) < 0 ||
+        swprintf_s(dll_list, MAX_PATH, L"%ls\\dlls.txt", g_root) < 0 ||
+        !local_sha256(dll_list, list_digest))
+        goto done;
+    if (_wfopen_s(&file, lock_path, L"rb") != 0 || !file)
+        goto done;
+    if (!lock_line(file, line, sizeof(line)) ||
+        strcmp(line, "WOW335-MODULES-V1") != 0 ||
+        !lock_line(file, line, sizeof(line)) ||
+        strcmp(line, list_digest) != 0)
+        goto done;
+    for (unsigned int i = 0; i < count; ++i) {
+        char ascii_name[WOW_MAX_NAME + 1], *separator;
+        size_t n = wcslen(names[i]);
+        if (n > WOW_MAX_NAME) goto done;
+        for (size_t k = 0; k < n; ++k) ascii_name[k] = (char)names[i][k];
+        ascii_name[n] = 0;
+        if (!lock_line(file, line, sizeof(line))) goto done;
+        separator = strchr(line, ' ');
+        if (!separator || strchr(separator + 1, ' ')) goto done;
+        *separator++ = 0;
+        if (strcmp(line, ascii_name) != 0 || !is_lower_sha(separator))
+            goto done;
+        if (swprintf_s(dll_path, MAX_PATH, L"%ls\\%ls",
+                       g_root, names[i]) < 0 ||
+            !local_sha256(dll_path, module_digest) ||
+            strcmp(module_digest, separator) != 0)
+            goto done;
+    }
+    if (fgetc(file) != EOF || ferror(file)) goto done;
+    ok = 1;
+done:
+    if (file) fclose(file);
+    if (!ok) log_event(NULL, L"MODULE_LOCK_SHA256_FAILED", ERROR_INVALID_DATA);
+    return ok;
+}
+
 /* Preflight the COMPLETE module list before loading its first DLL. A stale,
  * truncated, substituted or x64 DLL cannot leave a half-loaded runtime.
  * SHA256/provenance remains the managed updater's separate prerequisite;
@@ -230,9 +341,9 @@ static DWORD WINAPI load_modules(LPVOID unused) {
     if (ferror(f)) { log_event(NULL, L"READ_ERROR", 4); fclose(f); return 1; }
     fclose(f);
 
-    /* The managed updater must have verified exact SHA256 identities and dependencies
-       before starting the client. A DLL name alone is never GH provenance.
-       Preflight the entire set before loading ANY member. */
+    /* Verify the entire updater-managed lock BEFORE loading any member.
+       The lock binds exact bytes and list order to the selected game folder. */
+    if (!preflight_module_lock(names, count)) return 1;
     for (unsigned int i = 0; i < count; ++i) {
         if (!preflight_module(names[i])) return 1;
     }

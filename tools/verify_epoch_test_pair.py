@@ -139,7 +139,7 @@ def verify(original: bytes, patched: bytes, loader: bytes, branch: str,
     dependency_names=[item["dll"] for item in imports]
     if not dependency_names or any(
         not name.lower().startswith(("kernel32.dll","api-ms-win-","vcruntime",
-                                     "ucrtbase.dll","msvcrt.dll","user32.dll"))
+                                     "ucrtbase.dll","msvcrt.dll","user32.dll","advapi32.dll"))
         for name in dependency_names):
         raise ValueError("unexpected loader dependency: "+repr(dependency_names))
     if new.directory(9)[0]==0 or new.directory(5)[0]==0:

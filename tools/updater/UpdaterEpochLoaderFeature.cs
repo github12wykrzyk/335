@@ -112,6 +112,71 @@ namespace WoW335Updater
                 throw new InvalidOperationException("Epoch TEST: wymagane prawdziwe DLL PE32 x86.");
         }
 
+
+        /* The game loader reads only this updater-owned, content-bound list.
+         * No filename-only trust: every module must already match the installed
+         * test state's exact SHA256 before the lock can be written. */
+        private static string EpochModuleLockPath(string root)
+        {
+            return Path.Combine(root, ".wow335_updater", "epoch_test", "modules.lock");
+        }
+
+        private string EpochModuleLockContent(string root, Dictionary<string, object> state)
+        {
+            var listHash = GetString(state, "dlls_sha256");
+            EpochCheckFile(Path.Combine(root, "dlls.txt"), listHash);
+            var entries = AsArray(GetValue(state, "module_load_order"));
+            if (entries.Length > 1)
+                throw new InvalidOperationException("Epoch TEST: nieobsługiwany zestaw modułów.");
+            var sb = new StringBuilder("WOW335-MODULES-V1\n" + listHash.ToLowerInvariant() + "\n");
+            foreach (var entry in entries)
+            {
+                var name = Convert.ToString(entry);
+                var digest = GetString(state, "module_sha256");
+                if (name != EpochWorkAutoLoot || !UpdaterSafety.IsSha256Hex(digest))
+                    throw new InvalidOperationException("Epoch TEST: brak zaufanej tożsamości DLL.");
+                EpochCheckFile(Path.Combine(root, name), digest);
+                sb.Append(name).Append(' ').Append(digest.ToLowerInvariant()).Append('\n');
+            }
+            return sb.ToString();
+        }
+
+        private void EpochSyncModuleLock(string root)
+        {
+            var state = EpochInstalled(root);
+            if (state == null)
+                throw new InvalidOperationException("Epoch TEST: brak zweryfikowanego stanu.");
+            var path = EpochModuleLockPath(root);
+            EpochNotLink(path);
+            var existingDigest = GetString(state, "module_lock_sha256");
+            if (File.Exists(path))
+            {
+                if (!UpdaterSafety.IsSha256Hex(existingDigest))
+                    throw new InvalidOperationException("Epoch TEST: obcy plik modules.lock.");
+                EpochCheckFile(path, existingDigest);
+            }
+            else if (existingDigest.Length != 0)
+                throw new InvalidOperationException("Epoch TEST: zarządzany modules.lock zaginął.");
+
+            var bytes = Encoding.ASCII.GetBytes(EpochModuleLockContent(root, state));
+            var digest = Sha256(bytes);
+            var stage = path + ".stage-" + Guid.NewGuid().ToString("N");
+            EpochNotLink(stage);
+            try
+            {
+                File.WriteAllBytes(stage, bytes);
+                EpochStageFile(stage, path, digest);
+                state["module_lock_sha256"] = digest;
+                UpdaterSafety.WriteUtf8Atomic(EpochStatePath(root),
+                    json.Serialize(state), ".lockstage", ".lockprevious");
+                EpochCheckFile(path, digest);
+            }
+            finally
+            {
+                if (File.Exists(stage)) File.Delete(stage);
+            }
+        }
+
         private Dictionary<string, object> EpochInstalled(string root)
         {
             var path = EpochStatePath(root);
@@ -123,7 +188,9 @@ namespace WoW335Updater
                 !UpdaterSafety.IsGitCommitSha(GetString(state, "git_sha")) ||
                 !UpdaterSafety.IsSha256Hex(GetString(state, "epoch_sha256")) ||
                 !UpdaterSafety.IsSha256Hex(GetString(state, "loader_sha256")) ||
-                !UpdaterSafety.IsSha256Hex(GetString(state, "dlls_sha256")))
+                !UpdaterSafety.IsSha256Hex(GetString(state, "dlls_sha256")) ||
+                (GetString(state, "module_lock_sha256").Length != 0 &&
+                 !UpdaterSafety.IsSha256Hex(GetString(state, "module_lock_sha256"))))
                 throw new InvalidOperationException("Epoch TEST: uszkodzony manifest lokalnej instalacji.");
             var id = GetString(state, "backup_id");
             if (id.Length != 32 || id.Any(c => "0123456789abcdef".IndexOf(c) < 0))
@@ -408,6 +475,10 @@ namespace WoW335Updater
                 if (string.IsNullOrWhiteSpace(token.Text))
                     throw new InvalidOperationException("Wymagany token GitHub Contents: Read i Actions: Read.");
                 var manager = EpochManager(root);
+                var moduleLock = EpochModuleLockPath(root);
+                EpochNotLink(moduleLock);
+                if (previousEpochState == null && File.Exists(moduleLock))
+                    throw new InvalidOperationException("Epoch TEST: istnieje obcy modules.lock.");
                 var loaderPath = Path.Combine(root, EpochLoader);
                 var listPath = Path.Combine(root, "dlls.txt");
                 EpochNotLink(loaderPath); EpochNotLink(listPath);
@@ -540,6 +611,9 @@ namespace WoW335Updater
                     // Update ONLY the verified TEST pair. Preserve original backup,
                     // managed work AutoLoot and exact dlls.txt; restore prior pair on failure.
                     var previousEpochManifest = File.ReadAllBytes(EpochStatePath(root));
+                    var oldLockBytes = File.Exists(moduleLock) ? File.ReadAllBytes(moduleLock) : null;
+                    if (oldLockBytes != null && GetString(previousEpochState, "module_lock_sha256").Length != 0)
+                        EpochCheckFile(moduleLock, GetString(previousEpochState, "module_lock_sha256"));
                     var backupIdExisting = GetString(previousEpochState, "backup_id");
                     var backupOriginal = Path.Combine(manager, "backups", backupIdExisting, EpochDll);
                     EpochCheckFile(backupOriginal, EpochOriginalSha);
@@ -575,6 +649,7 @@ namespace WoW335Updater
                             json.Serialize(previousEpochState), ".stage", ".previous");
                         stage = "migracja AutoLoot po aktualizacji loadera";
                         EpochUpgradeAutoLoot(root, activeOrder);
+                        EpochSyncModuleLock(root);
                         statusText = "Aktualizacja Epoch TEST + AutoLoot: " + sha.Substring(0, 12) +
                             " • moduły: " + activeOrder.Length;
                         Log(statusText);
@@ -604,6 +679,20 @@ namespace WoW335Updater
                                 EpochStageFile(oldLoader, loaderPath, oldHash);
                             else
                                 EpochCheckFile(loaderPath, oldHash);
+                        }
+                        if (oldLockBytes == null)
+                        {
+                            if (File.Exists(moduleLock) &&
+                                GetString(EpochInstalled(root), "module_lock_sha256").Length != 0)
+                                EpochCheckFile(moduleLock,
+                                    GetString(EpochInstalled(root), "module_lock_sha256"));
+                            if (File.Exists(moduleLock)) File.Delete(moduleLock);
+                        }
+                        else
+                        {
+                            var oldLockPath = Path.Combine(transactional, "old-modules.lock");
+                            File.WriteAllBytes(oldLockPath, oldLockBytes);
+                            EpochStageFile(oldLockPath, moduleLock, Sha256(oldLockBytes));
                         }
                         var oldEpochStateFile = Path.Combine(transactional, "oldEpochState.json");
                         File.WriteAllBytes(oldEpochStateFile, previousEpochManifest);
@@ -667,6 +756,7 @@ namespace WoW335Updater
                         ".stage", ".previous");
                     stage = "migracja AutoLoot po instalacji loadera";
                     EpochUpgradeAutoLoot(root, activeOrder);
+                    EpochSyncModuleLock(root);
                     statusText = "Epoch TEST + AutoLoot: " + sha.Substring(0, 12) +
                         " • aktywne moduły: " + activeOrder.Length + " • wymagany test w grze.";
                     Log(statusText);
@@ -688,6 +778,10 @@ namespace WoW335Updater
                         if (!previousList && File.Exists(listPath) &&
                             string.Equals(Sha256File(listPath), dllSha, StringComparison.OrdinalIgnoreCase))
                             File.Delete(listPath);
+                        if (File.Exists(moduleLock) &&
+                            GetString(EpochInstalled(root), "module_lock_sha256").Length != 0)
+                            EpochCheckFile(moduleLock, GetString(EpochInstalled(root), "module_lock_sha256"));
+                        if (File.Exists(moduleLock)) File.Delete(moduleLock);
                         if (File.Exists(EpochStatePath(root))) File.Delete(EpochStatePath(root));
                     }
                     throw;
@@ -732,6 +826,9 @@ namespace WoW335Updater
                 EpochCheckFile(epoch, GetString(state, "epoch_sha256"));
                 EpochCheckFile(loader, GetString(state, "loader_sha256"));
                 EpochCheckFile(list, GetString(state, "dlls_sha256"));
+                var moduleLock = EpochModuleLockPath(root);
+                var lockDigest = GetString(state, "module_lock_sha256");
+                if (lockDigest.Length != 0) EpochCheckFile(moduleLock, lockDigest);
                 bool existed = GetBool(state, "dlls_existed");
                 if (existed) EpochCheckFile(Path.Combine(backup, "dlls.txt"),
                     GetString(state, "dlls_sha256"));
@@ -742,6 +839,7 @@ namespace WoW335Updater
                     EpochStageFile(Path.Combine(backup, "dlls.txt"), list,
                         GetString(state, "dlls_sha256"));
                 else File.Delete(list);
+                if (lockDigest.Length != 0) File.Delete(moduleLock);
                 File.Delete(EpochStatePath(root));
                 Log("Epoch TEST: przywrócono oryginalną DLL " + EpochOriginalSha);
                 status.Text = "Epoch TEST: rollback zakończony.";
@@ -788,6 +886,8 @@ namespace WoW335Updater
             EpochCheckFile(Path.Combine(root, EpochDll), GetString(state, "epoch_sha256"));
             EpochCheckFile(Path.Combine(root, EpochLoader), GetString(state, "loader_sha256"));
             EpochCheckFile(Path.Combine(root, "dlls.txt"), GetString(state, "dlls_sha256"));
+            if (GetString(state, "module_lock_sha256").Length != 0)
+                EpochCheckFile(EpochModuleLockPath(root), GetString(state, "module_lock_sha256"));
             var entries = AsArray(GetValue(state, "module_load_order"));
             if (entries.Length == 1)
             {
