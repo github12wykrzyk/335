@@ -8,7 +8,7 @@
     "platform": "Windows",
     "architecture": "x86"
   },
-  "release_id": "work-autoloot-12340",
+  "release_id": "work-autoloot-input-responsive-12340",
   "state": "test-candidate",
   "canonical_source_policy": "Each active runtime file must point to exact existing src/ lineage or documented external source.",
   "files": [
@@ -25,8 +25,8 @@
     {
       "component": "AutoLoot",
       "path": "runtime/AutoLoot335.dll",
-      "version": "1.0.0-test",
-      "sha256": "52bc5100d46c6edaa172ab5342d565454ea6629d7a0ec09bafc044f8f0f2b47e",
+      "version": "1.0.1-test",
+      "sha256": "6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3",
       "arch": "x86",
       "canonical_source": "src/AutoLoot/autoloot_win32_host.c",
       "depends_on": [],

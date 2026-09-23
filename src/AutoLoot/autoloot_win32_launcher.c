@@ -23,15 +23,26 @@ static BOOL CALLBACK find_window(HWND hwnd, LPARAM lparam) {
     if (tid && pid == s->pid) { s->tid=tid; s->hwnd=hwnd; return FALSE; }
     return TRUE;
 }
+/* Sent messages are processed even by many filtered nested input pumps;
+ * unlike periodic PostMessage, this never accumulates an unbounded backlog.
+ * A hung game thread times out; no WoW internals are called by this process.
+ */
+static int send_control(HWND hwnd, UINT msg, WPARAM command, UINT timeout_ms) {
+    DWORD_PTR ignored = 0;
+    return SendMessageTimeoutW(hwnd, msg, command, 0,
+        SMTO_ABORTIFHUNG | SMTO_BLOCK, timeout_ms, &ignored) != 0;
+}
 int wmain(int argc, wchar_t **argv) {
     wchar_t path[MAX_PATH], gameDir[MAX_PATH], command[2*MAX_PATH];
     STARTUPINFOW si;
     PROCESS_INFORMATION pi = {0};
     HMODULE host = NULL;
-    HHOOK hook = NULL;
+    HHOOK hook_msg = NULL;
+    HHOOK hook_dispatch = NULL;
     Search s = {0};
     message_id_fn getmsg;
     hook_fn proc;
+    hook_fn dispatch_proc;
     UINT msg = 0u;
     DWORD start, exitCode=STILL_ACTIVE;
     int result=1;
@@ -61,7 +72,9 @@ int wmain(int argc, wchar_t **argv) {
     if (!getmsg) getmsg=(message_id_fn)GetProcAddress(host, "_AL335_MessageId@0");
     proc=(hook_fn)GetProcAddress(host, "AL335_HookProc");
     if (!proc) proc=(hook_fn)GetProcAddress(host, "_AL335_HookProc@12");
-    if (!getmsg || !proc || !(msg=getmsg())) {
+    dispatch_proc=(hook_fn)GetProcAddress(host, "AL335_CallWndProc");
+    if (!dispatch_proc) dispatch_proc=(hook_fn)GetProcAddress(host, "_AL335_CallWndProc@12");
+    if (!getmsg || !proc || !dispatch_proc || !(msg=getmsg())) {
         fputs("Native hook exports unavailable.\n", stderr);goto cleanup;
     }
     memset(&si,0,sizeof(si));si.cb=sizeof(si);
@@ -78,30 +91,30 @@ int wmain(int argc, wchar_t **argv) {
         if (!s.tid) Sleep(100);
     }
     if (!s.tid) { fputs("WoW game window thread not found; no hook installed.\n",stderr); goto cleanup; }
-    hook=SetWindowsHookExW(WH_GETMESSAGE,proc,host,s.tid);
-    if (!hook) {fprintf(stderr,"Game-thread hook rejected: %lu\n",GetLastError());goto cleanup;}
-    /* Thread messages carry hwnd=NULL and can disappear from filtered
-     * GetMessage/PeekMessage loops during held mouse/keyboard input.
-     * Address the actual WoW window so nested/capture message pumps receive
-     * the same control messages as normal game-window traffic. */
-    if (!PostMessageW(s.hwnd,msg,1u,0u)) {
-        fprintf(stderr,"Unable to start window-targeted native AutoLoot: %lu\n",GetLastError());
+    hook_msg=SetWindowsHookExW(WH_GETMESSAGE,proc,host,s.tid);
+    if (!hook_msg) {fprintf(stderr,"Game-thread message hook rejected: %lu\n",GetLastError());goto cleanup;}
+    hook_dispatch=SetWindowsHookExW(WH_CALLWNDPROC,dispatch_proc,host,s.tid);
+    if (!hook_dispatch) {fprintf(stderr,"Game-thread sent-message hook rejected: %lu\n",GetLastError());goto cleanup;}
+    if (!send_control(s.hwnd,msg,1u,2000u)) {
+        fprintf(stderr,"Unable to initialize game-thread AutoLoot: %lu\n",GetLastError());
         goto cleanup;
     }
-    puts("Native AutoLoot requested on selected game thread; exact-client checks may keep it OFF.");
+    puts("Native AutoLoot requested on game thread; exact-client checks may keep it OFF.");
     while (GetExitCodeProcess(pi.hProcess,&exitCode) && exitCode==STILL_ACTIVE) {
-        if (!IsWindow(s.hwnd) || !PostMessageW(s.hwnd,msg,2u,0u)) {
-            fprintf(stderr,"WoW window lost; stopping AutoLoot launcher.\n");
+        if (!IsWindow(s.hwnd)) {
+            fputs("WoW window lost; stopping AutoLoot launcher.\n",stderr);
             goto cleanup;
         }
-        Sleep(100);
+        /* Timeout is nonfatal: retry when the window thread resumes. */
+        send_control(s.hwnd,msg,2u,200u);
+        Sleep(40);
     }
     result=0;
 cleanup:
-    if (hook) {
-        if (IsWindow(s.hwnd)) PostMessageW(s.hwnd,msg,0u,0u);
-        Sleep(150);
-        UnhookWindowsHookEx(hook);
+    if (hook_msg || hook_dispatch) {
+        if (IsWindow(s.hwnd)) send_control(s.hwnd,msg,0u,200u);
+        if (hook_dispatch) UnhookWindowsHookEx(hook_dispatch);
+        if (hook_msg) UnhookWindowsHookEx(hook_msg);
     }
     if (pi.hThread) CloseHandle(pi.hThread);
     if (pi.hProcess) CloseHandle(pi.hProcess);

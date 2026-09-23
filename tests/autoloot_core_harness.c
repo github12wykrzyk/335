@@ -78,11 +78,18 @@ int main(void) {
     assert(m.interacted == 2); /* no verified range: fail closed */
     al_init(&e, cb, 25.0f);
     m.ui = AL_UI_CLOSED;
+    m.corpses[0].can_loot = 0; /* isolate failed-open retry for GUID 200 */
     al_enable(&e, 1);
     al_tick(&e, 30000);
     assert(e.state == AL_WAIT_OPEN);
     al_tick(&e, 30601);
     assert(e.state == AL_IDLE && e.deferred == 1); /* open timeout */
+    al_tick(&e, 30799);
+    assert(m.interacted == 3); /* nearest GUID is still on failure cooldown */
+    al_tick(&e, 30801);
+    assert(m.interacted == 3); /* scan has a separate 40 ms throttle */
+    al_tick(&e, 30840);
+    assert(m.interacted == 4 && m.last.lo == 200); /* retry on first eligible scan */
     puts("AUTOLOOT_CORE: PASS (portable logic only; no 12340 adapter)");
     return 0;
 }

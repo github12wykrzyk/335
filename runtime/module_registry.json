@@ -32,6 +32,10 @@
           "mode": "exclusive"
         },
         {
+          "id": "win32:WH_CALLWNDPROC",
+          "mode": "exclusive"
+        },
+        {
           "id": "logical:loot-ui",
           "mode": "exclusive"
         },

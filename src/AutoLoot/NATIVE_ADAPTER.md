@@ -47,3 +47,16 @@ Verify auto-loot with and without held WASD / left and right mouse buttons,
 manual loot windows, full bags, combat and the no-corpse case. The first
 native package must be treated as unaccepted until the player reports
 this exact-SHA test result.
+
+## Input-responsive AutoLoot (TEST/work 1.0.1-test)
+The 80 ms WH_GETMESSAGE-only host could be delayed by filtered message loops
+while keys/mouse are held. This TEST host also uses WH_CALLWNDPROC and receives
+bounded SendMessageTimeout pulses on the exact WoW game window thread. One
+reentrancy/time guard limits native engine ticks to 40 ms, while the
+GUID-specific failure cooldown is shortened from 1200 to 200 ms (the loot
+opening timeout remains 600 ms). The launcher never calls client functions
+from an external worker thread. Portable C, 12340 ABI and PE32 x86 build
+checks are required; actual held-input behavior remains UNVERIFIED in game.
+Only the TEST/work exact package may be installed until player acceptance.
+Provenance: selected sources from feature/autoloot-12340 SHA
+038d260c922abc591123fe4a1dc5eb504336a7ff, not a user game test.

@@ -237,47 +237,58 @@ static int bind_host(void) {
     host.can_act = can_act;
     return al12340_bind(&g_engine, &host, 5.0f);
 }
-/* Hook installation belongs to the explicitly authorized x86 launcher.
- * The target thread must be WoW's own window/game thread; WH_GETMESSAGE
- * naturally runs inside that thread, without patching Wow.exe opcodes. */
+/* Both hook callbacks execute on the SAME verified WoW window thread.
+ * A cross-thread SendMessageTimeout pulse can be dispatched by the recipient
+ * even when a filtered PeekMessage loop ignores posted timer messages.
+ * WH_GETMESSAGE remains a fallback for ordinary input/message traffic.
+ * Never call client internals from the external launcher or a timer thread.
+ */
 __declspec(dllexport) UINT WINAPI AL335_MessageId(void) {
     return RegisterWindowMessageA(AL_WINMSG_NAME);
 }
+static void handle_control(UINT message, WPARAM command) {
+    if (!g_message) g_message=RegisterWindowMessageA(AL_WINMSG_NAME);
+    if (message != g_message) return;
+    if (!g_init_attempted) {
+        g_init_attempted=1u;
+        g_game_thread=GetCurrentThreadId();
+        if (!bind_host()) {
+            g_game_thread=0u;
+            return;
+        }
+    }
+    if (!g_engine.bound || !is_game_thread()) return;
+    if (command==1u) al12340_enable(&g_engine, 1);
+    else if (command==0u) al12340_enable(&g_engine, 0);
+}
+static void drive_engine(void) {
+    DWORD now;
+    if (!g_engine.bound || !is_game_thread() || !g_engine.engine.enabled ||
+        g_driving) return;
+    now=GetTickCount();
+    if ((uint32_t)(now - g_last_drive_ms) < 40u) return;
+    g_last_drive_ms=now;
+    g_driving=1u;
+    al12340_tick(&g_engine, (uint32_t)now);
+    g_driving=0u;
+}
 __declspec(dllexport) LRESULT CALLBACK AL335_HookProc(int code, WPARAM wp, LPARAM lp) {
     MSG *msg;
-    DWORD now;
     if (code < 0 || !lp) return CallNextHookEx(NULL, code, wp, lp);
     msg=(MSG *)lp;
-    if (!g_message) g_message=RegisterWindowMessageA(AL_WINMSG_NAME);
-    /* The external launcher now posts to the actual game HWND.  Some
-     * nested message pumps (mouse capture, held keys) may still filter out
-     * non-input messages.  Once initialized, opportunistically drive the
-     * state machine from ANY retrieved game-thread message, not only our
-     * registered timer command. This does not execute on a worker thread or
-     * install a new opcode hook, and does not interfere with game input. */
-    if (msg->message == g_message) {
-        if (!g_init_attempted) {
-            g_init_attempted=1u;
-            g_game_thread=GetCurrentThreadId();
-            if (!bind_host()) {
-                g_game_thread=0;
-                return CallNextHookEx(NULL, code, wp, lp);
-            }
-        }
-        if (!g_engine.bound || !is_game_thread())
-            return CallNextHookEx(NULL, code, wp, lp);
-        if (msg->wParam==1u) al12340_enable(&g_engine, 1);
-        else if (msg->wParam==0u) al12340_enable(&g_engine, 0);
+    if (msg->message != WM_QUIT) {
+        handle_control(msg->message, msg->wParam);
+        drive_engine();
     }
-    if (g_engine.bound && is_game_thread() && g_engine.engine.enabled &&
-        !g_driving && msg->message != WM_QUIT) {
-        now=GetTickCount();
-        if ((uint32_t)(now - g_last_drive_ms) >= 80u) {
-            g_last_drive_ms=now;
-            g_driving=1u;
-            al12340_tick(&g_engine, (uint32_t)now);
-            g_driving=0u;
-        }
+    return CallNextHookEx(NULL, code, wp, lp);
+}
+__declspec(dllexport) LRESULT CALLBACK AL335_CallWndProc(int code, WPARAM wp, LPARAM lp) {
+    const CWPSTRUCT *msg;
+    if (code < 0 || !lp) return CallNextHookEx(NULL, code, wp, lp);
+    msg=(const CWPSTRUCT *)lp;
+    if (msg->message != WM_QUIT) {
+        handle_control(msg->message, msg->wParam);
+        drive_engine();
     }
     return CallNextHookEx(NULL, code, wp, lp);
 }

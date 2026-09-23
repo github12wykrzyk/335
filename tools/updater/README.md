@@ -138,3 +138,9 @@ Przycisk **Natywny AutoLoot TEST** pozostaje wyłącznie dla starszego,
 odizolowanego eksperymentu: odmawia uruchomienia, jeśli katalog gry ma
 już zarejestrowany AutoLoot335.dll, żeby nie uruchamiać dwóch hooków.
 STABLE/main nie zmienia się bez oddzielnej akceptacji.
+
+## 0.3.9-335 — AutoLoot sent-message responsiveness in TEST/work
+The embedded PE32 x86 launcher uses bounded SendMessageTimeout pulses plus
+both game-thread message hooks. The registered AutoLoot335.dll is installed
+only as part of the verified, exact-SHA TEST package and remains uninstallable
+via the updater-managed rollback. STABLE/main remains unchanged.
