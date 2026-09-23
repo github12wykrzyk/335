@@ -6,6 +6,7 @@ on:
     paths:
       - 'EpochConnection.dll'
       - 'src/Loader12340/**'
+      - 'runtime/epoch_loader_interop.json'
       - 'tools/epoch_connection_loader_patch.py'
       - 'tools/verify_epoch_test_pair.py'
       - 'tests/test_epoch_connection_loader_patch.py'

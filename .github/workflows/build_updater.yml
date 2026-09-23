@@ -12,6 +12,8 @@ on:
       - 'tests/test_updater_autoloot_delivery.py'
       - 'tests/test_updater_epoch_loader.py'
       - 'tools/verify_epoch_test_pair.py'
+      - 'src/Loader12340/**'
+      - 'runtime/epoch_loader_interop.json'
       - '.github/workflows/loader_12340_preview.yml'
       - 'src/AutoLoot/diagnostics/**'
       - 'runtime/client_exe_target.json'
