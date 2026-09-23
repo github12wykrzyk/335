@@ -72,4 +72,37 @@ for name, address, nbytes in [
         for ins in md.disasm(buf[address-start:address-start+nbytes], address):
             print("INS",hex(ins.address),ins.mnemonic,ins.op_str)
         break
+
+# Find repeated client-owned CDataStore outbound-destruction call fan-ins.
+# This only nominates send ABI candidates; no function is called or hooked.
+from collections import Counter
+vtable=(0x009E0E24).to_bytes(4,"little")
+fanin=Counter()
+occurrences=[]
+for start,buf,name in secs:
+    p=0
+    while True:
+        p=buf.find(vtable,p)
+        if p<0:break
+        at=start+p
+        prior=buf[max(0,p-100):p]
+        directs=[]
+        for off in range(len(prior)-4):
+            if prior[off]!=0xE8:continue
+            rel=struct.unpack_from("<i",prior,off+1)[0]
+            callat=start+max(0,p-100)+off
+            dest=callat+5+rel
+            if base+0x1000<=dest<base+len(exe)+0x100000:
+                directs.append((callat,dest))
+        if directs:
+            last=directs[-1]
+            fanin[last[1]]+=1
+            occurrences.append((at,last[0],last[1]))
+        p+=4
+print("DATASTORE_VTABLE_REFERENCES",len(occurrences))
+print("DATASTORE_PREDESTRUCTOR_LAST_CALLS",[(hex(k),v) for k,v in fanin.most_common(25)])
+for addr,callat,dest in occurrences[:45]:
+    print("DATASTORE_EXAMPLE",hex(addr),hex(callat),hex(dest))
+for dest,count in fanin.most_common(6):
+    if count>=3:dump(dest,0,260)
 print("PACKET_AUDIT: STATIC_ONLY; sender ABI not certified by opcode or xrefs alone")
