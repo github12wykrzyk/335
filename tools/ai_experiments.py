@@ -68,7 +68,7 @@ def validate(ledger):
                 not any(isinstance(test, dict) and
                         test.get("sha") == entry.get("verified_commit") and
                         test.get("result") == "pass" for test in
-                        (tests if isinstance(tests, list) else []))):
+                        (tests if isinstance(tests, list) else [])))):
             errors.append(eid + ": acceptance requires same-SHA verified package and passing game test")
     return errors
 
