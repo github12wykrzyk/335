@@ -348,6 +348,14 @@ namespace WoW335Updater
                 {
                     var runs = AsArray(GetValue(AsDictionary(json.DeserializeObject(await GetStringAsync(client, ApiRoot + "/actions/runs?branch=" + branch + "&per_page=50"))), "workflow_runs"));
                     var chosen = UpdaterSafety.RequireLatestSuccessfulRun(runs, UpdaterWorkflowName, branch);
+                    var branchData = AsDictionary(json.DeserializeObject(
+                        await GetStringAsync(client, ApiRoot + "/branches/" + branch)));
+                    var liveHead = GetString(AsDictionary(GetValue(branchData, "commit")), "sha");
+                    if (liveHead.Length != 40 ||
+                        !string.Equals(GetString(chosen, "head_sha"), liveHead, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException(
+                            "Najnowszy udany updater nie pochodzi z aktualnego HEAD " + branch +
+                            ". Zaczekaj na build dla bieżącego commita; nie używam starszej paczki.");
 
                     var runId = GetLong(chosen, "id");
                     var artifacts = AsArray(GetValue(AsDictionary(json.DeserializeObject(await GetStringAsync(client, ApiRoot + "/actions/runs/" + runId + "/artifacts?per_page=100"))), "artifacts"));
@@ -356,7 +364,8 @@ namespace WoW335Updater
                     {
                         var row = AsDictionary(item);
                         var name = GetString(row, "name");
-                        if (!GetBool(row, "expired") && name.StartsWith(UpdaterArtifactPrefix, StringComparison.OrdinalIgnoreCase))
+                        if (!GetBool(row, "expired") &&
+                            string.Equals(name, UpdaterArtifactPrefix + liveHead, StringComparison.OrdinalIgnoreCase))
                         {
                             artifact = row;
                             break;
@@ -377,6 +386,12 @@ namespace WoW335Updater
                         var updaterBytes = ReadEntry(updaterEntry);
                         var bootstrapBytes = ReadEntry(bootstrapEntry);
                         var meta = AsDictionary(json.DeserializeObject(Encoding.UTF8.GetString(ReadEntry(metaEntry))));
+                        if (!string.Equals(GetString(meta, "git_sha"), liveHead,
+                                StringComparison.OrdinalIgnoreCase) ||
+                            !string.Equals(GetString(meta, "channel"), branch,
+                                StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidOperationException(
+                                "Pobrany updater nie odpowiada bieżącemu SHA i kanałowi " + branch + ".");
                         var protocol = GetLong(meta, "self_update_protocol");
                         if (protocol != 1) throw new InvalidOperationException("Nieobsługiwany self_update_protocol: " + protocol);
                         var updaterSha = GetString(meta, "sha256");

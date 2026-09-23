@@ -18,3 +18,45 @@ TEST/STABLE game artifacts must belong to current branch HEAD, not a stale succe
 
 ## 0.3.3-335 — selected client pin
 TEST installation and VERIFY / REPAIR reject a game package if its Wow.exe SHA256 is not 2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d. Updater builds independently of the uploaded EXE; a successful updater build is not a playable game package when there are no registered game DLLs.
+
+## 0.3.4-335 — niezależny test AutoLoot i wysyłka zdarzeń z gry
+
+Na kanale `work` updater Windows x86
+zawiera pliki dodatku `WoW335AutoLootDiag` jako zasoby kompilowane z
+dokładnego SHA updatera. Przycisk **Instaluj test AutoLoot** instaluje go
+do wybranego katalogu `Interface/AddOns`, po sprawdzeniu dokładnej
+binarki `Wow.exe`. Jeśli folder dodatku już istnieje, użytkownik
+potwierdza podmianę, a updater przenosi CAŁY poprzedni folder do
+`.wow335_updater/autoloot_diag_backups/` i zachowuje możliwość
+odzyskania; zgodna istniejąca kopia zostaje jedynie oznaczona jako
+zarządzana. Nie modyfikuje innych addonów, gry, DLL, `dlls.txt` ani
+nie udaje paczki `FINAL_PACKAGE: PASS`.
+
+W grze: `/al335 on`, otwórz zwłoki **ręcznie**, użyj `/reload`
+lub wyloguj się i zamknij grę. Przycisk **Wyślij log AutoLoot** lokalizuje
+`WTF/Account/*/SavedVariables/WoW335AutoLootDiag.lua` (alternatywnie
+`WoW335AutoLootDiagLog.lua`), wyodrębnia tylko ograniczoną liczbę
+dozwolonych linii zdarzeń i pokazuje **podgląd przed wysłaniem**
+jako GitHub Issue do `github12wykrzyk/335`. Nie przesyła surowych
+SavedVariables, nazw katalogów kont ani innych plików. Osobny token
+Issues: Read and write pozostaje zapisany przez DPAPI; użytkownik
+sam potwierdza wysyłkę. Ogólne **Wyślij raport** dołącza też te
+ograniczone linie zdarzeń (jeśli istnieją) do dotychczasowej diagnostyki.
+
+To dodatek diagnostyczny **manual-loot-window only**, nie natywny AutoLoot.
+Updater na kanale TEST (work) nadal odrzuca game-package, dopóki
+nie ma aktywnej zweryfikowanej DLL oraz `FINAL_PACKAGE: PASS`.
+Nie pobieraj oddzielnych paczek dodatku. Na istniejącym updaterze
+v0.3.3-335 wybierz **Aktualizuj updater** z kanału TEST (work), aby
+pobrać z GitHub Actions dokładnie zweryfikowany updater najnowszego
+SHA gałęzi `work`. Po restarcie v0.3.4-335 użyj przycisków
+**Instaluj test AutoLoot** i **Wyślij log AutoLoot**. Nie jest
+wymagana ręczna instalacja ZIP. Instalacja dodatku i raportowanie
+są niezależne od braku natywnej paczki gry; zwykła aktualizacja
+gry i VERIFY/REPAIR nadal wymagają FINAL_PACKAGE: PASS.
+
+Zabezpieczenia self-update v0.3.4: najnowszy wynik workflow musi być
+udany i odpowiadać aktualnemu HEAD wybranego kanału; wymagane są
+zgodne SHA artefaktu i `updater_build.json` (git_sha, channel,
+SHA256 updatera i bootstrapa). Brak gotowego workflow nie uruchamia
+instalacji starszej wersji updatera.

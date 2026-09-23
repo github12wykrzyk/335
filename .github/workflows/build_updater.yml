@@ -5,8 +5,10 @@ on:
     branches:
       - work
       - main
+      - 'feature/autoloot-12340'
     paths:
       - 'tools/updater/**'
+      - 'src/AutoLoot/diagnostics/**'
       - 'runtime/client_exe_target.json'
       - 'Wow.exe'
       - '.github/workflows/build_updater.yml'
@@ -42,6 +44,12 @@ jobs:
           if match is None or match.group(1)!=target["sha256"]: raise SystemExit("Updater pinned EXE differs from manifest")
           print("UPDATER_PIN: PASS")
           '@ | python -
+      - name: Bind addon resources to exact updater commit
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          [IO.File]::WriteAllText('dist/autoloot_diag_sha.txt', '${{ github.sha }}', [Text.Encoding]::ASCII)
+
       - name: Compile WinForms updater and bootstrap x86
         shell: pwsh
         run: |
@@ -78,6 +86,9 @@ jobs:
             /reference:"$ref\System.IO.Compression.FileSystem.dll" `
             /reference:"$ref\System.Security.dll" `
             /reference:"$ref\System.Web.Extensions.dll" `
+            /resource:src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.lua,AutoLootDiag.WoW335AutoLootDiag.lua `
+            /resource:src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.toc,AutoLootDiag.WoW335AutoLootDiag.toc `
+            /resource:dist\autoloot_diag_sha.txt,AutoLootDiag.SourceCommit.txt `
             tools\updater\WoW335Updater.cs `
             tools\updater\Updater335Dashboard.cs `
             tools\updater\Updater335GitHubMonitor.cs `
@@ -86,7 +97,8 @@ jobs:
             tools\updater\UpdaterProcessGuard.cs `
             tools\updater\UpdaterRealmlistFeature.cs `
             tools\updater\UpdaterMaintenanceFeature.cs `
-            tools\updater\UpdaterIssueReportFeature.cs
+            tools\updater\UpdaterIssueReportFeature.cs `
+            tools\updater\UpdaterAutoLootDiagFeature.cs
           if ($LASTEXITCODE -ne 0) { throw "updater csc failed with exit code $LASTEXITCODE" }
 
       - name: Verify updater PE32 x86 and hashes
@@ -150,6 +162,12 @@ jobs:
           Path('dist/updater_build.json').write_text(json.dumps(meta, indent=2) + '\n', encoding='utf-8')
           print(json.dumps(meta, indent=2))
           '@ | python -
+
+      - name: Verify exact-SHA addon resources, SavedVariables parser and installation fail-closed
+        shell: pwsh
+        run: |
+          & "$env:windir\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File tools\updater\tests\AutoLootDiagSmoke.ps1 -UpdaterExe dist\WoW335Updater.exe -ExpectedSha '${{ github.sha }}'
+          if ($LASTEXITCODE -ne 0) { throw "AutoLoot diagnostic updater smoke test failed" }
 
       - name: Copy updater README
         shell: pwsh
