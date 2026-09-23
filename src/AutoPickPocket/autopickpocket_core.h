@@ -28,7 +28,8 @@ typedef enum {
     PP_RESULT_SUCCESS = 1, /* positively confirmed Pick Pocket result; NOT loot completion */
     PP_RESULT_EMPTY = 2,   /* positively confirmed no pockets / already pickpocketed */
     PP_RESULT_RETRYABLE = 3, /* temporary range, LOS, stealth, or cast failure */
-    PP_RESULT_PERMANENT = 4 /* positively confirmed ineligible for this session */
+    PP_RESULT_PERMANENT = 4, /* positively confirmed ineligible for this session */
+    PP_RESULT_MONEY_SUCCESS = 5 /* wallet delta plus same-attempt loot event: indicative */
 } PpResult;
 typedef enum {
     PP_EVENT_CAST = 1,
@@ -46,7 +47,9 @@ typedef enum {
     PP_EVENT_ENABLED = 13,
     PP_EVENT_DISABLED = 14,
     PP_EVENT_RESET = 15,
-    PP_EVENT_PROBE_REJECTED = 16
+    PP_EVENT_PROBE_REJECTED = 16,
+    PP_EVENT_MONEY_SUCCESS = 17,
+    PP_EVENT_PACKET_FALLBACK = 18
 } PpEvent;
 typedef struct {
     void *ctx;
