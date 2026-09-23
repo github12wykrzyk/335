@@ -25,7 +25,10 @@
     "updater": "tools/updater",
     "experiment_ledger": "runtime/ai_experiments.json",
     "module_registry": "runtime/module_registry.json",
-    "module_registry_verifier": "tools/verify_module_registry.py"
+    "module_registry_verifier": "tools/verify_module_registry.py",
+    "active_builder": "tools/build_active.py",
+    "exact_runtime_verifier": "tools/verify_exact_runtime_artifacts.py",
+    "exact_stable_packager": "tools/package_exact_current.py"
   },
   "branches": {
     "stable": "main",

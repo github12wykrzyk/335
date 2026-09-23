@@ -256,7 +256,7 @@ namespace WoW335Updater
 
                 byte[] innerBytes;
                 string expectedPackageSha;
-                ExtractInnerPackage(outerBytes, lastRemote.InnerZipName, out innerBytes, out expectedPackageSha);
+                ExtractInnerPackage(outerBytes, lastRemote, out innerBytes, out expectedPackageSha);
                 var gotPackageSha = Sha256(innerBytes);
                 if (!string.Equals(gotPackageSha, expectedPackageSha, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("SHA256 wewnętrznej paczki nie zgadza się z candidate_metadata.json.");
@@ -319,6 +319,14 @@ namespace WoW335Updater
                     throw;
                 }
 
+                var branchRoot = AsDictionary(json.DeserializeObject(
+                    await GetStringAsync(client, ApiRoot + "/branches/" + branch)));
+                var liveHead = GetString(AsDictionary(GetValue(branchRoot, "commit")), "sha");
+                if (string.IsNullOrWhiteSpace(liveHead) ||
+                    !string.Equals(GetString(chosen, "head_sha"), liveHead, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Najnowszy udany workflow nie dotyczy aktualnego HEAD " + branch +
+                        ". Updater nie instaluje paczek ze starszego commita.");
+
                 var runId = GetLong(chosen, "id");
                 var artifactsRoot = AsDictionary(json.DeserializeObject(await GetStringAsync(client, ApiRoot + "/actions/runs/" + runId + "/artifacts?per_page=100")));
                 var artifacts = AsArray(GetValue(artifactsRoot, "artifacts"));
@@ -328,7 +336,7 @@ namespace WoW335Updater
                     var row = AsDictionary(item);
                     var name = GetString(row, "name");
                     var expired = GetBool(row, "expired");
-                    if (!expired && name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    if (!expired && string.Equals(name, prefix + liveHead, StringComparison.OrdinalIgnoreCase))
                     {
                         artifact = row;
                         break;
@@ -385,15 +393,15 @@ namespace WoW335Updater
             }
         }
 
-        private void ExtractInnerPackage(byte[] outerBytes, string innerZipName, out byte[] innerBytes, out string expectedSha)
+        private void ExtractInnerPackage(byte[] outerBytes, RemotePackageInfo remote, out byte[] innerBytes, out string expectedSha)
         {
             innerBytes = null;
             expectedSha = string.Empty;
             using (var ms = new MemoryStream(outerBytes, false))
             using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, false))
             {
-                var inner = zip.Entries.FirstOrDefault(e => string.Equals(Path.GetFileName(e.FullName), innerZipName, StringComparison.OrdinalIgnoreCase));
-                if (inner == null) throw new InvalidOperationException("Artefakt nie zawiera " + innerZipName + ".");
+                var inner = zip.Entries.FirstOrDefault(e => string.Equals(Path.GetFileName(e.FullName), remote.InnerZipName, StringComparison.OrdinalIgnoreCase));
+                if (inner == null) throw new InvalidOperationException("Artefakt nie zawiera " + remote.InnerZipName + ".");
                 innerBytes = ReadEntry(inner);
 
                 var metaEntry = zip.Entries.FirstOrDefault(e => string.Equals(Path.GetFileName(e.FullName), "candidate_metadata.json", StringComparison.OrdinalIgnoreCase));
@@ -401,6 +409,12 @@ namespace WoW335Updater
                     throw new InvalidOperationException("Artefakt nie zawiera candidate_metadata.json; instalacja została zablokowana.");
                 var metaText = Encoding.UTF8.GetString(ReadEntry(metaEntry));
                 var meta = AsDictionary(json.DeserializeObject(metaText));
+                var expectedBranch = remote.Channel == "stable" ? "main" : "work";
+                if (GetString(meta, "git_sha") != remote.HeadSha ||
+                    GetString(meta, "branch") != expectedBranch ||
+                    GetLong(meta, "wow_build") != 12340 ||
+                    GetString(meta, "arch") != "x86")
+                    throw new InvalidOperationException("Paczka nie pochodzi z dokładnego commita/brancha 335 build 12340.");
                 expectedSha = GetString(meta, "package_sha256");
                 if (!UpdaterSafety.IsSha256Hex(expectedSha))
                     throw new InvalidOperationException("candidate_metadata.json nie zawiera poprawnego package_sha256; instalacja została zablokowana.");
@@ -445,6 +459,18 @@ namespace WoW335Updater
                     var name = Convert.ToString(value);
                     if (!string.IsNullOrWhiteSpace(name)) oldManaged.Add(name);
                 }
+            }
+
+            // Never silently overwrite an unrelated DLL or dlls.txt in the chosen game directory.
+            // The explicitly selected game EXE is the managed installer target and is backed up.
+            foreach (var file in files)
+            {
+                var dest = SafeDestination(root, file.Name);
+                if (File.Exists(dest) && !oldManaged.Contains(file.Name) &&
+                    !file.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(Sha256File(dest), file.Sha256, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Kolizja z niezarządzanym plikiem: " + file.Name +
+                        ". Instalacja zablokowana, plik klienta nie został nadpisany.");
             }
 
             var newManaged = new HashSet<string>(files.Select(f => f.Name), StringComparer.OrdinalIgnoreCase);

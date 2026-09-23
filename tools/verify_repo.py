@@ -1,6 +1,6 @@
 from __future__ import annotations
 from manifest_common import ROOT,load_json,repo_path
-REQUIRED=["AGENTS.md","AI_START_HERE.md","AI_INDEX.json","CURRENT.json","runtime/current.json","PROJECT_INSTRUCTIONS.md","runtime/ai_experiments.json","runtime/module_registry.json","tools/verify_module_registry.py","tools/verify_repo.py","tools/verify_current.py","tools/package_candidate.py","tools/verify_candidate_package.py",".github/workflows/verify.yml",".github/workflows/build_updater.yml",".github/workflows/build_work_candidate.yml",".github/workflows/pre_promote_stable.yml"]
+REQUIRED=["AGENTS.md","AI_START_HERE.md","AI_INDEX.json","CURRENT.json","runtime/current.json","PROJECT_INSTRUCTIONS.md","runtime/ai_experiments.json","runtime/module_registry.json","tools/verify_module_registry.py","tools/verify_repo.py","tools/verify_current.py","tools/build_active.py","tools/verify_exact_runtime_artifacts.py","tools/package_exact_current.py","tools/package_candidate.py","tools/verify_candidate_package.py",".github/workflows/verify.yml",".github/workflows/build_updater.yml",".github/workflows/build_work_candidate.yml",".github/workflows/pre_promote_stable.yml"]
 TARGET={"product":"World of Warcraft","version":"3.3.5a","build":12340,"platform":"Windows","architecture":"x86"}
 def main():
     err=[]

@@ -11,7 +11,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: python tools/verify_repo.py
       - run: python tools/verify_current.py
-      - run: python tools/package_candidate.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json
+      - name: Require accepted stable state and exact recoverable DLLs
+        run: python tools/verify_exact_runtime_artifacts.py
+      - run: python tools/package_exact_current.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json
       - run: python tools/verify_candidate_package.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
       - uses: actions/upload-artifact@v4
         with:

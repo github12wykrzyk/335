@@ -24,6 +24,8 @@ jobs:
       - run: python tools/verify_current.py
       - run: python tools/verify_module_registry.py
       - run: python -m unittest discover -s tests -v
+      - name: Verify recoverable exact stable DLLs
+        run: python tools/verify_exact_runtime_artifacts.py
       - name: Exact-byte runtime gate
-        run: python tools/package_candidate.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json
+        run: python tools/package_exact_current.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json
       - run: python tools/verify_candidate_package.py --package dist/WoW335_STABLE_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
