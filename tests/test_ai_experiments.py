@@ -2,7 +2,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from ai_experiments import route, validate
+from ai_experiments import route, validate, scope_errors
 
 def example():
     return {"schema_version":1,"repository":"github12wykrzyk/335",
@@ -36,6 +36,24 @@ class ExperimentTests(unittest.TestCase):
         ledger=example()
         ledger["experiments"].append(ledger["experiments"][0])
         self.assertTrue(any("duplicate" in s for s in validate(ledger)))
+
+    def test_feature_candidate_requires_owned_runtime_dll(self):
+        ledger = example()
+        ledger["experiments"][0]["branch"] = "feature/movement"
+        runtime = {"files": [{"component": "AutoLoot", "kind": "dll"}]}
+        self.assertIn("INCOMPLETE_EXPERIMENT", str(scope_errors(ledger, runtime, "feature/movement")))
+        runtime["files"].append({"component": "Movement", "kind": "dll"})
+        self.assertEqual(scope_errors(ledger, runtime, "feature/movement"), [])
+
+    def test_feature_candidate_requires_registered_owner(self):
+        self.assertTrue(scope_errors({"experiments": []}, {"files": []}, "feature/new"))
+        self.assertEqual(scope_errors({"experiments": []}, {"files": []}, "work"), [])
+
+    def test_blocked_experiment_cannot_ship_candidate(self):
+        ledger = example()
+        ledger["experiments"][0]["branch"] = "feature/movement"
+        ledger["experiments"][0]["status"] = "blocked"
+        self.assertTrue(scope_errors(ledger, {"files": [{"component": "Movement", "kind": "dll"}]}, "feature/movement"))
 
 if __name__ == "__main__":
     unittest.main()
