@@ -135,12 +135,13 @@ static int test_attempt_correlation(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;uint32_t old_id;
     defaults(&m);h=host(&m);CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
     pp12340_tick(&a,0);old_id=m.last_attempt;CHECK(old_id!=0u);
-    pp12340_tick(&a,1500);pp12340_tick(&a,4500);
+    /* Timeout immediately scans the next unblocked NPC in the same pulse. */
+    pp12340_tick(&a,1500);
     CHECK(m.casts==2 && m.last_attempt!=old_id);
     m.result=PP_RESULT_SUCCESS;m.expected_result_attempt=old_id;
-    pp12340_tick(&a,4501);CHECK(a.engine.successes==0 && a.engine.active_valid);
+    pp12340_tick(&a,1501);CHECK(a.engine.successes==0 && a.engine.active_valid);
     m.expected_result_attempt=m.last_attempt;
-    pp12340_tick(&a,4502);CHECK(a.engine.successes==1);
+    pp12340_tick(&a,1502);CHECK(a.engine.successes==1);
     return 0;
 }
 static int test_silent_commands(void){
