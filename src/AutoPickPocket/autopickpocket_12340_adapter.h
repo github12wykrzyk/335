@@ -14,6 +14,7 @@ extern "C" {
 #define PP12340_SPELL_ID 921u
 #define PP12340_UNIT_TYPE 3u
 #define PP12340_REACH 4.0f
+#define PP12340_DETECT_REACH 9.0f /* read-ahead only: not spell range */
 /* Signed and guarded native callbacks run exclusively in the WoW game thread.
  * This interface does not install hooks or access the AutoLoot UI.
  * No callback may infer cast success from mere submission.

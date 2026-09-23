@@ -97,14 +97,14 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
             a->host.position(a->host.ctx,obj,pos)==1) {
             float dx=pos[0]-me[0],dy=pos[1]-me[1],dz=pos[2]-me[2];
             float d2=dx*dx+dy*dy+dz*dz;
-            if (d2>=0.0f && d2<=PP12340_REACH*PP12340_REACH &&
+            if (d2>=0.0f && d2<=PP12340_DETECT_REACH*PP12340_DETECT_REACH &&
                 d2<FLT_MAX &&
                 a->host.eligible_npc(a->host.ctx,obj,guid)==1) {
                 size_t far=0u,n;
                 if (count<cap) {
                     out[count].guid=guid;
                     out[count].distance_sq=d2;
-                    out[count].eligible=1u;
+                    out[count].eligible=(d2<=PP12340_REACH*PP12340_REACH) ? 1u : 2u;
                     ++count;
                 } else {
                     for(n=1u;n<count;++n)
@@ -112,7 +112,7 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
                     if(d2<out[far].distance_sq) {
                         out[far].guid=guid;
                         out[far].distance_sq=d2;
-                        out[far].eligible=1u;
+                        out[far].eligible=(d2<=PP12340_REACH*PP12340_REACH) ? 1u : 2u;
                     }
                 }
             }

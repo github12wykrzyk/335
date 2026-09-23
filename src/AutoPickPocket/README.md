@@ -63,3 +63,34 @@ items reached inventory. The user-selected target is never changed.
 No movement, position spoofing, forced NPC target selection or AutoLoot changes.
 Confirm actual cast cadence, target release, false positives and CPU stability
 in-game before considering any wider deployment.
+
+## Moving fast: continuous look-ahead scan (1.0.5 TEST)
+
+The previous 1.0.4 implementation **stopped discovering new NPCs while a
+Pick Pocket result was pending** and could keep a nearby-GUID snapshot for
+1200 ms. This specifically misses NPCs passed during Sprint/Stealth.
+The updated core discovers NPCs even while the prior result is pending or
+while the server reports a spell cooldown. A bounded object-manager scan
+refreshes every 60 ms of in-game pulse time (approximately every other
+40 ms external loader pulse, subject to frame scheduling and scan cost).
+NPCs are detected up to 9 yards in advance, but only marked ready at a
+verified geometric range of at most 4 yards; the native GUID cast bridge
+**rechecks** player and target positions, type, health and spell usability
+immediately before submission. Prefetched NPCs are never cast on outside
+validated range. A scan snapshot expires within 160 ms, and all active
+histories remain GUID-specific. There is at most one native cast submitted
+per pulse and one outstanding spell result; the bounded unanswered-result
+window is 900 ms rather than 1500 ms, with nonce-correlation and per-GUID
+backoff unchanged. A delayed server result must never count as success of
+another GUID. Do not speed up by assuming cast submission means success.
+
+This removes local scanning/queue stalls; it cannot remove server GCD,
+spell cooldown, packet latency or the requirement to be physically within
+Pick Pocket range while Sprinting. No movement spoofing, target
+selection/clearing, mouseover emulation, additional launcher, AutoLoot
+modifications, or in-game chat messages. The first in-game test should
+compare `scan_ms`, `pulse_gap_ms`, `cast_gap_ms`,
+`result_wait_ms`, `next_wait_ms`, and `not_castable` events during
+Stealth+Sprint. In particular a repeating ~3 s gap with no casts while
+`not_castable` is emitted indicates spell/server readiness rather than
+unvisited NPCs; the updater report contains the structured evidence.

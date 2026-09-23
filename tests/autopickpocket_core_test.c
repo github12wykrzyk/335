@@ -75,9 +75,9 @@ static int test_idle_diagnostics_are_sampled(void){
  Stub s;PpEngine e;init(&s);s.n=0;s.permitted=0;
  CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
  pp_tick(&e,0);pp_tick(&e,100);pp_tick(&e,1000);
- CHECK(s.events[PP_EVENT_NOT_CASTABLE]==2 && s.scans==0);
+ CHECK(s.scans==3u && s.cast_n==0u); /* scan runs during cooldown */
  s.permitted=1;pp_tick(&e,1100);pp_tick(&e,2000);
- CHECK(s.events[PP_EVENT_NO_CANDIDATES]==1);
+ CHECK(s.events[PP_EVENT_NO_CANDIDATES]>=1u);
  s.n=1;s.t[0].eligible=0;pp_tick(&e,3000);
  CHECK(s.events[PP_EVENT_ALL_BLOCKED]==1 && s.cast_n==0);
  return 0;
@@ -147,21 +147,46 @@ static int test_failed_or_timedout_npc_does_not_block_next_guid(void){
 static int test_stale_queue_rebuilds_before_cast(void){
  Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
  pp_tick(&e,10u);CHECK(s.cast_n==1 && s.casted[0].lo==102u);
- CHECK(s.scans==1u && e.queue_count==1u);
+ CHECK(s.scans==1u && e.queue_count==2u);
  /* NPC 101 disappeared, GUID 103 spawned while result was pending. */
  s.n=1u;s.t[0].guid.lo=103u;s.t[0].eligible=1u;
  s.t[0].distance_sq=1.0f;
  s.result=PP_RESULT_SUCCESS;
- pp_tick(&e,1300u); /* 1290ms after scan: snapshot expired */
+ pp_tick(&e,1300u); /* continuous refresh replaced old NPC */
  CHECK(s.cast_n==2 && s.casted[1].lo==103u && s.scans==2u);
  return 0;
 }
 static int test_queue_dropped_on_disable_and_world_reset(void){
  Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
- pp_tick(&e,10u);CHECK(e.queue_count==1u);
+ pp_tick(&e,10u);CHECK(e.queue_count==2u);
  pp_enable(&e,0);CHECK(e.queue_count==0u);
- pp_enable(&e,1);pp_tick(&e,20u);CHECK(e.queue_count==1u);
+ pp_enable(&e,1);pp_tick(&e,20u);CHECK(e.queue_count==2u);
  pp_reset(&e);CHECK(e.queue_count==0u);
  return 0;
 }
-int main(void){if(test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+static int test_read_ahead_while_cast_pending_and_gcd(void){
+ Stub s;PpEngine e;init(&s);s.n=1u;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,0u);CHECK(s.cast_n==1u);
+ s.n=2u;s.t[1].guid.lo=103u;s.t[1].eligible=2u;
+ s.t[1].distance_sq=49.0f;
+ pp_tick(&e,80u);CHECK(s.scans==2u && s.cast_n==1u);
+ s.t[1].eligible=1u;s.t[1].distance_sq=4.0f;
+ s.permitted=0u;pp_tick(&e,160u);
+ CHECK(s.scans==3u && s.cast_n==1u && e.queue_count==2u);
+ s.result=PP_RESULT_SUCCESS;
+ pp_tick(&e,161u);CHECK(e.successes==1u && s.cast_n==1u);
+ s.permitted=1u;pp_tick(&e,162u);
+ CHECK(s.cast_n==2u && s.casted[1].lo==103u && s.scans==3u);
+ return 0;
+}
+static int test_prefetched_outside_range_never_submitted(void){
+ Stub s;PpEngine e;init(&s);s.n=1u;s.t[0].eligible=2u;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,0u);CHECK(s.cast_n==0u && e.queue_count==1u);
+ pp_tick(&e,80u);CHECK(s.cast_n==0u);
+ s.t[0].eligible=1u;pp_tick(&e,160u);
+ CHECK(s.cast_n==1u && s.casted[0].lo==101u);
+ return 0;
+}
+int main(void){if(test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

@@ -108,7 +108,7 @@ int pp_probe_once(PpEngine *e,PpGuid selected,uint32_t now) {
     count=e->api.scan(e->api.ctx,targets,PP_SCAN_CAP);
     if (count>PP_SCAN_CAP) count=PP_SCAN_CAP;
     for(i=0u;i<count;++i) {
-        if (same(targets[i].guid,selected) && targets[i].eligible &&
+        if (same(targets[i].guid,selected) && targets[i].eligible==1u &&
             targets[i].distance_sq>=0.0f &&
             targets[i].distance_sq<FLT_MAX) {found=1;break;}
     }
@@ -135,13 +135,31 @@ int pp_probe_once(PpEngine *e,PpGuid selected,uint32_t now) {
     emit(e,PP_EVENT_CAST,selected);
     return 1;
 }
+/* Discovery runs independently of an outstanding spell result or cooldown.
+ * A moving player must not be offered a 1.2-second-old GUID snapshot.
+ * The native bridge validates the actual GUID/range again before casting. */
+static void refresh_snapshot(PpEngine *e,uint32_t now) {
+    size_t count;
+    if (e->scan_started &&
+        (uint32_t)(now-e->last_scan_ms)<PP_SCAN_INTERVAL_MS) {
+        if ((uint32_t)(now-e->queue_built_ms)>=PP_QUEUE_TTL_MS)
+            e->queue_count=0u;
+        return;
+    }
+    e->scan_started=1u;
+    e->last_scan_ms=now;
+    e->queue_built_ms=now;
+    count=e->api.scan(e->api.ctx,e->queue,PP_SCAN_CAP);
+    e->queue_count=count>PP_SCAN_CAP ? PP_SCAN_CAP : count;
+}
 void pp_tick(PpEngine *engine, uint32_t now) {
     PpTarget best = {0}; /* MSVC /W4: initialized even on the no-candidate path. */
     size_t i;
-    int found=0;
+    int found=0,has_prefetch=0;
     PpHistory *h;
     PpResult outcome;
     if (!engine || !engine->enabled) return;
+    refresh_snapshot(engine,now); /* also while waiting for result */
     if (engine->active_valid) {
         outcome=engine->api.result(engine->api.ctx,engine->active,engine->active_attempt_id);
         switch(outcome) {
@@ -186,41 +204,24 @@ void pp_tick(PpEngine *engine, uint32_t now) {
     }
 scan_next:
     if (engine->probe_mode) return;
-    /* One bounded snapshot covers several nearby GUIDs. A candidate is
-     * consumed once; a queued GUID never bypasses pp_cast's fresh range and
-     * type checks. Refill after expiry/exhaustion, no repeated full walk
-     * following each successful Pick Pocket. */
-    if (engine->queue_count &&
-        (uint32_t)(now-engine->queue_built_ms)>=PP_QUEUE_TTL_MS)
-        engine->queue_count=0u;
+    if (!engine->queue_count) {
+        idle_event(engine,PP_EVENT_NO_CANDIDATES,now);
+        return;
+    }
     if (engine->api.can_cast(engine->api.ctx)!=1) {
         idle_event(engine,PP_EVENT_NOT_CASTABLE,now);
         return;
-    }
-    if (!engine->queue_count) {
-        if (engine->scan_started &&
-            (uint32_t)(now-engine->last_scan_ms)<PP_SCAN_INTERVAL_MS)
-            return;
-        engine->scan_started=1u;
-        engine->last_scan_ms=now;
-        engine->queue_built_ms=now;
-        engine->queue_count=engine->api.scan(engine->api.ctx,
-                                            engine->queue,PP_SCAN_CAP);
-        if (engine->queue_count>PP_SCAN_CAP)
-            engine->queue_count=PP_SCAN_CAP;
-        if (!engine->queue_count) {
-            idle_event(engine,PP_EVENT_NO_CANDIDATES,now);
-            return;
-        }
     }
     /* Select the nearest *unblocked* queued GUID and consume it. Keep
      * blocked entries only until this snapshot expires; never retry a
      * rejected GUID in a tight loop. */
     for(i=0u;i<engine->queue_count;++i) {
         PpTarget target=engine->queue[i];
-        if (!target.eligible || !nonzero(target.guid) ||
+        if (!nonzero(target.guid) ||
             !(target.distance_sq>=0.0f && target.distance_sq<FLT_MAX))
             continue;
+        if (target.eligible==2u) {has_prefetch=1;continue;}
+        if (target.eligible!=1u)continue;
         h=entry(engine,target.guid,0);
         if (h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
                   !deadline_reached(now,h->blocked_until_ms)))
@@ -231,18 +232,12 @@ scan_next:
         }
     }
     if (!found) {
-        engine->queue_count=0u;
-        idle_event(engine,PP_EVENT_ALL_BLOCKED,now);
+        idle_event(engine,has_prefetch ? PP_EVENT_NO_CANDIDATES :
+                   PP_EVENT_ALL_BLOCKED,now);
         return;
     }
-    /* Only one native cast submission in a loader pulse. */
-    for(i=0u;i<engine->queue_count;++i) {
-        if(same(engine->queue[i].guid,best.guid)) {
-            engine->queue[i]=engine->queue[engine->queue_count-1u];
-            --engine->queue_count;
-            break;
-        }
-    }
+    /* Snapshot is refreshed on a short cadence. History excludes this GUID
+     * after a submission; do not remove the snapshot's other candidates. */
     h=entry(engine,best.guid,1);
     ++h->attempts;
     if (++engine->next_attempt_id==0u) ++engine->next_attempt_id;

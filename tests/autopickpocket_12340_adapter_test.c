@@ -18,7 +18,7 @@ typedef struct {
     unsigned player_pos_calls,move_player_after_scan;
     unsigned eligible_calls;
     uint32_t clock_value;
-    float npc_b_distance;
+    float npc_a_distance,npc_b_distance;
     PpGuid last_guid;
 } Mock;
 static int digest(void *p,const char *expected){
@@ -64,7 +64,7 @@ static int pos(void *p,uintptr_t obj,float out[3]){
         ++m->player_pos_calls;
         out[0]=m->move_player_after_scan && m->player_pos_calls>1u ? 12.0f : 0.0f;
     }
-    else if(obj==NPC_A)out[0]=3;
+    else if(obj==NPC_A)out[0]=m->npc_a_distance;
     else if(obj==NPC_B)out[0]=m->npc_b_distance;
     else return 0;
     return 1;
@@ -99,7 +99,7 @@ static Pp12340Host host(Mock *m) {
 static void defaults(Mock *m) {
     memset(m,0,sizeof(*m));m->thread=1u;m->hash_ok=1u;m->abi_ok=1u;
     m->usable=1u;m->eligible_a=1u;m->eligible_b=1u;m->world=0x01010101u;
-    m->npc_b_distance=2.0f;
+    m->npc_a_distance=3.0f;m->npc_b_distance=2.0f;
 }
 static int test_bind_guard(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
@@ -211,8 +211,33 @@ static int test_borderline_range_is_skipped_before_native_cast(void){
  CHECK(m.casts==1u && m.last_guid.lo==111u);
  return 0;
 }
+static int test_detect_ahead_does_not_cast_beyond_native_range(void){
+ Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+ m.npc_a_distance=15.0f;m.npc_b_distance=7.0f;
+ CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ pp12340_tick(&a,0u);
+ CHECK(m.casts==0u && a.engine.queue_count==1u);
+ CHECK(a.engine.queue[0].guid.lo==222u && a.engine.queue[0].eligible==2u);
+ /* Walking or sprinting closer changes eligibility at the next live scan. */
+ m.npc_b_distance=3.0f;pp12340_tick(&a,80u);
+ CHECK(m.casts==1u && m.last_guid.lo==222u);
+ return 0;
+}
+static int test_discover_new_npc_while_previous_result_pending(void){
+ Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+ m.npc_a_distance=15.0f;
+ CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ pp12340_tick(&a,0u);
+ CHECK(m.casts==1u && m.last_guid.lo==222u);
+ m.npc_a_distance=3.0f;
+ pp12340_tick(&a,80u);
+ CHECK(m.casts==1u && a.engine.queue_count==2u);
+ m.result=PP_RESULT_SUCCESS;pp12340_tick(&a,81u);
+ CHECK(m.casts==2u && m.last_guid.lo==111u);
+ return 0;
+}
 int main(void){
-    if(test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
+    if(test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
        test_attempt_correlation()||test_silent_commands()||
        test_moving_player_rechecked_before_cast()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");
