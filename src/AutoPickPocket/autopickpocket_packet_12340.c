@@ -5,7 +5,7 @@ static void le32(uint8_t *p,uint32_t v){
 }
 size_t pp335_build_cast_packet(uint8_t *dst,size_t cap,
                              uint8_t cast_count,uint32_t guid_lo,uint32_t guid_hi){
-    uint32_t parts[2],j;size_t n=14u;uint8_t mask=0u;unsigned i;
+    uint32_t parts[2],j;size_t n=15u;uint8_t mask=0u;unsigned i;
     if(!dst || cap<15u || (guid_lo|guid_hi)==0u)return 0u;
     parts[0]=guid_lo;parts[1]=guid_hi;
     for(i=0u;i<8u;++i)
