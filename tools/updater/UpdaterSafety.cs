@@ -53,6 +53,16 @@ namespace WoW335Updater
             return chosen;
         }
 
+        // Git commit SHA-1 IDs use 40 lowercase hex characters, unlike file SHA256 digests.
+        public static bool IsGitCommitSha(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length != 40) return false;
+            foreach (char c in value)
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+                    return false;
+            return true;
+        }
+
         public static bool IsSha256Hex(string value)
         {
             if (string.IsNullOrWhiteSpace(value) || value.Length != 64) return false;
