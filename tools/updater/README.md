@@ -146,3 +146,31 @@ and a later compatible uploader workflow. The user must not hand-edit dlls.txt.
 When installed, the normal **Uruchom grę** button verifies every managed DLL
 and the exact Wow.exe hash before launching. If any bytes differ, it refuses to
 start under this TEST state. This experiment never modifies Wow.exe or main/work.
+
+## 0.3.9-335-epoch-test — managed work AutoLoot interop
+
+The initial Epoch TEST installer incorrectly rejected the already managed,
+non-empty dlls.txt from work. This isolated fix accepts exactly the registered
+work/149a2523f8068e407a8fc74e058b4f24c81d21e5 AutoLoot335.dll only:
+it checks the existing managed updater state, listed order and both on-disk
+SHA256 values against that pinned work runtime; any unknown or modified file
+blocks installation without changing the client. It preserves the existing
+AutoLoot335.dll and dlls.txt exactly; the original EpochConnection.dll is
+backed up and the exact-CI test pair replaces only the network DLL and
+creates the additional loader DLL. Rollback restores the original EpochConnection
+and pre-install dlls.txt, leaving the work AutoLoot bytes untouched.
+
+Loading the work AutoLoot DLL is not sufficient to activate its native game
+logic. The loader now additionally installs its documented WH_GETMESSAGE hook
+on the actual game window thread and posts its enable / tick messages,
+mirroring the verified work launcher ABI. This combined execution path is
+an **untested compatibility experiment**: CI PE/hashes and compilation do not
+prove that game networking and AutoLoot coexist. Wow335Loader.log records
+LOADED/HOOK_ENABLED/HOOK_FAILED/HOOK_STOPPED. No other module receives such
+implicit hook activation. Normal work package updates and work rollback are
+blocked while the isolated Epoch TEST install is active to protect both sets
+of managed files. Use the separate Epoch rollback first.
+
+Unknown or future work DLL versions are not implicitly trusted: the interop
+pin needs a new verified compatibility set with dependency/resource review.
+The current feature runtime manifest still does not claim a full game package.

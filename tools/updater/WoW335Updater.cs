@@ -243,6 +243,8 @@ namespace WoW335Updater
             try
             {
                 ValidateInputs();
+                if (EpochInstalled(Path.GetFullPath(gameDir.Text.Trim())) != null)
+                    throw new InvalidOperationException("Najpierw Przywróć Epoch DLL — zwykła aktualizacja work nie może nadpisać aktywnego eksperymentu.");
                 if (IsGameRunning(gameDir.Text.Trim()))
                     throw new InvalidOperationException("Gra działa z tego katalogu. Zamknij WoW przed aktualizacją.");
 
@@ -643,6 +645,8 @@ namespace WoW335Updater
                 if (busy) return;
                 var root = gameDir.Text.Trim();
                 if (!Directory.Exists(root)) throw new InvalidOperationException("Wybierz katalog gry.");
+                if (EpochInstalled(Path.GetFullPath(root)) != null)
+                    throw new InvalidOperationException("Najpierw Przywróć Epoch DLL — rollback work nie może naruszyć testowego loadera.");
                 if (IsGameRunning(root)) throw new InvalidOperationException("Zamknij WoW przed rollbackiem.");
                 var choice = rollbackChoice.SelectedItem as BackupChoice;
                 string dir = choice == null ? null : choice.Path;

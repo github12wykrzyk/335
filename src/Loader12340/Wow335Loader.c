@@ -1,5 +1,5 @@
 /* WoW 3.3.5a 12340 x86 STARTUP LOADER: isolated TEST experiment only.
- * This DLL is imported by an *isolated candidate* executable at process startup.
+ * This DLL is imported by a copy-only patched EpochConnection.dll at process startup.
  * It never writes to another process or changes game memory.
  */
 #define WIN32_LEAN_AND_MEAN
@@ -36,9 +36,73 @@ static void log_event(const wchar_t *name, const wchar_t *event, DWORD code) {
     fclose(f);
 }
 
+/* AutoLoot335.dll from work/149a2523 is not self-activating: the game-thread
+ * WH_GETMESSAGE hook and enable message are part of its documented ABI.
+ * The caller/updater verifies exact bytes and manages the single DLL list.
+ * This hook is installed only for the matching explicitly listed module. */
+typedef UINT (WINAPI *al_message_fn)(void);
+typedef LRESULT (CALLBACK *al_hook_fn)(int, WPARAM, LPARAM);
+typedef struct { DWORD pid; DWORD tid; HWND hwnd; } GameWindow;
+static BOOL CALLBACK find_game_window(HWND hwnd, LPARAM value) {
+    GameWindow *game=(GameWindow *)value;
+    DWORD pid=0, tid;
+    if (!IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER)) return TRUE;
+    tid=GetWindowThreadProcessId(hwnd,&pid);
+    if (tid && pid==game->pid) {
+        game->tid=tid;
+        game->hwnd=hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+static DWORD activate_autoloot(HMODULE host) {
+    GameWindow game={0};
+    HHOOK hook=NULL;
+    al_message_fn getmsg=(al_message_fn)GetProcAddress(host,"AL335_MessageId");
+    al_hook_fn callback=(al_hook_fn)GetProcAddress(host,"AL335_HookProc");
+    UINT message;
+    DWORD start=GetTickCount();
+    if (!getmsg) getmsg=(al_message_fn)GetProcAddress(host,"_AL335_MessageId@0");
+    if (!callback) callback=(al_hook_fn)GetProcAddress(host,"_AL335_HookProc@12");
+    if (!getmsg || !callback || !(message=getmsg())) {
+        log_event(L"AutoLoot335.dll",L"HOOK_EXPORT_MISSING",GetLastError());
+        return 1;
+    }
+    game.pid=GetCurrentProcessId();
+    while ((DWORD)(GetTickCount()-start)<120000u && !game.tid) {
+        EnumWindows(find_game_window,(LPARAM)&game);
+        if (!game.tid) Sleep(100);
+    }
+    if (!game.tid) {
+        log_event(L"AutoLoot335.dll",L"GAME_WINDOW_NOT_FOUND",0); return 1;
+    }
+    hook=SetWindowsHookExW(WH_GETMESSAGE,callback,host,game.tid);
+    if (!hook) {
+        log_event(L"AutoLoot335.dll",L"HOOK_FAILED",GetLastError()); return 1;
+    }
+    if (!PostMessageW(game.hwnd,message,1u,0u)) {
+        log_event(L"AutoLoot335.dll",L"ENABLE_FAILED",GetLastError());
+        UnhookWindowsHookEx(hook);
+        return 1;
+    }
+    log_event(L"AutoLoot335.dll",L"HOOK_ENABLED",0);
+    while (IsWindow(game.hwnd)) {
+        DWORD owner=0;
+        GetWindowThreadProcessId(game.hwnd,&owner);
+        if (owner!=game.pid || !PostMessageW(game.hwnd,message,2u,0u)) break;
+        Sleep(100);
+    }
+    if (IsWindow(game.hwnd)) PostMessageW(game.hwnd,message,0u,0u);
+    Sleep(150);
+    UnhookWindowsHookEx(hook);
+    log_event(L"AutoLoot335.dll",L"HOOK_STOPPED",0);
+    return 0;
+}
+
 static DWORD WINAPI load_modules(LPVOID unused) {
     wchar_t path[MAX_PATH], line[256], names[WOW_MAX_MODULES][WOW_MAX_NAME + 1];
     unsigned int count = 0;
+    HMODULE autoloot=NULL;
     FILE *f;
     (void)unused;
     if (swprintf_s(path, MAX_PATH, L"%ls\\dlls.txt", g_root) < 0) return 1;
@@ -95,7 +159,9 @@ static DWORD WINAPI load_modules(LPVOID unused) {
             log_event(names[i], L"LOAD_FAILED", GetLastError()); return 1;
         }
         log_event(names[i], L"LOADED", 0);
+        if (_wcsicmp(names[i], L"AutoLoot335.dll") == 0) autoloot=loaded;
     }
+    if (autoloot) return activate_autoloot(autoloot);
     return 0;
 }
 

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "kind": "ISOLATED_EPOCH_WORK_AUTOLOOT_INTEROP_UNVERIFIED_IN_GAME",
+  "target_build": 12340,
+  "arch": "x86",
+  "branch": "feature/loader-12340",
+  "source": {
+    "branch": "work",
+    "commit": "149a2523f8068e407a8fc74e058b4f24c81d21e5",
+    "run_id": 35855470746,
+    "module": "AutoLoot335.dll",
+    "sha256": "52bc5100d46c6edaa172ab5342d565454ea6629d7a0ec09bafc044f8f0f2b47e",
+    "owner": "AutoLoot",
+    "resources": [
+      "wow12340:object-manager observe",
+      "wow12340:0x00731260-unit-interact exclusive",
+      "wow12340:0x00819210-framescript-execute exclusive",
+      "win32:WH_GETMESSAGE exclusive",
+      "logical:loot-ui exclusive",
+      "logical:interaction exclusive"
+    ]
+  },
+  "activation": "AL335_HookProc game-window-thread WH_GETMESSAGE + AL335_MessageId on enable",
+  "load_order": [
+    "AutoLoot335.dll"
+  ],
+  "existing_work_files_policy": "Keep managed AutoLoot335.dll and dlls.txt bytes unchanged; install separate EpochConnection.dll TEST pair only with exact pinned work state and SHA256; revert Epoch alone",
+  "compatibility": "not_verified_in_game",
+  "final_package": "NOT_RUN"
+}
