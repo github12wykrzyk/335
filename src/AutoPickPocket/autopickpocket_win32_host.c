@@ -186,7 +186,8 @@ static uint64_t world_token(void *ctx) {
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     wchar_t path[MAX_PATH],dir[MAX_PATH],*slash;
-    char line[160];
+    char line[224];
+    const char *reason="attempt";
     DWORD ignored;
     HANDLE file;
     LARGE_INTEGER length;
@@ -209,10 +210,28 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
         SetFilePointer(file,0,NULL,FILE_BEGIN);
         SetEndOfFile(file); /* bounded log; no personal data or chat */
     }else SetFilePointer(file,0,NULL,FILE_END);
+    switch(kind) {
+    case PP_EVENT_CAST: reason="cast_submitted";break;
+    case PP_EVENT_SUCCESS: reason="verified_result";break;
+    case PP_EVENT_EMPTY: reason="no_pockets";break;
+    case PP_EVENT_RETRY: reason="temporary_failure";break;
+    case PP_EVENT_TIMEOUT: reason="result_timeout";break;
+    case PP_EVENT_INELIGIBLE: reason="permanent_failure";break;
+    case PP_EVENT_GAVE_UP: reason="retry_budget_exhausted";break;
+    case PP_EVENT_NOT_CASTABLE: reason="not_castable";break;
+    case PP_EVENT_NO_CANDIDATES: reason="no_candidates";break;
+    case PP_EVENT_ALL_BLOCKED: reason="all_candidates_blocked";break;
+    case PP_EVENT_WORLD_PAUSED: reason="world_unavailable";break;
+    case PP_EVENT_WORLD_RESET: reason="world_changed";break;
+    case PP_EVENT_ENABLED: reason="enabled";break;
+    case PP_EVENT_DISABLED: reason="disabled";break;
+    case PP_EVENT_RESET: reason="manual_reset";break;
+    default:break;
+    }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu}\n",
-       (unsigned long)GetTickCount(),(unsigned)kind,(unsigned long)attempt_id,
-       (unsigned long)guid.lo,(unsigned long)guid.hi);
+       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu}\n",
+       (unsigned long)GetTickCount(),(unsigned)kind,reason,
+       (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);
     CloseHandle(file);
 }

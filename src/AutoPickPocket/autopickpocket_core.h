@@ -36,7 +36,15 @@ typedef enum {
     PP_EVENT_RETRY = 4,
     PP_EVENT_TIMEOUT = 5,
     PP_EVENT_INELIGIBLE = 6,
-    PP_EVENT_GAVE_UP = 7 /* bounded retry budget exhausted for GUID */
+    PP_EVENT_GAVE_UP = 7, /* bounded retry budget exhausted for GUID */
+    PP_EVENT_NOT_CASTABLE = 8,
+    PP_EVENT_NO_CANDIDATES = 9,
+    PP_EVENT_ALL_BLOCKED = 10,
+    PP_EVENT_WORLD_PAUSED = 11,
+    PP_EVENT_WORLD_RESET = 12,
+    PP_EVENT_ENABLED = 13,
+    PP_EVENT_DISABLED = 14,
+    PP_EVENT_RESET = 15
 } PpEvent;
 typedef struct {
     void *ctx;
@@ -66,6 +74,8 @@ typedef struct {
     uint32_t active_attempt_id, next_attempt_id;
     uint32_t started_ms, last_scan_ms;
     unsigned history_next, active_valid, enabled, scan_started;
+    uint32_t last_diagnostic_ms;
+    unsigned diagnostic_started;
     uint32_t casts, successes, empty, retries, timeouts;
 } PpEngine;
 /* Starts DISABLED; no game interactions without an explicitly enabled adapter. */

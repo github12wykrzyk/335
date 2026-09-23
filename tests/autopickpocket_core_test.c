@@ -5,7 +5,7 @@
 typedef struct {
     PpTarget t[4]; size_t n;
     PpResult result;
-    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[8], cast_ok;
+    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[16], cast_ok;
     uint32_t last_attempt, expected_result_attempt;
 } Stub;
 static size_t scan(void *p,PpTarget *out,size_t cap) {
@@ -69,6 +69,17 @@ static int test_late_result_cannot_complete_new_attempt(void){
  CHECK(s.last_attempt!=second && s.last_attempt!=first);
  return 0;
 }
+static int test_idle_diagnostics_are_sampled(void){
+ Stub s;PpEngine e;init(&s);s.n=0;s.permitted=0;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,0);pp_tick(&e,100);pp_tick(&e,1000);
+ CHECK(s.events[PP_EVENT_NOT_CASTABLE]==2 && s.scans==0);
+ s.permitted=1;pp_tick(&e,1100);pp_tick(&e,2000);
+ CHECK(s.events[PP_EVENT_NO_CANDIDATES]==1);
+ s.n=1;s.t[0].eligible=0;pp_tick(&e,3000);
+ CHECK(s.events[PP_EVENT_ALL_BLOCKED]==1 && s.cast_n==0);
+ return 0;
+}
 static int test_filter_and_wrap(void){
  Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
  s.t[1].eligible=0;s.t[0].distance_sq=-1.0f;
@@ -77,4 +88,4 @@ static int test_filter_and_wrap(void){
  s.permitted=1;pp_tick(&e,0xc5u);CHECK(s.cast_n==1 && s.casted[0].lo==101);
  return 0;
 }
-int main(void){if(test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+int main(void){if(test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

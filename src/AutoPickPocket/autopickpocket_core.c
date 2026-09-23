@@ -11,6 +11,15 @@ static int deadline_reached(uint32_t now, uint32_t deadline) {
 static void emit(PpEngine *e, PpEvent ev, PpGuid guid) {
     if (e->api.event) e->api.event(e->api.ctx, ev, guid, e->active_attempt_id);
 }
+/* Sampling keeps idle diagnostics bounded and avoids per-scan disk writes. */
+static void idle_event(PpEngine *e,PpEvent reason,uint32_t now) {
+    PpGuid none={0u,0u};
+    if (!e->diagnostic_started || (uint32_t)(now-e->last_diagnostic_ms)>=1000u) {
+        e->diagnostic_started=1u;
+        e->last_diagnostic_ms=now;
+        emit(e,reason,none);
+    }
+}
 static PpHistory *entry(PpEngine *e, PpGuid guid, int create) {
     unsigned i;
     PpHistory *slot;
@@ -67,6 +76,7 @@ void pp_reset(PpEngine *engine) {
     if (!engine) return;
     memset(engine->history,0,sizeof(engine->history));
     engine->history_next=0u;
+    engine->diagnostic_started=0u;
     engine->active_valid=0u;
     engine->active_attempt_id=0u; /* keep next_attempt_id across world resets */
     engine->scan_started=0u;
@@ -117,9 +127,16 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         return;
     engine->scan_started=1u;
     engine->last_scan_ms=now;
-    if (engine->api.can_cast(engine->api.ctx)!=1) return;
+    if (engine->api.can_cast(engine->api.ctx)!=1) {
+        idle_event(engine,PP_EVENT_NOT_CASTABLE,now);
+        return;
+    }
     count=engine->api.scan(engine->api.ctx,targets,PP_SCAN_CAP);
     if (count>PP_SCAN_CAP) count=PP_SCAN_CAP;
+    if (!count) {
+        idle_event(engine,PP_EVENT_NO_CANDIDATES,now);
+        return;
+    }
     for(i=0u;i<count;++i) {
         PpTarget target=targets[i];
         if (!target.eligible || !nonzero(target.guid) ||
@@ -131,7 +148,10 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             found=1;
         }
     }
-    if (!found) return;
+    if (!found) {
+        idle_event(engine,PP_EVENT_ALL_BLOCKED,now);
+        return;
+    }
     /* Record every submission attempt, including native rejection. */
     h=entry(engine,best.guid,1);
     if (h->attempts>=PP_MAX_ATTEMPTS_PER_GUID) {

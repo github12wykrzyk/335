@@ -13,7 +13,7 @@ typedef struct {
     uint32_t thread,hash_ok,abi_ok,usable,eligible_a,eligible_b;
     uint64_t world;
     PpResult result;
-    unsigned casts,cast_spell,callbacks;
+    unsigned casts,cast_spell,callbacks,events[16];
     uint32_t last_attempt,expected_result_attempt;
     unsigned player_pos_calls,move_player_after_scan;
     PpGuid last_guid;
@@ -82,7 +82,7 @@ static int cast(void *p,uintptr_t addr,uint32_t spell,PpGuid target,uint32_t att
     return 1;
 }
 static PpResult result(void *p,PpGuid g,uint32_t attempt){Mock *m=(Mock*)p;(void)g;return m->expected_result_attempt && m->expected_result_attempt!=attempt ? PP_RESULT_PENDING : m->result;}
-static void event(void *p,PpEvent ev,PpGuid g,uint32_t attempt){(void)ev;(void)g;(void)attempt;++((Mock*)p)->callbacks;}
+static void event(void *p,PpEvent ev,PpGuid g,uint32_t attempt){Mock *m=(Mock*)p;(void)g;(void)attempt;++m->callbacks;++m->events[ev];}
 static Pp12340Host host(Mock *m) {
     Pp12340Host h;memset(&h,0,sizeof(h));h.ctx=m;
     h.verify_exe_sha256=digest;h.verify_cast_abi=abi;h.thread_id=tid;
@@ -121,8 +121,10 @@ static int test_scan_cast_history_world(void){
     pp12340_enable(&a,1);
     m.world=0u;pp12340_tick(&a,2100);
     CHECK(a.engine.enabled && !a.engine.active_valid && m.casts==3);
+    CHECK(m.events[PP_EVENT_WORLD_PAUSED]==1);
     m.world=3u;pp12340_tick(&a,2200);
     CHECK(a.engine.enabled && m.casts==4 && m.last_guid.lo==222);
+    CHECK(m.events[PP_EVENT_WORLD_RESET]==2);
     return 0;
 }
 static int test_attempt_correlation(void){
@@ -142,9 +144,12 @@ static int test_silent_commands(void){
     CHECK(pp12340_bind(&a,&h));
     CHECK(!pp12340_command(&a,"invalid") && !a.engine.enabled);
     CHECK(pp12340_command(&a,"  on\t") && a.engine.enabled);
+    CHECK(m.events[PP_EVENT_ENABLED]==1);
     pp12340_tick(&a,0);CHECK(m.casts==1);
     CHECK(pp12340_command(&a,"reset") && !a.engine.active_valid);
+    CHECK(m.events[PP_EVENT_RESET]==1);
     CHECK(pp12340_command(&a,"off") && !a.engine.enabled);
+    CHECK(m.events[PP_EVENT_DISABLED]==1);
     m.thread=9u;CHECK(!pp12340_command(&a,"on") && !a.engine.enabled);
     m.thread=1u;CHECK(!pp12340_command(&a,"") && !a.engine.enabled);
     return 0;

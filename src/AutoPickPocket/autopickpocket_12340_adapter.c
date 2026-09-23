@@ -191,6 +191,10 @@ void pp12340_reset(Pp12340Adapter *a) {
     if (a && a->bound && a->host.thread_id(a->host.ctx)==a->owner_thread)
         pp_reset(&a->engine);
 }
+static void pp_status(Pp12340Adapter *a,PpEvent status) {
+    PpGuid none={0u,0u};
+    if (a->host.event) a->host.event(a->host.ctx,status,none,0u);
+}
 int pp12340_command(Pp12340Adapter *a,const char *arguments) {
     const char *end;
     size_t length;
@@ -201,13 +205,16 @@ int pp12340_command(Pp12340Adapter *a,const char *arguments) {
     while (end>arguments && (end[-1]==' ' || end[-1]=='\t')) --end;
     length=(size_t)(end-arguments);
     if (length==2u && !memcmp(arguments,"on",2u)) {
-        pp_enable(&a->engine,1);return 1;
+        pp_enable(&a->engine,1);
+        pp_status(a,PP_EVENT_ENABLED);return 1;
     }
     if (length==3u && !memcmp(arguments,"off",3u)) {
-        pp_enable(&a->engine,0);return 1;
+        pp_enable(&a->engine,0);
+        pp_status(a,PP_EVENT_DISABLED);return 1;
     }
     if (length==5u && !memcmp(arguments,"reset",5u)) {
-        pp_reset(&a->engine);return 1;
+        pp_reset(&a->engine);
+        pp_status(a,PP_EVENT_RESET);return 1;
     }
     return 0; /* unknown/empty commands are silent and do not change state */
 }
@@ -219,13 +226,17 @@ void pp12340_tick(Pp12340Adapter *a,uint32_t now_ms) {
     if (!world) {
         /* Loading screens are transient; pause and drop any ambiguous
          * in-flight attempt, but preserve the user's enabled setting. */
-        if (a->current_world) pp_reset(&a->engine);
+        if (a->current_world) {
+            pp_reset(&a->engine);
+            pp_status(a,PP_EVENT_WORLD_PAUSED);
+        }
         a->current_world=0u;
         return;
     }
     if (world!=a->current_world) {
         pp_reset(&a->engine);
         a->current_world=world;
+        pp_status(a,PP_EVENT_WORLD_RESET);
     }
     pp_tick(&a->engine,now_ms);
 }
