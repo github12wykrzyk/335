@@ -44,7 +44,6 @@ static void log_event(const wchar_t *name, const wchar_t *event, DWORD code) {
  */
 typedef UINT (WINAPI *al_message_fn)(void);
 typedef LRESULT (CALLBACK *al_hook_fn)(int, WPARAM, LPARAM);
-typedef LONG (WINAPI *al_frame_fn)(void);
 typedef struct { DWORD pid; DWORD tid; HWND hwnd; } GameWindow;
 static BOOL CALLBACK find_game_window(HWND hwnd, LPARAM value) {
     GameWindow *game=(GameWindow *)value;
@@ -67,17 +66,12 @@ static DWORD activate_autoloot(HMODULE host) {
     al_message_fn getmsg=(al_message_fn)GetProcAddress(host,"AL335_MessageId");
     al_hook_fn callback=(al_hook_fn)GetProcAddress(host,"AL335_HookProc");
     al_hook_fn dispatch=(al_hook_fn)GetProcAddress(host,"AL335_CallWndProc");
-    al_frame_fn frame_status=(al_frame_fn)GetProcAddress(host,"AL335_FrameStatus");
-    al_frame_fn frame_ticks=(al_frame_fn)GetProcAddress(host,"AL335_FrameTicks");
     UINT message;
     DWORD start=GetTickCount(), result=1u;
     if (!getmsg) getmsg=(al_message_fn)GetProcAddress(host,"_AL335_MessageId@0");
     if (!callback) callback=(al_hook_fn)GetProcAddress(host,"_AL335_HookProc@12");
     if (!dispatch) dispatch=(al_hook_fn)GetProcAddress(host,"_AL335_CallWndProc@12");
-    if (!frame_status) frame_status=(al_frame_fn)GetProcAddress(host,"_AL335_FrameStatus@0");
-    if (!frame_ticks) frame_ticks=(al_frame_fn)GetProcAddress(host,"_AL335_FrameTicks@0");
-    if (!getmsg || !callback || !dispatch || !frame_status || !frame_ticks ||
-        !(message=getmsg())) {
+    if (!getmsg || !callback || !dispatch || !(message=getmsg())) {
         log_event(L"AutoLoot335.dll",L"HOOK_EXPORT_MISSING",GetLastError());
         return 1;
     }
@@ -104,59 +98,25 @@ static DWORD activate_autoloot(HMODULE host) {
         log_event(L"AutoLoot335.dll",L"ENABLE_FAILED",GetLastError());
         goto cleanup;
     }
-    log_event(L"AutoLoot335.dll",L"FRAME_ARMING",0);
+    log_event(L"AutoLoot335.dll",L"HOOK_ENABLED_RESPONSIVE",0);
     {
-        DWORD armStart=GetTickCount(), pulses=0u, delivered=0u, timeouts=0u;
-        DWORD lastCheck=GetTickCount(), lastTicks=0u;
-        int loggedReady=0, loggedWrongThread=0;
+        DWORD pulses=0u, delivered=0u, timeouts=0u;
         while (IsWindow(game.hwnd)) {
             DWORD owner=0;
-            LONG frame;
             GetWindowThreadProcessId(game.hwnd,&owner);
             if (owner!=game.pid) break;
-            frame=frame_status();
-            if (frame==2) {
-                if (!loggedWrongThread) {
-                    log_event(L"AutoLoot335.dll",L"FRAME_WRONG_THREAD",0);
-                    loggedWrongThread=1;
-                }
-                /* Fail closed: disable the engine and do not perform
-                 * client memory calls from this loader worker thread. */
-                send_control(game.hwnd,message,0u,200u);
-                goto cleanup;
+            /* Logging runs on the loader worker only, never in the game
+             * callback. SendMessageTimeout success means dispatch was
+             * acknowledged, NOT that a corpse interaction succeeded. */
+            if (send_control(game.hwnd,message,2u,200u)) ++delivered;
+            else ++timeouts;
+            ++pulses;
+            if (pulses>=250u) {
+                log_event(L"AutoLoot335.dll",L"PULSE_DELIVERED",delivered);
+                log_event(L"AutoLoot335.dll",L"PULSE_TIMEOUT",timeouts);
+                pulses=delivered=timeouts=0u;
             }
-            if (frame==0) {
-                /* Only ARM attempts use Windows messages; NO loot ticks are
-                 * performed by message hooks. Once armed, this path stops. */
-                if (send_control(game.hwnd,message,2u,200u)) ++delivered;
-                else ++timeouts;
-                ++pulses;
-                if (pulses>=250u) {
-                    log_event(L"AutoLoot335.dll",L"PULSE_DELIVERED",delivered);
-                    log_event(L"AutoLoot335.dll",L"PULSE_TIMEOUT",timeouts);
-                    pulses=delivered=timeouts=0u;
-                }
-                if ((DWORD)(GetTickCount()-armStart)>120000u) {
-                    log_event(L"AutoLoot335.dll",L"FRAME_NOT_ARMED",0);
-                    send_control(game.hwnd,message,0u,200u);
-                    goto cleanup;
-                }
-                Sleep(40);
-                continue;
-            }
-            if (!loggedReady) {
-                log_event(L"AutoLoot335.dll",L"FRAME_ARMED",0);
-                loggedReady=1;
-                lastCheck=GetTickCount();
-                lastTicks=(DWORD)frame_ticks();
-            }
-            if ((DWORD)(GetTickCount()-lastCheck)>=5000u) {
-                DWORD next=(DWORD)frame_ticks();
-                log_event(L"AutoLoot335.dll",L"FRAME_TICKS_DELTA",next-lastTicks);
-                lastTicks=next;
-                lastCheck=GetTickCount();
-            }
-            Sleep(200);
+            Sleep(40);
         }
         if (pulses) {
             log_event(L"AutoLoot335.dll",L"PULSE_DELIVERED",delivered);

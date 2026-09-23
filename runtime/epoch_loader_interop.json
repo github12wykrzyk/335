@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "kind": "ISOLATED_EPOCH_NATIVE_FRAME_AUTOLOOT_INTEROP_UNVERIFIED_IN_GAME",
+  "kind": "ISOLATED_EPOCH_WORK_AUTOLOOT_INTEROP_UNVERIFIED_IN_GAME",
   "target_build": 12340,
   "arch": "x86",
   "branch": "feature/loader-12340",
   "source": {
-    "branch": "feature/loader-12340",
-    "commit": "f1372bfa30f9fbe62fe8e10e8de444ae38bc406e",
-    "run_id": 35880781469,
+    "branch": "work",
+    "commit": "3cbc14b66aa2ed5687b0132190c4381494c0bdb6",
+    "run_id": 35872640642,
     "module": "AutoLoot335.dll",
-    "sha256": "e2bf85df42ca8c434db5a99a7606a7d3cf82995ea525fa8acec2c8cc7587579a",
+    "sha256": "6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3",
     "owner": "AutoLoot",
     "resources": [
       "wow12340:object-manager observe",
@@ -17,17 +17,16 @@
       "wow12340:0x00819210-framescript-execute exclusive",
       "logical:loot-ui exclusive",
       "logical:interaction exclusive",
-      "wow12340:CGWorldFrame::OnLayerUpdate vtable slot 0x009F9A50 exclusive",
-      "wow12340:verified game-window thread only",
-      "win32:WH_GETMESSAGE + WH_CALLWNDPROC init/arm only"
+      "win32:WH_GETMESSAGE + WH_CALLWNDPROC game-thread ticks"
     ],
-    "artifact_name": "AutoLoot335-FRAME-ISOLATED-f1372bfa30f9fbe62fe8e10e8de444ae38bc406e"
+    "artifact_name": "WoW335-WORK-CANDIDATE-3cbc14b66aa2ed5687b0132190c4381494c0bdb6"
   },
-  "activation": "AL335_FrameStatus + AL335_FrameTicks: loot ticks ONLY in OnLayerUpdate, Windows hooks init/arm only",
+  "activation": "Original responsive AutoLoot work/3cbc14b: WH_GETMESSAGE + WH_CALLWNDPROC with bounded SendMessageTimeout pulses; no native frame hook",
   "load_order": [
     "AutoLoot335.dll"
   ],
-  "existing_work_files_policy": "Updater-managed exact legacy work AutoLoot migrated to exact native frame TEST binary from isolated feature experiment; restore previous Epoch pair and managed state on failure; no STABLE promotion.",
+  "existing_work_files_policy": "Revert failed Native Frame experiment to exact work/3cbc14b responsive AutoLoot by managed transaction, backup and rollback; only known prior DLLs, no unowned files or STABLE.",
   "compatibility": "not_verified_in_game",
-  "final_package": "NOT_RUN"
+  "final_package": "NOT_RUN",
+  "observed_previous_behavior": "User reports stationary looting before frame experiment; current restored exact SHA remains untested in game"
 }

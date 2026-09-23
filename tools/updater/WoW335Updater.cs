@@ -236,9 +236,9 @@ namespace WoW335Updater
                     bool current = installedEpoch != null &&
                         string.Equals(GetString(installedEpoch, "git_sha"), latest.Item1, StringComparison.Ordinal) &&
                         (AsArray(GetValue(installedEpoch, "module_load_order")).Length == 0 ||
-                         (GetString(installedEpoch, "source_commit") == EpochFrameAutoLootCommit &&
+                         (GetString(installedEpoch, "source_commit") == EpochWorkAutoLootCommit &&
                           string.Equals(GetString(installedEpoch, "module_sha256"),
-                              EpochFrameAutoLootSha, StringComparison.OrdinalIgnoreCase)));
+                              EpochWorkAutoLootSha, StringComparison.OrdinalIgnoreCase)));
                     status.Text = current ? "Loader i aktywne DLL są aktualne." :
                         "Dostępna aktualizacja loadera / AutoLoot TEST: " + ShortSha(latest.Item1);
                     Log("Sprawdzono parę Epoch TEST: " + ShortSha(latest.Item1) +

@@ -1,19 +1,12 @@
-# AutoLoot335.dll native-frame TEST provenance
+# Restored responsive AutoLoot335.dll TEST provenance
 
-Exact isolated source: `github12wykrzyk/335` on
-`feature/loader-12340` SHA `f1372bfa30f9fbe62fe8e10e8de444ae38bc406e`.
-The source builds on canonical `work/3cbc14b66aa2ed5687b0132190c4381494c0bdb6`
-AutoLoot logic, with a new game-frame host on the loader experiment branch.
-Client SHA256: `2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d`.
-Exact native-frame static audit: GitHub Actions run `35879764556`.
-MSVC x86 rebuilt byte-for-byte: run `35880781469`.
-Git blob: `40705452175fa81dd1bbfcbae1294dc277d7b574`.
-SHA256: `e2bf85df42ca8c434db5a99a7606a7d3cf82995ea525fa8acec2c8cc7587579a`.
-Size: 94208 bytes, PE32 x86 DLL, build 12340.
-
-This is **NOT** an accepted `work` candidate or STABLE game package.
-Its native world-frame behavior and loot during held mouse/keyboard input
-have NOT been confirmed in game. The updater installs this exact binary
-ONLY into the managed isolated TEST/Epoch experiment, migrating previously
-registered work AutoLoot bytes and preserving transactional rollback.
-No automatic promotion; `main` and original `work` binary stay untouched.
+This is the original exact-byte work module, not a recompiled frame experiment:
+source branch work at 3cbc14b66aa2ed5687b0132190c4381494c0bdb6,
+Windows x86 native CI run 35872640642, Git blob
+9169f0874e470ce030ef4727f6120a04059eab30, SHA256
+6551b34fde100edaf0b9597b4e267d1844acf92da379fae344c41efeaa8c31c3.
+The user reported that native-frame AutoLoot stops looting entirely, while
+the prior variant looted when stationary. This restores the old managed
+module and matching message-hook loader in TEST only, without modifying
+work or STABLE. During sustained movement even native manual loot may fail;
+do not claim this rollback makes movement looting possible.
