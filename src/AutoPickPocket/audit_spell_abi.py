@@ -39,6 +39,7 @@ def main():
         ("npc_GetCreatureType_candidate_A", 0x00605570),
         ("npc_GetReaction_candidate_A", 0x006061E0),
         ("npc_GetCreatureType_candidate_B", 0x0071F6E0),
+        ("npc_CGUnit_GetCreatureType_12340_candidate", 0x0071F300),
     )
     for name,va in candidates:
         try:
