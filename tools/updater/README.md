@@ -90,3 +90,28 @@ odrzucała wszystkie takie wiersze pomimo poprawnego pliku.
 Ręczne wskazanie kopii `WoW335AutoLootDiag(1).lua` także jest obsługiwane.
 Aktualizacja wyłącznie przyciskiem **Aktualizuj updater** z kanału TEST
 (work); do GitHub wysyłane są jedynie zaakceptowane zdarzenia po podglądzie.
+
+## 0.3.7-335 — natywny AutoLoot tylko jako świadomie uruchamiany eksperyment
+
+Przycisk **Natywny AutoLoot TEST** jest oddzielony od zwykłego
+**Aktualizuj** i `FINAL_PACKAGE`. Jego jedyne źródło to najnowszy
+zakończony sukcesem workflow `Build isolated 12340 AutoLoot native host`
+na aktualnym SHA `feature/autoloot-12340`; brak bieżącego artefaktu,
+mismatched SHA, zła architektura lub hash EXE przerywają działanie.
+Updater sprawdza metadane `NATIVE_AUTOLOOT_PREVIEW_NOT_GAME_PACKAGE`,
+SHA256 obu plików, dokładną wersję PE32 x86 i świadome potwierdzenie
+przed uruchomieniem. Pliki trafiają wyłącznie pod
+`.wow335_updater/native_preview/<SHA>`; nie nadpisują Wow.exe,
+innych DLL, dlls.txt, innych dodatków ani stable, a istniejące
+niezgodne pliki zostają zachowane i użycie jest blokowane.
+
+Wybierz dokładny katalog gry, zamknij działającego klienta, wybierz
+kanał TEST, kliknij **Natywny AutoLoot TEST** i potwierdź ostrzeżenie.
+Natywny launcher uruchamia wybrany Wow.exe i próbuje podłączyć
+WH_GETMESSAGE tylko do jego głównego wątku okna. Działa jedynie dla
+SHA256 klienta przypiętego w repo; może nie działać, jeśli OS lub
+konfiguracja gry odrzuci hook bądź wymagany wątek Lua będzie inny.
+Natywny eksperyment nie jest jeszcze zaakceptowany jako aktywna
+paczka DLL. Nie uruchamiaj go podczas zwykłego lootu z innym
+modułem ingerującym w interakcje. W razie problemów zamknij grę;
+sam launcher kończy się i odłącza hook po zamknięciu gry.

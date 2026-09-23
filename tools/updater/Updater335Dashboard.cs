@@ -204,7 +204,9 @@ namespace WoW335Updater
             dashboardFeatureButtons.Add(autoLootDiagInstallButton);
             addonTools.Controls.Add(UiButton(autoLootDiagInstallButton, "Instaluj test AutoLoot"), 0, 0);
             addonTools.Controls.Add(UiButton(autoLootReport, "Wyślij log AutoLoot"), 1, 0);
-            addonTools.Controls.Add(UiLabel("Dodatek Lua: test okna lootu, bez DLL i paczki gry", 8.2f, UiMuted), 2, 0);
+            autoLootNativePreviewButton.Click += async delegate { await NativeAutoLootPreviewAsync(); };
+            dashboardFeatureButtons.Add(autoLootNativePreviewButton);
+            addonTools.Controls.Add(UiButton(autoLootNativePreviewButton, "Natywny AutoLoot TEST"), 2, 0);
             tools.Controls.Add(addonTools, 0, 2);
             var rollback = UiGrid(3, 1);
             rollback.ColumnStyles.Clear();

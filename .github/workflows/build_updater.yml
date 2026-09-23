@@ -98,7 +98,8 @@ jobs:
             tools\updater\UpdaterRealmlistFeature.cs `
             tools\updater\UpdaterMaintenanceFeature.cs `
             tools\updater\UpdaterIssueReportFeature.cs `
-            tools\updater\UpdaterAutoLootDiagFeature.cs
+            tools\updater\UpdaterAutoLootDiagFeature.cs `
+            tools\updater\UpdaterAutoLootNativePreviewFeature.cs
           if ($LASTEXITCODE -ne 0) { throw "updater csc failed with exit code $LASTEXITCODE" }
 
       - name: Verify updater PE32 x86 and hashes
