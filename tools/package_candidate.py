@@ -25,6 +25,12 @@ def main():
     files = runtime["files"]
     exes = [x for x in files if x.get("kind") == "exe"]
     dlls = [x for x in files if x.get("kind") == "dll"]
+    selected = load_json(ROOT / "runtime/client_exe_target.json")
+    if exes and (exes[0].get("path") != selected["path"] or
+                 exes[0].get("sha256") != selected["sha256"] or
+                 sha256_file(repo_path(exes[0]["path"])) != selected["sha256"]):
+        print("PACKAGE: FAIL selected client EXE mismatch")
+        return 3
     if runtime.get("state") == "empty" or len(exes) != 1 or not dlls:
         print("NO_RUNTIME: exact 12340 EXE and one or more active real DLLs required")
         return 2

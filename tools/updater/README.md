@@ -15,3 +15,6 @@ verified runnable WoW game package.
 
 ## 0.3.2-335 — exact HEAD/package identity and managed-file protection
 TEST/STABLE game artifacts must belong to current branch HEAD, not a stale successful run. The inner package metadata must match exact run SHA, channel, game build and x86. Existing unmanaged DLL/dlls.txt filename collisions are blocked before writes; the explicitly selected target EXE is backed up. Full-package rollback remains supported. No active 12340 game DLL has been certified by this updater build.
+
+## 0.3.3-335 — selected client pin
+TEST installation and VERIFY / REPAIR reject a game package if its Wow.exe SHA256 is not 2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d. Updater builds independently of the uploaded EXE; a successful updater build is not a playable game package when there are no registered game DLLs.

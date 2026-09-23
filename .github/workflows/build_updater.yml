@@ -7,6 +7,8 @@ on:
       - main
     paths:
       - 'tools/updater/**'
+      - 'runtime/client_exe_target.json'
+      - 'Wow.exe'
       - '.github/workflows/build_updater.yml'
   workflow_dispatch:
 
@@ -28,6 +30,18 @@ jobs:
         shell: pwsh
         run: python tools/verify_current.py
 
+      - name: Verify pinned EXE identity embedded in updater
+        shell: pwsh
+        run: |
+          @'
+          import json, re
+          from pathlib import Path
+          target=json.loads(Path("runtime/client_exe_target.json").read_text(encoding="utf-8"))
+          code=Path("tools/updater/UpdaterSafety.cs").read_text(encoding="utf-8")
+          match=re.search(r'PinnedClientSha256\s*=\s*"([0-9a-f]{64})"', code)
+          if match is None or match.group(1)!=target["sha256"]: raise SystemExit("Updater pinned EXE differs from manifest")
+          print("UPDATER_PIN: PASS")
+          '@ | python -
       - name: Compile WinForms updater and bootstrap x86
         shell: pwsh
         run: |

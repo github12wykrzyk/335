@@ -29,7 +29,7 @@ jobs:
       - name: Audit uploaded 3.3.5 client EXE (Windows PE32 x86)
         shell: pwsh
         run: |
-          python tools/verify_client_exe.py --exe Wow.exe --report dist/client_exe_audit.json
+          python tools/verify_client_exe.py --exe Wow.exe --require-target --report dist/client_exe_audit.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $audit = Get-Content dist/client_exe_audit.json -Raw | ConvertFrom-Json
           $versionInfo = (Get-Item -LiteralPath Wow.exe).VersionInfo

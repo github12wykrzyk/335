@@ -83,6 +83,11 @@ def main():
                 errors.append(f"{comp}: missing dependency component {dep}")
             if dep == comp:
                 errors.append(f"{comp}: self dependency")
+    selected = load_json(ROOT / "runtime/client_exe_target.json")
+    for item in files:
+        if isinstance(item, dict) and item.get("kind") == "exe":
+            if item.get("path") != selected["path"] or item.get("sha256") != selected["sha256"]:
+                errors.append("active EXE does not match exact user-selected client")
     sets = manifest.get("compatibility_sets", [])
     if not isinstance(sets, list):
         errors.append("compatibility_sets must be array")

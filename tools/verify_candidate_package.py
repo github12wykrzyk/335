@@ -90,8 +90,11 @@ def main():
                 raise ValueError("incorrect ZIP root file set or order")
             exes = [x for x in meta["files"] if x["kind"] == "exe"]
             dlls = [x for x in meta["files"] if x["kind"] == "dll"]
+            selected = json.loads((ROOT / "runtime/client_exe_target.json").read_text(encoding="utf-8"))
             if (len(exes) != 1 or not dlls or
                     meta["exe"] != exes[0]["name"] or
+                    exes[0]["name"] != selected["name"] or
+                    exes[0]["sha256"] != selected["sha256"] or
                     meta["dlls"] != [x["name"] for x in dlls]):
                 raise ValueError("missing/extra EXE or DLL or incorrect DLL order")
             if archive.read("dlls.txt") != (

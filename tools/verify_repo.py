@@ -1,6 +1,6 @@
 from __future__ import annotations
 from manifest_common import ROOT,load_json,repo_path
-REQUIRED=["AGENTS.md","AI_START_HERE.md","AI_INDEX.json","CURRENT.json","runtime/current.json","PROJECT_INSTRUCTIONS.md","runtime/ai_experiments.json","runtime/module_registry.json","tools/verify_module_registry.py","tools/ai_experiments.py",".github/workflows/ai_experiments.yml","tools/verify_repo.py","tools/verify_current.py","tools/build_active.py","tools/verify_exact_runtime_artifacts.py","tools/package_exact_current.py","tools/package_candidate.py","tools/verify_candidate_package.py",".github/workflows/verify.yml",".github/workflows/build_updater.yml",".github/workflows/build_work_candidate.yml",".github/workflows/pre_promote_stable.yml"]
+REQUIRED=["AGENTS.md","AI_START_HERE.md","AI_INDEX.json","CURRENT.json","runtime/current.json","runtime/client_exe_target.json","PROJECT_INSTRUCTIONS.md","runtime/ai_experiments.json","runtime/module_registry.json","tools/verify_module_registry.py","tools/ai_experiments.py",".github/workflows/ai_experiments.yml","tools/verify_repo.py","tools/verify_current.py","tools/build_active.py","tools/verify_exact_runtime_artifacts.py","tools/package_exact_current.py","tools/package_candidate.py","tools/verify_candidate_package.py",".github/workflows/verify.yml",".github/workflows/build_updater.yml",".github/workflows/build_work_candidate.yml",".github/workflows/pre_promote_stable.yml"]
 TARGET={"product":"World of Warcraft","version":"3.3.5a","build":12340,"platform":"Windows","architecture":"x86"}
 def main():
     err=[]
@@ -15,6 +15,9 @@ def main():
     if cur.get("project")!="335" or cur.get("runtime_manifest")!="runtime/current.json": err.append("bad current project/manifest")
     if idx.get("read_order")!=REQUIRED[:5]: err.append("wrong mandatory read order")
     if cur.get("canonical_source_root")!="src": err.append("wrong source root")
+    selected=load_json(ROOT/"runtime/client_exe_target.json")
+    if cur.get("client_exe_target_manifest")!="runtime/client_exe_target.json" or idx.get("canonical",{}).get("client_exe_target")!="runtime/client_exe_target.json": err.append("wrong client routing")
+    if selected.get("target_build")!=12340 or selected.get("architecture")!="x86" or selected.get("name")!="Wow.exe" or selected.get("path")!="Wow.exe" or not isinstance(selected.get("size"),int) or selected["size"]<512 or not isinstance(selected.get("sha256"),str) or len(selected["sha256"])!=64: err.append("invalid selected client metadata")
     for m in idx.get("modules",[]):
         for k in ("source","docs"):
             if m.get(k) and not repo_path(m[k]).exists(): err.append("missing module "+m[k])

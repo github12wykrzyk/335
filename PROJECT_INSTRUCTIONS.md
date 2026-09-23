@@ -10,6 +10,8 @@ Przed każdym zadaniem repo odczytaj z aktywnego brancha w kolejności: AGENTS.m
 main = ostatni zaakceptowany stabilny stan, work = rozwój, parallel = niezależny eksperyment, jeśli faktycznie istnieje; feature/* = krótkie izolowane prace, promote/* = kontrola promocji. Gdy użytkownik wskazuje branch, nie przechodź na inny ani nie przenoś niezaakceptowanych eksperymentów. Literówka „pararell” oznacza parallel. Bez wskazania brancha sprawdź HEAD, aktywny eksperyment, właściciela mechanizmu i zależności; kontynuuj powiązany eksperyment lub utwórz feature/* z właściwej aktualnej bazy. Kilka współpracujących DLL to jeden eksperyment. Jeden logiczny zestaw zmian = jeden spójny commit. Bez force-push, destrukcyjnego resetu i automatycznej promocji całego work/parallel. Przed zapisem sprawdź, czy zmiana nie została już wykonana.
 
 4. ZGODNOŚĆ KLIENTA
+Dokładnie wybrany przez użytkownika Wow.exe jest wskazany w runtime/client_exe_target.json (SHA256, rozmiar i docelowy build 12340). Inna binarka o takim samym numerze wersji NIE jest zamiennikiem. Do momentu zastąpienia work/Wow.exe przez te dokładne bajty weryfikacja pakietu TEST pozostaje zablokowana. Updater musi odrzucać paczki zawierające inny EXE; nie zmieniaj main bez stabilnej promocji.
+
 Adresy, struktury, offsety, hooki, opcodes, patche EXE i binarki z WoW 1.12.1 build 5875 NIE są zgodne domyślnie z 3.3.5a build 12340. Możesz samodzielnie badać publiczny internet i projekty referencyjne; wyniki potwierdzaj na dokładnym kliencie 12340 x86. Nie kopiuj cudzych źródeł bez sprawdzenia licencji. Sprawdzaj współdzielone hooki, ABI, kolejność ładowania, wersje DLL i konflikty ruchu/targetowania. Sama kompilacja nie dowodzi działania w grze.
 
 5. ITERACJA I WERYFIKACJA

@@ -415,6 +415,11 @@ namespace WoW335Updater
                     GetLong(meta, "wow_build") != 12340 ||
                     GetString(meta, "arch") != "x86")
                     throw new InvalidOperationException("Paczka nie pochodzi z dokładnego commita/brancha 335 build 12340.");
+                var pinnedExe = AsArray(GetValue(meta, "files")).Select(AsDictionary)
+                    .FirstOrDefault(f => string.Equals(GetString(f, "kind"), "exe", StringComparison.OrdinalIgnoreCase));
+                if (pinnedExe == null || !string.Equals(GetString(pinnedExe, "name"), "Wow.exe", StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(GetString(pinnedExe, "sha256"), UpdaterBuildInfo.PinnedClientSha256, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Paczka zawiera niezgodny Wow.exe; instalacja zablokowana.");
                 expectedSha = GetString(meta, "package_sha256");
                 if (!UpdaterSafety.IsSha256Hex(expectedSha))
                     throw new InvalidOperationException("candidate_metadata.json nie zawiera poprawnego package_sha256; instalacja została zablokowana.");
@@ -442,8 +447,10 @@ namespace WoW335Updater
                     files.Add(new PackageFile(entry.Name, bytes));
                 }
             }
-            if (!files.Any(f => f.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)))
-                throw new InvalidOperationException("Paczka nie zawiera WoW.exe/canonical WoW executable.");
+            var executables = files.Where(f => f.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (executables.Count != 1 || !string.Equals(executables[0].Name, "Wow.exe", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(executables[0].Sha256, UpdaterBuildInfo.PinnedClientSha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Paczka nie zawiera dokładnie wybranego Wow.exe.");
             if (!files.Any(f => f.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("Paczka nie zawiera DLL-i.");
 

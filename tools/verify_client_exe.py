@@ -44,13 +44,29 @@ def inspect_exe(path: Path) -> dict:
         "verification": "PE32_X86_PASS",
     }
 
+def verify_target(result: dict, target: dict) -> None:
+    """Reject other EXEs even if they report the same game build."""
+    for key in ("name", "sha256", "size"):
+        if result.get(key) != target.get(key):
+            raise ValueError("selected client mismatch: " + key)
+    if target.get("target_build") != 12340 or target.get("architecture") != "x86":
+        raise ValueError("invalid selected client target build / architecture")
+    if result.get("pe_machine") != "0x014c" or result.get("pe_format") != "PE32":
+        raise ValueError("selected client must be PE32 x86")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--exe", default="Wow.exe")
     parser.add_argument("--report", default="dist/client_exe_audit.json")
+    parser.add_argument("--require-target", action="store_true")
     args = parser.parse_args()
     try:
         result = inspect_exe(Path(args.exe))
+        if args.require_target:
+            target = json.loads((Path(__file__).resolve().parents[1] / "runtime/client_exe_target.json").read_text(encoding="utf-8"))
+            verify_target(result, target)
+            result["exact_client_target"] = "PASS"
         dest = Path(args.report)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

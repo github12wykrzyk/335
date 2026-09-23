@@ -12,5 +12,6 @@
   "canonical_source_root": "src",
   "candidate_workflow": ".github/workflows/build_work_candidate.yml",
   "updater_workflow": ".github/workflows/build_updater.yml",
-  "promotion_workflow": ".github/workflows/pre_promote_stable.yml"
+  "promotion_workflow": ".github/workflows/pre_promote_stable.yml",
+  "client_exe_target_manifest": "runtime/client_exe_target.json"
 }

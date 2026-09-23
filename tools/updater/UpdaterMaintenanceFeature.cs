@@ -600,6 +600,11 @@ namespace WoW335Updater
                     if (metaEntry == null)
                         throw new InvalidOperationException("Artifact nie zawiera candidate_metadata.json; VERIFY / REPAIR został zablokowany.");
                     var meta = AsDictionary(json.DeserializeObject(Encoding.UTF8.GetString(ReadEntry(metaEntry))));
+                    var pinnedExe = AsArray(GetValue(meta, "files")).Select(AsDictionary)
+                        .FirstOrDefault(f => string.Equals(GetString(f, "kind"), "exe", StringComparison.OrdinalIgnoreCase));
+                    if (pinnedExe == null || !string.Equals(GetString(pinnedExe, "name"), "Wow.exe", StringComparison.OrdinalIgnoreCase) ||
+                        !string.Equals(GetString(pinnedExe, "sha256"), UpdaterBuildInfo.PinnedClientSha256, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("VERIFY / REPAIR: niezgodna binarka klienta.");
                     expectedSha = GetString(meta, "package_sha256");
                     if (!UpdaterSafety.IsSha256Hex(expectedSha))
                         throw new InvalidOperationException("candidate_metadata.json nie zawiera poprawnego package_sha256; VERIFY / REPAIR został zablokowany.");

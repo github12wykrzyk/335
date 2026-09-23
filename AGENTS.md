@@ -1,5 +1,5 @@
 # WoW 335 — AI operating contract
-Target only github12wykrzyk/335, WoW 3.3.5a build 12340, Windows x86.
+Target only github12wykrzyk/335, WoW 3.3.5a build 12340, Windows x86. The selected exact Wow.exe is pinned in runtime/client_exe_target.json (SHA256 and size); client-audit and updater must reject different bytes even if their build label matches.
 Read in order AGENTS.md, AI_START_HERE.md, AI_INDEX.json, CURRENT.json, runtime/current.json, then affected modules and workflows. PROJECT_INSTRUCTIONS.md contains the full Polish contract.
 main = accepted stable, work = development, parallel only if it exists, feature/* isolated experiments, promote/* verified promotion. Never copy WoW 1.12 offsets/binaries.
 Current manifest and exact source lineage determine active runtime. Empty manifest means NO GAME PACKAGE. Fail closed; never claim x86 smoke = game DLL test.

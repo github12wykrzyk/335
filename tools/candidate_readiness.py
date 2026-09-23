@@ -18,6 +18,12 @@ def assess(runtime: dict, audit: dict) -> tuple[bool, str]:
         raise ValueError("runtime must register exactly one EXE and at least one real DLL")
     if Path(exes[0].get("path", "")).name.lower() != "wow.exe":
         raise ValueError("active EXE must reference the audited Wow.exe")
+    target = load_json(ROOT / "runtime/client_exe_target.json")
+    if (exes[0].get("path") != target.get("path") or
+        exes[0].get("sha256") != target.get("sha256") or
+        audit.get("sha256") != target.get("sha256") or
+        audit.get("size") != target.get("size")):
+        raise ValueError("client differs from selected exact Wow.exe")
     if audit.get("sha256") != exes[0].get("sha256"):
         raise ValueError("registered EXE checksum does not match audited client")
     if not audit.get("version_resource_matches_12340"):

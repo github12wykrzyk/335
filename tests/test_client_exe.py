@@ -34,6 +34,16 @@ class ExeAuditTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not x86"):
                 load("verify_client_exe").inspect_exe(p)
 
+    def test_pinned_exe_identity(self):
+        tool = load("verify_client_exe")
+        target = {"name":"Wow.exe", "sha256":"a"*64, "size":12,
+                  "target_build":12340, "architecture":"x86"}
+        actual = {"name":"Wow.exe", "sha256":"a"*64, "size":12,
+                  "pe_machine":"0x014c", "pe_format":"PE32"}
+        tool.verify_target(actual, target)
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            tool.verify_target(dict(actual, sha256="b"*64), target)
+
     def test_empty_manifest_never_ready(self):
         ready, reason = load("candidate_readiness").assess(
             {"state": "empty", "files": []}, {"sha256": "dummy"}
