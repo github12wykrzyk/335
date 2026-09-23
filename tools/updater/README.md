@@ -1,4 +1,4 @@
-# WoW335Updater 0.1.0-335 — experimental port
+# WoW335Updater 0.3.12-335 — universal branch-selectable updater
 Windows x86 WinForms external updater, bound ONLY to github12wykrzyk/335. Does not inject DLLs.
 TEST(work): newest successful Build 335 work candidate; STABLE(main): newest successful Build 335 stable candidate. Requires actual final-gated runtime artifacts; empty bootstrap has none.
 Validates package SHA256 from candidate_metadata.json before installing, keeps managed-file backups, supports rollback, verify/repair, update+play, updater self-update, optional sanitized issue reports. Current updater requires a fine-grained GitHub token with Contents: Read and Actions: Read for this repository (including artifact downloads). A separate optional report token grants Issues: Read and write only. Never commit tokens.
@@ -199,3 +199,17 @@ wyłącznie do uruchamiania Wow.exe. Wcześniej guard szukał Wow.exe w folderze
 `.wow335_updater/native_loader` i zgłaszał brak pliku mimo poprawnego
 katalogu gry. Bez zmian w manifestach i binarkach DLL; potwierdzenie
 załadowania modułów wymaga testu w grze.
+
+## 0.3.12-335 — one binary for all branches
+
+The sole canonical `WoW335Updater.exe` is built on `work` and its self-update
+always fetches the current work-HEAD updater artifact, independently of the
+game branch selection. The game branch selector discovers all GitHub branches
+(paginated) and retains the selected branch. Game installation requires that
+branch's exact current HEAD, an authentic pinned WoW 12340 x86 client, the
+registered DLL set and FINAL_PACKAGE: PASS. An experiment without a verified
+game package fails closed; it is not installed automatically or promoted.
+The updater stores the installed branch for diagnostics and rollback.
+Old workflow artifacts may remain on GitHub but are never used by self-update.
+For a one-time upgrade from a broken older updater, download the new canonical
+work Actions artifact and replace only WoW335Updater.exe while it is closed.

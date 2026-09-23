@@ -61,6 +61,7 @@ namespace WoW335Updater
         private readonly string configPath;
         private RemotePackageInfo lastRemote;
         private bool busy;
+        private bool refreshingBranches;
 
         public MainForm()
         {
@@ -79,6 +80,8 @@ namespace WoW335Updater
             Build335Dashboard();
             LoadConfig();
             RefreshLocalState();
+            Shown += async delegate { await RefreshBranchChoicesAsync(); };
+            channel.DropDown += async delegate { await RefreshBranchChoicesAsync(); };
         }
 
         private void BuildUi()
@@ -97,6 +100,71 @@ namespace WoW335Updater
             rollbackButton.Click += delegate { Rollback(); };
             status.Text = "Gotowy";
             log.ReadOnly = true;
+        }
+
+        // One updater binary serves every branch; a selected game package must
+        // still match the exact HEAD, manifest and SHA256 of that branch.
+        private string SelectedGameBranch()
+        {
+            if (channel.SelectedIndex == 1) return "main";
+            if (channel.SelectedIndex <= 0) return "work";
+            var branch = Convert.ToString(channel.SelectedItem);
+            if (!ValidGameBranch(branch)) throw new InvalidOperationException("Nieprawidłowy branch gry.");
+            return branch;
+        }
+
+        private static bool ValidGameBranch(string branch)
+        {
+            if (string.IsNullOrWhiteSpace(branch) || branch.Length > 200 ||
+                branch.StartsWith("/", StringComparison.Ordinal) ||
+                branch.EndsWith("/", StringComparison.Ordinal) || branch.Contains("..")) return false;
+            foreach (var c in branch)
+                if (!(char.IsLetterOrDigit(c) && c < 128) && c != '-' && c != '_' && c != '.' && c != '/')
+                    return false;
+            return true;
+        }
+
+        private async Task RefreshBranchChoicesAsync()
+        {
+            if (refreshingBranches || string.IsNullOrWhiteSpace(token.Text)) return;
+            refreshingBranches = true;
+            try
+            {
+                var found = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                using (var client = CreateClient())
+                {
+                    for (var page = 1; page <= 10; page++)
+                    {
+                        var rows = AsArray(json.DeserializeObject(await GetStringAsync(client,
+                            ApiRoot + "/branches?per_page=100&page=" + page)));
+                        foreach (var entry in rows)
+                        {
+                            var branch = GetString(AsDictionary(entry), "name");
+                            if (ValidGameBranch(branch) && branch != "work" && branch != "main") found.Add(branch);
+                        }
+                        if (rows.Length < 100) break;
+                        if (page == 10) throw new InvalidOperationException("Lista branchy przekracza 1000 wpisów.");
+                    }
+                }
+                var selected = SelectedGameBranch();
+                channel.BeginUpdate();
+                try
+                {
+                    while (channel.Items.Count > 2) channel.Items.RemoveAt(2);
+                    foreach (var branch in found) channel.Items.Add(branch);
+                    if (selected == "main") channel.SelectedIndex = 1;
+                    else if (selected == "work") channel.SelectedIndex = 0;
+                    else if (found.Contains(selected)) channel.SelectedItem = selected;
+                    else
+                    {
+                        channel.SelectedIndex = 0;
+                        Log("Branch nie istnieje na GitHubie: " + selected + ". Wybrano TEST (work).");
+                    }
+                }
+                finally { channel.EndUpdate(); }
+            }
+            catch (Exception ex) { Log("Lista branchy: " + ex.Message); }
+            finally { refreshingBranches = false; }
         }
 
         private void BrowseButton_Click(object sender, EventArgs e)
@@ -148,6 +216,12 @@ namespace WoW335Updater
                 gameDir.Text = GetString(root, "game_dir");
                 var selected = GetString(root, "channel");
                 if (selected == "stable") channel.SelectedIndex = 1;
+                var savedBranch = GetString(root, "game_branch");
+                if (savedBranch != "work" && savedBranch != "main" && ValidGameBranch(savedBranch))
+                {
+                    channel.Items.Add(savedBranch);
+                    channel.SelectedItem = savedBranch;
+                }
                 var protectedToken = GetString(root, "token_dpapi");
                 if (!string.IsNullOrWhiteSpace(protectedToken))
                 {
@@ -174,6 +248,7 @@ namespace WoW335Updater
                 var root = new Dictionary<string, object>();
                 root["game_dir"] = gameDir.Text.Trim();
                 root["channel"] = IsStable() ? "stable" : "test";
+                root["game_branch"] = SelectedGameBranch();
                 root["token_dpapi"] = protectedToken;
                 File.WriteAllText(configPath, json.Serialize(root), Encoding.UTF8);
                 if (announce) Log("Ustawienia zapisane lokalnie.");
@@ -211,10 +286,14 @@ namespace WoW335Updater
                 SaveConfig(false);
                 SetBusy(true, "Sprawdzanie GitHuba...");
                 lastRemote = await FindLatestPackageAsync();
-                Show335Remote(lastRemote.Channel, lastRemote.HeadSha, lastRemote.RunId);
+                Show335Remote(lastRemote.Branch, lastRemote.HeadSha, lastRemote.RunId);
                 var installed = ReadInstalledState();
                 Log("Najnowszy build: " + ShortSha(lastRemote.HeadSha) + " / run " + lastRemote.RunId);
-                if (installed != null && GetLong(installed, "run_id") == lastRemote.RunId && GetString(installed, "channel") == lastRemote.Channel)
+                if (installed != null && GetLong(installed, "run_id") == lastRemote.RunId &&
+                    GetString(installed, "channel") == lastRemote.Channel &&
+                    (GetString(installed, "branch") == lastRemote.Branch ||
+                    (string.IsNullOrEmpty(GetString(installed, "branch")) &&
+                     (lastRemote.Branch == "work" || lastRemote.Branch == "main"))))
                 {
                     status.Text = "Masz najnowszą wersję " + lastRemote.Channel.ToUpperInvariant() + ".";
                     Log("Lokalny stan odpowiada najnowszemu artefaktowi.");
@@ -249,7 +328,7 @@ namespace WoW335Updater
                 SaveConfig(false);
                 SetBusy(true, "Pobieranie najnowszej paczki...");
                 lastRemote = await FindLatestPackageAsync();
-                Show335Remote(lastRemote.Channel, lastRemote.HeadSha, lastRemote.RunId);
+                Show335Remote(lastRemote.Branch, lastRemote.HeadSha, lastRemote.RunId);
                 Log("Pobieram artifact: " + lastRemote.ArtifactName);
                 var outerBytes = await DownloadBytesAsync(lastRemote.DownloadUrl);
                 Log("Pobrano " + FormatBytes(outerBytes.LongLength) + ". Weryfikuję paczkę...");
@@ -310,15 +389,15 @@ namespace WoW335Updater
 
         private async Task<RemotePackageInfo> FindLatestPackageAsync()
         {
-            var stable = IsStable();
-            var branch = stable ? "main" : "work";
+            var branch = SelectedGameBranch();
+            var stable = branch == "main";
             var workflowName = stable ? StableWorkflowName : TestWorkflowName;
             var prefix = stable ? StableArtifactPrefix : TestArtifactPrefix;
             var innerName = stable ? StableInnerZip : TestInnerZip;
 
             using (var client = CreateClient())
             {
-                var runsUrl = ApiRoot + "/actions/runs?branch=" + branch + "&per_page=50";
+                var runsUrl = ApiRoot + "/actions/runs?branch=" + Uri.EscapeDataString(branch) + "&per_page=50";
                 var runsRoot = AsDictionary(json.DeserializeObject(await GetStringAsync(client, runsUrl)));
                 var runs = AsArray(GetValue(runsRoot, "workflow_runs"));
                 Dictionary<string, object> chosen;
@@ -334,7 +413,7 @@ namespace WoW335Updater
                 }
 
                 var branchRoot = AsDictionary(json.DeserializeObject(
-                    await GetStringAsync(client, ApiRoot + "/branches/" + branch)));
+                    await GetStringAsync(client, ApiRoot + "/branches/" + Uri.EscapeDataString(branch))));
                 var liveHead = GetString(AsDictionary(GetValue(branchRoot, "commit")), "sha");
                 if (string.IsNullOrWhiteSpace(liveHead) ||
                     !string.Equals(GetString(chosen, "head_sha"), liveHead, StringComparison.OrdinalIgnoreCase))
@@ -360,7 +439,8 @@ namespace WoW335Updater
 
                 return new RemotePackageInfo
                 {
-                    Channel = stable ? "stable" : "test",
+                    Channel = stable ? "stable" : (branch == "work" ? "test" : "experiment"),
+                    Branch = branch,
                     RunId = runId,
                     HeadSha = GetString(chosen, "head_sha"),
                     ArtifactName = GetString(artifact, "name"),
@@ -423,7 +503,7 @@ namespace WoW335Updater
                     throw new InvalidOperationException("Artefakt nie zawiera candidate_metadata.json; instalacja została zablokowana.");
                 var metaText = Encoding.UTF8.GetString(ReadEntry(metaEntry));
                 var meta = AsDictionary(json.DeserializeObject(metaText));
-                var expectedBranch = remote.Channel == "stable" ? "main" : "work";
+                var expectedBranch = remote.Branch;
                 if (GetString(meta, "git_sha") != remote.HeadSha ||
                     GetString(meta, "branch") != expectedBranch ||
                     GetLong(meta, "wow_build") != 12340 ||
@@ -596,7 +676,8 @@ namespace WoW335Updater
                 var whenText = DateTime.TryParse(GetString(installed, "installed_utc"), out when)
                     ? " • " + when.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                     : string.Empty;
-                localInfo.Text = "Lokalnie: " + GetString(installed, "channel").ToUpperInvariant()
+                localInfo.Text = "Lokalnie: " + (string.IsNullOrEmpty(GetString(installed, "branch"))
+                    ? GetString(installed, "channel").ToUpperInvariant() : GetString(installed, "branch"))
                     + " • run " + GetLong(installed, "run_id")
                     + " • " + ShortSha(GetString(installed, "head_sha"))
                     + whenText;
@@ -726,6 +807,7 @@ namespace WoW335Updater
             state["schema_version"] = 2;
             state["updater_version"] = UpdaterVersion;
             state["channel"] = remote.Channel;
+            state["branch"] = remote.Branch;
             state["run_id"] = remote.RunId;
             state["head_sha"] = remote.HeadSha;
             state["artifact_name"] = remote.ArtifactName;
@@ -921,6 +1003,7 @@ namespace WoW335Updater
         private sealed class RemotePackageInfo
         {
             public string Channel;
+            public string Branch;
             public long RunId;
             public string HeadSha;
             public string ArtifactName;

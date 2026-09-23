@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - work
-      - main
-      - parallel
-      - 'feature/**'
-      - 'promote/**'
   workflow_dispatch:
 
 permissions:
@@ -19,6 +15,7 @@ concurrency:
 
 jobs:
   build-updater:
+    if: github.ref_name == 'work'
     runs-on: windows-2022
     steps:
       - name: Checkout current tree
@@ -219,8 +216,7 @@ jobs:
           }
           Write-Host "CURRENT_HEAD: PASS $actual"
 
-      - name: Upload updater
-        if: github.ref_name == 'work' || github.ref_name == 'main'
+      - name: Upload the only canonical updater for all game branches
         uses: actions/upload-artifact@v4
         with:
           name: WoW335Updater-${{ github.sha }}
@@ -232,15 +228,3 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Upload isolated feature preview (never auto-installed)
-        if: github.ref_name != 'work' && github.ref_name != 'main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: WoW335Updater-EXPERIMENT-${{ github.sha }}
-          path: |
-            dist/WoW335Updater.exe
-            dist/WoW335UpdaterBootstrap.exe
-            dist/updater_build.json
-            dist/README_UPDATER.md
-          if-no-files-found: error
-          compression-level: 0
