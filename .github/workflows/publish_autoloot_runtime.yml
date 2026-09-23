@@ -1,0 +1,35 @@
+name: Register verified x86 AutoLoot on work
+on:
+  push:
+    branches: [work]
+    paths:
+      - 'src/AutoLoot/autoloot_core.c'
+      - 'src/AutoLoot/autoloot_12340_adapter.c'
+      - 'src/AutoLoot/autoloot_win32_host.c'
+      - 'tools/publish_autoloot_runtime.py'
+      - '.github/workflows/publish_autoloot_runtime.yml'
+permissions:
+  contents: write
+  actions: write
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python tools/verify_client_exe.py --exe Wow.exe --require-target
+      - run: python tools/publish_autoloot_runtime.py
+      - name: Dispatch final exact-SHA verification after generated runtime commit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $head = (git rev-parse HEAD).Trim()
+          git fetch origin work
+          if ((git rev-parse FETCH_HEAD).Trim() -ne $head) { throw "work moved after runtime commit" }
+          foreach ($workflow in @('verify.yml', 'build_work_candidate.yml', 'build_updater.yml')) {
+            gh api -X POST "repos/$env:GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" -f ref=work
+            if ($LASTEXITCODE -ne 0) { throw "Failed to dispatch $workflow for $head" }
+            Write-Host "DISPATCHED $workflow at $head"
+          }

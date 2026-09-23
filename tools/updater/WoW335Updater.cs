@@ -518,7 +518,8 @@ namespace WoW335Updater
                 }
 
                 var exeName = files.First(f => f.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).Name;
-                WriteInstalledState(root, remote, newManaged.ToList(), exeName);
+                WriteInstalledState(root, remote, newManaged.ToList(), exeName,
+                    files.ToDictionary(f => f.Name, f => f.Sha256, StringComparer.OrdinalIgnoreCase));
             }
             catch
             {
@@ -703,7 +704,8 @@ namespace WoW335Updater
             if (consume) Directory.Delete(dir, true);
         }
 
-        private void WriteInstalledState(string root, RemotePackageInfo remote, IList<string> managedFiles, string exeName)
+        private void WriteInstalledState(string root, RemotePackageInfo remote, IList<string> managedFiles, string exeName,
+                                         Dictionary<string, string> fileHashes)
         {
             var state = new Dictionary<string, object>();
             state["schema_version"] = 2;
@@ -714,6 +716,7 @@ namespace WoW335Updater
             state["artifact_name"] = remote.ArtifactName;
             state["installed_utc"] = DateTime.UtcNow.ToString("o");
             state["managed_files"] = managedFiles.ToArray();
+            state["managed_sha256"] = fileHashes;
             state["exe_name"] = exeName;
             var path = InstalledStatePath(root);
             UpdaterSafety.WriteUtf8Atomic(path, json.Serialize(state), ".tmp", ".previous");
@@ -766,8 +769,11 @@ namespace WoW335Updater
                     exe = candidates.FirstOrDefault();
                 }
                 if (exe == null) throw new InvalidOperationException("Nie znalazłem WoW*.exe w wybranym katalogu.");
-                Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = root, UseShellExecute = true });
-                Log("Uruchomiono: " + Path.GetFileName(exe));
+                if (!TryLaunchInstalledAutoLoot(root, exe, state))
+                {
+                    Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = root, UseShellExecute = true });
+                    Log("Uruchomiono: " + Path.GetFileName(exe) + " (brak aktywnego AutoLoot).");
+                }
             }
             catch (Exception ex)
             {

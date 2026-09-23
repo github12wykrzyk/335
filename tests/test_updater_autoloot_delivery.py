@@ -15,7 +15,7 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
         source = (ROOT / "tools/updater/UpdaterAutoLootDiagFeature.cs").read_text(encoding="utf-8")
         report = (ROOT / "tools/updater/UpdaterIssueReportFeature.cs").read_text(encoding="utf-8")
         version = (ROOT / "tools/updater/UpdaterSafety.cs").read_text(encoding="utf-8")
-        self.assertIn('Version = "0.3.7-335"', version)
+        self.assertIn('Version = "0.3.8-335"', version)
         self.assertIn('UpdaterArtifactPrefix + liveHead', maintenance)
         self.assertIn('GetString(meta, "git_sha"), liveHead', maintenance)
         self.assertIn('GetString(meta, "channel"), branch', maintenance)
@@ -39,12 +39,17 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
         for name in ('WoW335AutoLootDiag.lua', 'WoW335AutoLootDiag.toc'):
             self.assertTrue((ROOT / 'src/AutoLoot/diagnostics/WoW335AutoLootDiag' / name).is_file())
 
-    def test_diagnostic_not_registered_as_game_dll(self):
+    def test_diagnostic_addon_is_never_registered_as_a_game_dll(self):
         runtime = json.loads((ROOT / "runtime/current.json").read_text(encoding="utf-8"))
         registry = json.loads((ROOT / "runtime/module_registry.json").read_text(encoding="utf-8"))
-        self.assertEqual(runtime["state"], "empty")
-        self.assertEqual(runtime["files"], [])
-        self.assertEqual(registry["modules"], [])
+        self.assertNotIn("WoW335AutoLootDiag", [m["component"] for m in registry["modules"]])
+        if runtime["state"] == "empty":
+            self.assertEqual(runtime["files"], [])
+            self.assertEqual(registry["modules"], [])
+        else:
+            self.assertEqual([x["component"] for x in runtime["files"]],
+                             ["Client12340", "AutoLoot"])
+            self.assertEqual([m["component"] for m in registry["modules"]], ["AutoLoot"])
 
 
 if __name__ == "__main__":

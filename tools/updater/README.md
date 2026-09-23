@@ -115,3 +115,26 @@ Natywny eksperyment nie jest jeszcze zaakceptowany jako aktywna
 paczka DLL. Nie uruchamiaj go podczas zwykłego lootu z innym
 modułem ingerującym w interakcje. W razie problemów zamknij grę;
 sam launcher kończy się i odłącza hook po zamknięciu gry.
+
+## 0.3.8-335 — zarejestrowany AutoLoot335.dll w TEST/work
+
+AutoLoot nie jest już pobierany jako osobny natywny podgląd, gdy
+`runtime/current.json` i pełna paczka z dokładnego SHA zawierają
+zarejestrowany moduł. **Aktualizuj** instaluje tylko kompletny, zweryfikowany
+zestaw `Wow.exe + AutoLoot335.dll + dlls.txt` z udanego workflow
+`FINAL_PACKAGE: PASS`. Przy instalacji updater zapisuje również
+`managed_sha256` dla każdego zarządzanego pliku; nie nadpisuje żadnego
+niepowiązanego pliku klienta.
+
+Po instalacji przycisk **Uruchom grę** automatycznie uruchamia wbudowany w
+updater launcher PE32 x86. Launcher jest weryfikowany SHA256, dostarczany
+wewnątrz updatera i ładuje wyłącznie zainstalowany AutoLoot335.dll
+z wybranego katalogu gry. Updater sprawdza hash exe, DLL i dlls.txt
+względem zapisanej instalacji; przy niezgodności nie uruchamia gry bez
+aktywnego modułu, tylko wymaga **Sprawdź / napraw**. Nie pobieraj ani
+nie instaluj osobnych paczek.
+
+Przycisk **Natywny AutoLoot TEST** pozostaje wyłącznie dla starszego,
+odizolowanego eksperymentu: odmawia uruchomienia, jeśli katalog gry ma
+już zarejestrowany AutoLoot335.dll, żeby nie uruchamiać dwóch hooków.
+STABLE/main nie zmienia się bez oddzielnej akceptacji.

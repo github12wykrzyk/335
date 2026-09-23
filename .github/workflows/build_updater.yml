@@ -8,6 +8,9 @@ on:
       - 'feature/autoloot-12340'
     paths:
       - 'tools/updater/**'
+      - 'src/AutoLoot/autoloot_win32_launcher.c'
+      - 'runtime/current.json'
+      - 'runtime/AutoLoot335.dll'
       - 'src/AutoLoot/diagnostics/**'
       - 'runtime/client_exe_target.json'
       - 'Wow.exe'
@@ -50,6 +53,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           [IO.File]::WriteAllText('dist/autoloot_diag_sha.txt', '${{ github.sha }}', [Text.Encoding]::ASCII)
 
+      - name: Compile embedded x86 game-thread launcher for registered AutoLoot
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x86
+          if errorlevel 1 exit /b 1
+          if not exist dist mkdir dist
+          cl /nologo /W4 /WX /O2 /TC /DAL_NORMAL_RUNTIME /Fe:dist\AutoLoot335_Launcher.exe src\AutoLoot\autoloot_win32_launcher.c /link /MACHINE:X86 /Brepro User32.lib /SUBSYSTEM:WINDOWS /ENTRY:wmainCRTStartup
+          if errorlevel 1 exit /b 1
+
       - name: Compile WinForms updater and bootstrap x86
         shell: pwsh
         run: |
@@ -89,6 +103,7 @@ jobs:
             /resource:src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.lua,AutoLootDiag.WoW335AutoLootDiag.lua `
             /resource:src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.toc,AutoLootDiag.WoW335AutoLootDiag.toc `
             /resource:dist\autoloot_diag_sha.txt,AutoLootDiag.SourceCommit.txt `
+            /resource:dist\AutoLoot335_Launcher.exe,AutoLootRuntime.Launcher.exe `
             tools\updater\WoW335Updater.cs `
             tools\updater\Updater335Dashboard.cs `
             tools\updater\Updater335GitHubMonitor.cs `
@@ -99,7 +114,8 @@ jobs:
             tools\updater\UpdaterMaintenanceFeature.cs `
             tools\updater\UpdaterIssueReportFeature.cs `
             tools\updater\UpdaterAutoLootDiagFeature.cs `
-            tools\updater\UpdaterAutoLootNativePreviewFeature.cs
+            tools\updater\UpdaterAutoLootNativePreviewFeature.cs `
+            tools\updater\UpdaterAutoLootRuntimeFeature.cs
           if ($LASTEXITCODE -ne 0) { throw "updater csc failed with exit code $LASTEXITCODE" }
 
       - name: Verify updater PE32 x86 and hashes
@@ -128,6 +144,14 @@ jobs:
               raise SystemExit('UpdaterBuildInfo.Version not found')
           updater_version = match.group(1)
 
+          launcher = Path('dist/AutoLoot335_Launcher.exe')
+          loader_data, loader_machine = inspect(launcher)
+          if struct.unpack_from('<H', loader_data, struct.unpack_from('<I', loader_data, 0x3C)[0] + 24)[0] != 0x10B:
+              raise SystemExit('AutoLoot registered loader must be PE32 x86')
+          if 'AutoLoot335.dll'.encode('utf-16le') not in loader_data:
+              raise SystemExit('AutoLoot registered loader does not reference normal DLL')
+          print('Embedded native AutoLoot launcher PE32 x86: PASS', hashlib.sha256(loader_data).hexdigest())
+
           updater = Path('dist/WoW335Updater.exe')
           bootstrap = Path('dist/WoW335UpdaterBootstrap.exe')
           updater_data, updater_machine = inspect(updater)
@@ -147,6 +171,7 @@ jobs:
                   raise SystemExit(f'{binary}: ice icon resource not embedded in PE')
           print('Embedded ice icon: PASS')
           meta = {
+              'native_loader_sha256': hashlib.sha256(loader_data).hexdigest(),
               'name': updater.name,
               'updater_version': updater_version,
               'self_update_protocol': 1,
@@ -163,6 +188,12 @@ jobs:
           Path('dist/updater_build.json').write_text(json.dumps(meta, indent=2) + '\n', encoding='utf-8')
           print(json.dumps(meta, indent=2))
           '@ | python -
+
+      - name: Verify embedded native-loader PE32 and manifest launch gates
+        shell: pwsh
+        run: |
+          & "$env:windir\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File tools\updater\tests\AutoLootRuntimeSmoke.ps1 -UpdaterExe dist\WoW335Updater.exe -LoaderExe dist\AutoLoot335_Launcher.exe
+          if ($LASTEXITCODE -ne 0) { throw "Native AutoLoot embedded loader verification failed" }
 
       - name: Verify exact-SHA addon resources, SavedVariables parser and installation fail-closed
         shell: pwsh

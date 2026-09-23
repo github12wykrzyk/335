@@ -1,6 +1,7 @@
 name: verify
 
 on:
+  workflow_dispatch:
   push:
     branches: [work, main, parallel, 'feature/**', 'promote/**']
   pull_request:

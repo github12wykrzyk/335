@@ -60,6 +60,13 @@ namespace WoW335Updater
                 if (!Directory.Exists(root))
                     throw new InvalidOperationException("Wybierz istniejący katalog WoW 3.3.5a.");
                 root = Path.GetFullPath(root);
+                var state = ReadInstalledState();
+                if (state != null && AsArray(GetValue(state, "managed_files"))
+                    .Any(x => string.Equals(Convert.ToString(x), "AutoLoot335.dll",
+                                           StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException(
+                        "Zarejestrowany AutoLoot335.dll jest już w paczce gry. " +
+                        "Użyj «Uruchom grę», aby uniknąć podwójnego ładowania AutoLoot.");
                 var wow = Path.Combine(root, "Wow.exe");
                 if (!File.Exists(wow) ||
                     !string.Equals(Sha256File(wow), UpdaterBuildInfo.PinnedClientSha256,
