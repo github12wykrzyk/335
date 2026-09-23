@@ -16,6 +16,8 @@ namespace WoW335Updater
         private static readonly Color UiAccent = Color.FromArgb(62, 205, 207);
         private readonly Label availableBuild = new Label();
         private readonly Label connectionBadge = new Label();
+        private readonly Label modulesSummary = new Label();
+        private bool advancedOpen;
         private readonly ToolTip dashboardTips = new ToolTip();
         private readonly List<Button> dashboardFeatureButtons = new List<Button>();
         private bool dashboardReady;
@@ -43,6 +45,7 @@ namespace WoW335Updater
             p.BackColor = UiSurface;
             p.Padding = new Padding(9, 5, 9, 5);
             p.Margin = new Padding(0, 0, 0, 9);
+            p.RowStyles.Clear();
             p.RowStyles.Add(new RowStyle(SizeType.Absolute, 23));
             for (int i = 0; i < rows; i++)
                 p.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / rows));
@@ -95,154 +98,244 @@ namespace WoW335Updater
             var report = TakeFeatureButton("WYŚLIJ RAPORT");
             var reportToken = TakeFeatureButton("TOKEN RAPORTU");
             var autoLootReport = TakeFeatureButton("WYŚLIJ LOG AUTOLOOT");
-            Controls.Clear(); // Remove only the obsolete absolute-position labels from feature attachment.
+            Controls.Clear();
             SuspendLayout();
             Font = new Font("Segoe UI", 9f);
             BackColor = UiCanvas;
             ForeColor = UiInk;
-            ClientSize = new Size(1060, 710);
-            MinimumSize = new Size(970, 660);
+            ClientSize = new Size(1060, 660);
+            MinimumSize = new Size(960, 610);
             AutoScaleMode = AutoScaleMode.Dpi;
             StartPosition = FormStartPosition.CenterScreen;
             DoubleBuffered = true;
             Text = "WoW335 Updater v" + UpdaterVersion + " • 3.3.5a / 12340";
-            Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
             var root = UiGrid(1, 5);
-            root.Padding = new Padding(16);
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 156));
+            root.RowStyles.Clear();
+            root.Padding = new Padding(12, 9, 12, 9);
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 166));
+            var advancedHeight = new RowStyle(SizeType.Absolute, 37);
+            root.RowStyles.Add(advancedHeight);
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
             var header = UiGrid(2, 1);
             header.ColumnStyles.Clear();
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             var branding = UiGrid(1, 3);
-            branding.RowStyles.Add(new RowStyle(SizeType.Absolute, 33));
-            branding.RowStyles.Add(new RowStyle(SizeType.Absolute, 19));
+            branding.RowStyles.Clear();
+            branding.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            branding.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
             branding.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            branding.Controls.Add(UiLabel("WoW 335", 21, UiAccent, true), 0, 0);
-            branding.Controls.Add(UiLabel("Updater  " + UpdaterVersion + "   •   Wrath 3.3.5a / build 12340", 9, UiMuted), 0, 1);
-            connectionBadge.Text = "GitHub: token niesprawdzony";
+            branding.Controls.Add(UiLabel("WoW 335", 20, UiAccent, true), 0, 0);
+            branding.Controls.Add(UiLabel("3.3.5a  •  build 12340", 8.5f, UiMuted), 0, 1);
+            connectionBadge.Text = "GitHub: sprawdzanie";
             connectionBadge.ForeColor = UiMuted;
             connectionBadge.Dock = DockStyle.Fill;
+            connectionBadge.AutoEllipsis = true;
             branding.Controls.Add(connectionBadge, 0, 2);
             header.Controls.Add(branding, 0, 0);
             header.Controls.Add(Build335MonitorHeader(), 1, 0);
             root.Controls.Add(header, 0, 0);
 
-            var config = UiCard("KONFIGURACJA", 3);
+            var config = UiCard("KONFIGURACJA", 2);
+            config.Padding = new Padding(9, 3, 9, 3);
             var path = UiGrid(3, 1);
             path.ColumnStyles.Clear();
             path.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
             path.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            path.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 122));
+            path.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
             path.Controls.Add(UiLabel("Katalog gry", 9, UiMuted), 0, 0);
             UiInput(gameDir); path.Controls.Add(gameDir, 1, 0);
             path.Controls.Add(UiButton(browseButton, "Wybierz…"), 2, 0);
             config.Controls.Add(path, 0, 1);
 
-            var settings = UiGrid(5, 1);
+            var settings = UiGrid(4, 1);
             settings.ColumnStyles.Clear();
-            foreach (var w in new[] { 94, 178, 112, -1, 105 })
-                settings.ColumnStyles.Add(w < 0 ? new ColumnStyle(SizeType.Percent, 100) : new ColumnStyle(SizeType.Absolute, w));
-            settings.Controls.Add(UiLabel("Kanał", 9, UiMuted), 0, 0);
+            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
+            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 226));
+            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 114));
+            settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            settings.Controls.Add(UiLabel("Branch gry", 9, UiMuted), 0, 0);
             UiInput(channel); settings.Controls.Add(channel, 1, 0);
             settings.Controls.Add(UiLabel("Token GitHub", 9, UiMuted), 2, 0);
             UiInput(token); settings.Controls.Add(token, 3, 0);
-            settings.Controls.Add(UiButton(saveButton, "Zapisz"), 4, 0);
+            dashboardTips.SetToolTip(token, "Contents: Read + Actions: Read; token jest chroniony lokalnie przez DPAPI.");
             config.Controls.Add(settings, 0, 2);
-            config.Controls.Add(UiLabel("Dostęp do github12wykrzyk/335 • token tylko do odczytu (Contents + Actions), zapis DPAPI. Nie nadpisujemy realmlist.", 8.5f, UiMuted), 0, 3);
             root.Controls.Add(config, 0, 1);
 
-            var build = UiCard("AKTUALIZACJA", 4);
+            var build = UiCard("AKTUALIZACJA I MODUŁY", 5);
+            build.Padding = new Padding(9, 3, 9, 3);
             build.RowStyles.Clear();
-            foreach (var h in new[] { 23f, 47f, 28f, 13f, 49f })
+            foreach (var h in new[] { 22f, 43f, 23f, 24f, 8f, 40f })
                 build.RowStyles.Add(new RowStyle(SizeType.Absolute, h));
             var versions = UiGrid(2, 1);
-            var installed = UiGrid(1, 2); installed.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
-            installed.Controls.Add(UiLabel("ZAINSTALOWANO", 8.5f, UiMuted, true), 0, 0);
-            localInfo.Dock = DockStyle.Fill; localInfo.ForeColor = UiInk; localInfo.AutoEllipsis = true;
+            var installed = UiGrid(1, 2);
+            installed.RowStyles.Clear();
+            installed.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
+            installed.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            installed.Controls.Add(UiLabel("ZAINSTALOWANO", 8f, UiMuted, true), 0, 0);
+            localInfo.Dock = DockStyle.Fill;
+            localInfo.ForeColor = UiInk;
+            localInfo.AutoEllipsis = true;
             installed.Controls.Add(localInfo, 0, 1);
             versions.Controls.Add(installed, 0, 0);
-            var remote = UiGrid(1, 2); remote.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
-            remote.Controls.Add(UiLabel("DOSTĘPNE", 8.5f, UiMuted, true), 0, 0);
-            availableBuild.Dock = DockStyle.Fill; availableBuild.ForeColor = UiInk; availableBuild.AutoEllipsis = true;
-            availableBuild.Text = "Nie sprawdzono • wybierz Sprawdź";
+            var remote = UiGrid(1, 2);
+            remote.RowStyles.Clear();
+            remote.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
+            remote.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            remote.Controls.Add(UiLabel("DOSTĘPNE", 8f, UiMuted, true), 0, 0);
+            availableBuild.Dock = DockStyle.Fill;
+            availableBuild.ForeColor = UiInk;
+            availableBuild.AutoEllipsis = true;
+            availableBuild.Text = "Nie sprawdzono";
             remote.Controls.Add(availableBuild, 0, 1);
             versions.Controls.Add(remote, 1, 0);
             build.Controls.Add(versions, 0, 1);
-            status.Dock = DockStyle.Fill; status.ForeColor = UiInk; status.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-            build.Controls.Add(status, 0, 2);
-            progress.Dock = DockStyle.Fill; progress.Style = ProgressBarStyle.Marquee;
-            build.Controls.Add(progress, 0, 3);
-            var actions = UiGrid(4, 1);
+
+            modulesSummary.Dock = DockStyle.Fill;
+            modulesSummary.ForeColor = UiMuted;
+            modulesSummary.AutoEllipsis = true;
+            modulesSummary.TextAlign = ContentAlignment.MiddleLeft;
+            modulesSummary.Text = "Moduły: brak zainstalowanej paczki";
+            build.Controls.Add(modulesSummary, 0, 2);
+            status.Dock = DockStyle.Fill;
+            status.ForeColor = UiInk;
+            status.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            status.AutoEllipsis = true;
+            build.Controls.Add(status, 0, 3);
+            progress.Dock = DockStyle.Fill;
+            progress.Style = ProgressBarStyle.Marquee;
+            build.Controls.Add(progress, 0, 4);
+            var actions = UiGrid(3, 1);
             actions.Controls.Add(UiButton(checkButton, "Sprawdź"), 0, 0);
             actions.Controls.Add(UiButton(updateButton, "Aktualizuj"), 1, 0);
             actions.Controls.Add(UiButton(updatePlayButton, "Aktualizuj i uruchom", true), 2, 0);
-            actions.Controls.Add(UiButton(launchButton, "Uruchom grę"), 3, 0);
-            build.Controls.Add(actions, 0, 4);
+            build.Controls.Add(actions, 0, 5);
             root.Controls.Add(build, 0, 2);
 
-            var tools = UiCard("NARZĘDZIA I PRZYWRACANIE", 3);
-            var utility = UiGrid(5, 1);
-            var toolButtons = new[] { repair, diagnostics, report, reportToken, selfUpdate };
-            var toolNames = new[] { "Sprawdź / napraw", "Diagnostyka ZIP", "Wyślij raport", "Token raportu", "Aktualizuj updater" };
-            for (int i = 0; i < toolButtons.Length; i++)
-                utility.Controls.Add(UiButton(toolButtons[i], toolNames[i]), i, 0);
-            tools.Controls.Add(utility, 0, 1);
-            var addonTools = UiGrid(2, 1);
-            addonTools.ColumnStyles.Clear();
-            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
-            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
+            // Secondary actions remain functional, but occupy no space until expanded.
+            var advanced = UiGrid(1, 2);
+            advanced.RowStyles.Clear();
+            advanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            advanced.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
+            var advancedDetails = UiGrid(1, 3);
+            advancedDetails.RowStyles.Clear();
+            advancedDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 33));
+            advancedDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 33));
+            advancedDetails.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
+            advancedDetails.Visible = false;
+            var toolsToggle = UiButton(new Button(), "Narzędzia  ▾   raporty, naprawa i kopie");
+            toolsToggle.TextAlign = ContentAlignment.MiddleLeft;
+            toolsToggle.Click += delegate
+            {
+                advancedOpen = !advancedOpen;
+                advancedHeight.Height = advancedOpen ? 145 : 37;
+                advanced.RowStyles[1].Height = advancedOpen ? 106 : 0;
+                advancedDetails.Visible = advancedOpen;
+                toolsToggle.Text = advancedOpen ? "Narzędzia  ▴   zwiń" : "Narzędzia  ▾   raporty, naprawa i kopie";
+                root.PerformLayout();
+            };
+            advanced.Controls.Add(toolsToggle, 0, 0);
+            dashboardFeatureButtons.Add(toolsToggle);
+
+            var utilities = UiGrid(6, 1);
+            var utilityButtons = new[] { repair, diagnostics, report, reportToken, selfUpdate, launchButton };
+            var utilityNames = new[] { "Sprawdź / napraw", "Diagnostyka ZIP", "Wyślij raport", "Token raportu", "Aktualizuj updater", "Uruchom bez update" };
+            for (int i = 0; i < utilityButtons.Length; i++)
+                utilities.Controls.Add(UiButton(utilityButtons[i], utilityNames[i]), i, 0);
+            advancedDetails.Controls.Add(utilities, 0, 0);
+
+            var addonTools = UiGrid(3, 1);
             autoLootDiagInstallButton.Click += delegate { InstallAutoLootDiagnostic(); };
             dashboardFeatureButtons.Add(autoLootDiagInstallButton);
             addonTools.Controls.Add(UiButton(autoLootDiagInstallButton, "Instaluj test AutoLoot"), 0, 0);
             addonTools.Controls.Add(UiButton(autoLootReport, "Wyślij log AutoLoot"), 1, 0);
-            tools.Controls.Add(addonTools, 0, 2);
+            addonTools.Controls.Add(UiButton(monitorButton, "Szczegóły GitHub"), 2, 0);
+            dashboardFeatureButtons.Add(monitorButton);
+            advancedDetails.Controls.Add(addonTools, 0, 1);
+
             var rollback = UiGrid(3, 1);
             rollback.ColumnStyles.Clear();
-            rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 119));
+            rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
             rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-            rollback.Controls.Add(UiLabel("Przywróć kopię", 9, UiMuted), 0, 0);
+            rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
+            rollback.Controls.Add(UiLabel("Kopia zapasowa", 9, UiMuted), 0, 0);
             UiInput(rollbackChoice); rollback.Controls.Add(rollbackChoice, 1, 0);
             rollback.Controls.Add(UiButton(rollbackButton, "Rollback"), 2, 0);
-            tools.Controls.Add(rollback, 0, 3);
-            root.Controls.Add(tools, 0, 3);
+            advancedDetails.Controls.Add(rollback, 0, 2);
+            advanced.Controls.Add(advancedDetails, 0, 1);
+            root.Controls.Add(advanced, 0, 3);
 
             var journal = UiGrid(1, 2);
-            journal.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            journal.RowStyles.Clear();
+            journal.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
             journal.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var logHeader = UiGrid(3, 1);
+            var logHeader = UiGrid(2, 1);
             logHeader.ColumnStyles.Clear();
             logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-            logHeader.Controls.Add(UiLabel("DZIENNIK SESJI", 9, UiAccent, true), 0, 0);
-            logHeader.Controls.Add(UiButton(monitorButton, "Monitor GH"), 1, 0);
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
+            logHeader.Controls.Add(UiLabel("DZIENNIK SESJI", 8.5f, UiAccent, true), 0, 0);
             var copy = UiButton(new Button(), "Kopiuj log");
             copy.Click += delegate { try { Clipboard.SetText(log.Text); } catch (Exception ex) { Log("Błąd kopiowania: " + ex.Message); } };
-            logHeader.Controls.Add(copy, 2, 0);
+            logHeader.Controls.Add(copy, 1, 0);
             journal.Controls.Add(logHeader, 0, 0);
-            log.Dock = DockStyle.Fill; log.BackColor = UiCanvas; log.ForeColor = UiMuted;
-            log.Font = new Font("Consolas", 9f); log.BorderStyle = BorderStyle.FixedSingle;
+            log.Dock = DockStyle.Fill;
+            log.BackColor = UiCanvas;
+            log.ForeColor = UiMuted;
+            log.Font = new Font("Consolas", 8.5f);
+            log.BorderStyle = BorderStyle.FixedSingle;
             journal.Controls.Add(log, 0, 1);
             root.Controls.Add(journal, 0, 4);
 
             dashboardReady = true;
-            gameDir.TextChanged += delegate { availableBuild.Text = "Katalog zmieniony • sprawdź ponownie."; lastRemote = null; };
-            channel.SelectedIndexChanged += delegate { availableBuild.Text = "Kanał zmieniony • sprawdź ponownie."; lastRemote = null; SaveConfig(false); };
-            token.TextChanged += delegate { connectionBadge.Text = string.IsNullOrWhiteSpace(token.Text) ? "GitHub: brak tokenu" : "GitHub: token niesprawdzony"; lastRemote = null; };
-            status.TextChanged += delegate { status.ForeColor = status.Text.IndexOf("błąd", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                status.Text.IndexOf("nie powiod", StringComparison.OrdinalIgnoreCase) >= 0 ? Color.FromArgb(255, 164, 164) : UiInk; };
+            gameDir.TextChanged += delegate { availableBuild.Text = "Katalog zmieniony"; lastRemote = null; };
+            gameDir.Leave += delegate { SaveConfig(false); RefreshLocalState(); };
+            channel.SelectedIndexChanged += delegate
+            {
+                availableBuild.Text = "Branch zmieniony";
+                lastRemote = null;
+                SaveConfig(false);
+            };
+            token.TextChanged += delegate
+            {
+                connectionBadge.Text = string.IsNullOrWhiteSpace(token.Text) ? "GitHub: brak tokenu" : "GitHub: token niesprawdzony";
+                lastRemote = null;
+            };
+            token.Leave += delegate { SaveConfig(false); };
+            status.TextChanged += delegate
+            {
+                status.ForeColor = status.Text.IndexOf("błąd", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    status.Text.IndexOf("nie powiod", StringComparison.OrdinalIgnoreCase) >= 0
+                    ? Color.FromArgb(255, 164, 164) : UiInk;
+            };
             Shown += delegate { Fit335Window(); Start335Monitor(); };
             FormClosed += delegate { dashboardTips.Dispose(); };
             ResumeLayout(true);
+        }
+
+        private void Update335ModuleSummary(Dictionary<string, object> installed)
+        {
+            if (!dashboardReady) return;
+            if (installed == null)
+            {
+                modulesSummary.Text = "Moduły: brak zainstalowanej paczki";
+                dashboardTips.SetToolTip(modulesSummary, modulesSummary.Text);
+                return;
+            }
+            var modules = AsArray(GetValue(installed, "managed_files"))
+                .Select(x => Convert.ToString(x))
+                .Where(x => !string.IsNullOrWhiteSpace(x) && x.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            modulesSummary.Text = modules.Length == 0
+                ? "Moduły: brak aktywnych DLL"
+                : "Moduły (" + modules.Length + "): " + string.Join("  •  ", modules);
+            dashboardTips.SetToolTip(modulesSummary, modulesSummary.Text +
+                "\nLista zainstalowanej paczki; nie potwierdza działania w grze.");
         }
 
         private void Fit335Window()

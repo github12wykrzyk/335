@@ -55,7 +55,6 @@ namespace WoW335Updater
         private readonly Button rollbackButton = new Button();
         private readonly Button launchButton = new Button();
         private readonly Button browseButton = new Button();
-        private readonly Button saveButton = new Button();
         private readonly JavaScriptSerializer json = new JavaScriptSerializer();
         private readonly string configDir;
         private readonly string configPath;
@@ -92,7 +91,6 @@ namespace WoW335Updater
             rollbackChoice.DropDownStyle = ComboBoxStyle.DropDownList;
             token.UseSystemPasswordChar = true;
             browseButton.Click += BrowseButton_Click;
-            saveButton.Click += delegate { SaveConfig(true); };
             checkButton.Click += async delegate { await CheckAsync(); };
             updateButton.Click += async delegate { await UpdateAsync(); };
             updatePlayButton.Click += async delegate { await UpdateAndPlayAsync(); };
@@ -193,7 +191,6 @@ namespace WoW335Updater
             rollbackChoice.Enabled = !value && rollbackChoice.Items.Count > 0;
             launchButton.Enabled = !value;
             browseButton.Enabled = !value;
-            saveButton.Enabled = !value;
             channel.Enabled = !value;
             status.Text = text;
             Cursor = value ? Cursors.WaitCursor : Cursors.Default;
@@ -660,6 +657,7 @@ namespace WoW335Updater
             if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             {
                 localInfo.Text = "Lokalnie: wybierz katalog gry.";
+                Update335ModuleSummary(null);
                 rollbackButton.Enabled = false;
                 rollbackChoice.Enabled = false;
                 return;
@@ -669,6 +667,7 @@ namespace WoW335Updater
             if (installed == null)
             {
                 localInfo.Text = "Lokalnie: brak stanu updatera (pierwsza instalacja lub ręcznie kopiowane pliki).";
+                Update335ModuleSummary(null);
             }
             else
             {
@@ -676,6 +675,7 @@ namespace WoW335Updater
                 var whenText = DateTime.TryParse(GetString(installed, "installed_utc"), out when)
                     ? " • " + when.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                     : string.Empty;
+                Update335ModuleSummary(installed);
                 localInfo.Text = "Lokalnie: " + (string.IsNullOrEmpty(GetString(installed, "branch"))
                     ? GetString(installed, "channel").ToUpperInvariant() : GetString(installed, "branch"))
                     + " • run " + GetLong(installed, "run_id")

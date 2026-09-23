@@ -34,3 +34,15 @@ Actions: Read; osobny token raportów Issues: Read and write. Tokenów nie
 umieszczać w repo, nie zmieniać `Data/<locale>/realmlist.wtf`.
 Build updatera i CI nie dowodzą działania w grze: do promocji STABLE
 potrzebny jest test konkretnego SHA na WoW 3.3.5a build 12340 Windows x86.
+
+## 0.3.14-335 — kompaktowy dashboard
+
+Trzy przyciski codziennej obsługi: Sprawdź, Aktualizuj i Aktualizuj i uruchom.
+Wszystkie dotychczasowe operacje pomocnicze, w tym bezpośredni start gry,
+self-update updatera, weryfikacja/naprawa, raporty i rollback, pozostają
+w zwijanym panelu w tym samym oknie. Self-update jest nadal oddzielną
+operacją z kontrolowanym restartem — nie deklarujemy automatycznego
+wznowienia aktualizacji gry po restarcie updatera. Ustawienia zapisują się
+po opuszczeniu pola lub zmianie brancha; token DPAPI pozostaje chroniony.
+Widoczna linia DLL pochodzi z lokalnego manifestu zainstalowanej paczki,
+nie z eksperymentów GitHub; status CI nie jest testem w grze.
