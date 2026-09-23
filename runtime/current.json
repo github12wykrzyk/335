@@ -8,7 +8,7 @@
     "platform": "Windows",
     "architecture": "x86"
   },
-  "release_id": "work-autoloot-input-responsive-12340",
+  "release_id": "feature-autopickpocket-universal-12340",
   "state": "test-candidate",
   "canonical_source_policy": "Each active runtime file must point to exact existing src/ lineage or documented external source.",
   "files": [
@@ -31,14 +31,25 @@
       "canonical_source": "src/AutoLoot/autoloot_win32_host.c",
       "depends_on": [],
       "kind": "dll"
+    },
+    {
+      "component": "AutoPickPocket",
+      "path": "runtime/AutoPickPocket335.dll",
+      "version": "1.0.0-test+sha.2d9b7031521f",
+      "sha256": "2d9b7031521fbc650bce7c1cf72b13f08b165c88613bd5ba3156f5494232f79b",
+      "arch": "x86",
+      "canonical_source": "src/AutoPickPocket/autopickpocket_win32_host.c",
+      "depends_on": [],
+      "kind": "dll"
     }
   ],
   "compatibility_sets": [
     {
-      "id": "client12340-autoloot",
+      "id": "client12340-autoloot-autopickpocket",
       "components": [
         "Client12340",
-        "AutoLoot"
+        "AutoLoot",
+        "AutoPickPocket"
       ]
     }
   ]

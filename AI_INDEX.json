@@ -45,6 +45,11 @@
       "component": "AutoLoot",
       "source": "src/AutoLoot/autoloot_win32_host.c",
       "docs": "src/AutoLoot/NATIVE_ADAPTER.md"
+    },
+    {
+      "component": "AutoPickPocket",
+      "source": "src/AutoPickPocket/autopickpocket_win32_host.c",
+      "docs": "src/AutoPickPocket/README.md"
     }
   ],
   "state": "test-candidate"

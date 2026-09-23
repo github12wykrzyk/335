@@ -29,11 +29,13 @@
         },
         {
           "id": "win32:WH_GETMESSAGE",
-          "mode": "exclusive"
+          "mode": "chain",
+          "arbitrator": "AutoLoot"
         },
         {
           "id": "win32:WH_CALLWNDPROC",
-          "mode": "exclusive"
+          "mode": "chain",
+          "arbitrator": "AutoLoot"
         },
         {
           "id": "logical:loot-ui",
@@ -65,6 +67,81 @@
         "cflags": [
           "/TC",
           "/Brepro"
+        ],
+        "ldflags": []
+      }
+    },
+    {
+      "component": "AutoPickPocket",
+      "sources": [
+        "src/AutoPickPocket/autopickpocket_core.c",
+        "src/AutoPickPocket/autopickpocket_core.h",
+        "src/AutoPickPocket/autopickpocket_12340_adapter.c",
+        "src/AutoPickPocket/autopickpocket_12340_adapter.h",
+        "src/AutoPickPocket/autopickpocket_win32_host.c",
+        "src/AutoPickPocket/autopickpocket_win32_host.h",
+        "src/AutoPickPocket/autopickpocket_game_policies.c"
+      ],
+      "requires": [],
+      "resources": [
+        {
+          "id": "wow12340:object-manager",
+          "mode": "observe"
+        },
+        {
+          "id": "wow12340:0x00819210-framescript-execute",
+          "mode": "observe"
+        },
+        {
+          "id": "wow12340:0x0080DA40-guid-spell-cast",
+          "mode": "exclusive"
+        },
+        {
+          "id": "wow12340:0x0071F300-native-creature-type",
+          "mode": "observe"
+        },
+        {
+          "id": "logical:targeting",
+          "mode": "observe"
+        },
+        {
+          "id": "logical:loot-ui",
+          "mode": "observe"
+        },
+        {
+          "id": "logical:spell-cast",
+          "mode": "exclusive"
+        },
+        {
+          "id": "win32:WH_GETMESSAGE",
+          "mode": "chain",
+          "arbitrator": "AutoLoot"
+        },
+        {
+          "id": "win32:WH_CALLWNDPROC",
+          "mode": "chain",
+          "arbitrator": "AutoLoot"
+        }
+      ],
+      "build": {
+        "toolchain": "msvc_x86",
+        "sources": [
+          "src/AutoPickPocket/autopickpocket_core.c",
+          "src/AutoPickPocket/autopickpocket_12340_adapter.c",
+          "src/AutoPickPocket/autopickpocket_win32_host.c",
+          "src/AutoPickPocket/autopickpocket_game_policies.c"
+        ],
+        "include_dirs": [
+          "src/AutoPickPocket"
+        ],
+        "libraries": [
+          "Advapi32.lib",
+          "User32.lib"
+        ],
+        "cflags": [
+          "/TC",
+          "/Brepro",
+          "/WX"
         ],
         "ldflags": []
       }
