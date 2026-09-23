@@ -74,7 +74,7 @@ def find_vcvars():
         raise RuntimeError("vcvarsall.bat x86 is unavailable")
     return vcvars
 
-def compile_module(m, runtime_file, vcvars, output_dir):
+def compile_module(m, runtime_file, vcvars, output_dir, verify_registered=True):
     recipe = m["build"]
     name = m["component"]
     filename = Path(runtime_file["path"]).name
@@ -111,14 +111,16 @@ def compile_module(m, runtime_file, vcvars, output_dir):
             raise RuntimeError(name + ": x86 DLL compilation failed")
     inspect_dll(output)
     actual = sha256_file(output)
-    if actual != runtime_file["sha256"]:
-        raise ValueError(name + ": compiled DLL SHA256 differs from registered runtime: "
-            + actual + " != " + runtime_file["sha256"] + "; do not package stale binaries")
-    if sha256_file(repo_path(runtime_file["path"])) != actual:
-        raise ValueError(name + ": registered game DLL changed during build")
+    if verify_registered:
+        if actual != runtime_file["sha256"]:
+            raise ValueError(name + ": compiled DLL SHA256 differs from registered runtime: "
+                + actual + " != " + runtime_file["sha256"] + "; do not package stale binaries")
+        if sha256_file(repo_path(runtime_file["path"])) != actual:
+            raise ValueError(name + ": registered game DLL changed during build")
     return {"component": name, "source_sha256": {p: sha256_file(repo_path(p))
             for p in recipe["sources"]}, "binary_sha256": actual,
-            "binary_name": filename, "verification": "EXACT_PE32_X86_REBUILD_PASS"}
+            "binary_name": filename, "verification": ("EXACT_PE32_X86_REBUILD_PASS"
+                if verify_registered else "PE32_X86_BUILD_AWAITING_REGISTRATION")}
 
 def main():
     parser = argparse.ArgumentParser()
