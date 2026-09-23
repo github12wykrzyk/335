@@ -1,6 +1,7 @@
-/* Exact-client native adapter, isolated TEST. The shared game-thread loader
- * must supply verified NPC, spell and cast-result policies before activation.
- * Does not install hooks, touch target, invoke AutoLoot, or chat.
+/* Exact-client native adapter, registered feature TEST. The universal
+ * game-thread loader binds pinned NPC, spell and cast-result policies.
+ * Conditional exact-GUID target release is policy-owned; no extra hooks,
+ * extra AutoLoot calls or chat messages. The burst scheduler is bounded.
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

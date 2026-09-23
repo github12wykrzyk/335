@@ -1,6 +1,7 @@
-/* 12340 x86 game-thread policy. Isolated: NOT an installable game package.
- * The exact pinned EXE and native call ABIs are checked before any Lua access.
- * Game Lua only OBSERVES; never changes target, loot, movement or chat.
+/* 12340 x86 game-thread policy for the registered TEST DLL.
+ * Pinned EXE/native ABIs are checked before Lua access. A standard Lua frame
+ * observes spell/loot/money events; conditional exact-GUID ClearTarget only
+ * touches the current PP-selected target. Never register native Lua callbacks.
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
