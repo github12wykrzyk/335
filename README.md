@@ -8,3 +8,8 @@ GitHub Actions independently verify repository contracts and build a WoW335Updat
 
 ## Exact user-selected client upload
 Replace the existing root Wow.exe on branch work via https://github.com/github12wykrzyk/335/upload/work . Required SHA256: 2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d; length: 7717528 bytes. Candidate audit will fail closed until the new file is uploaded. A matching Win32 3.3.5.12340 version resource is necessary but not proof of gameplay compatibility. The updater rejects packages with another EXE and no runnable package is issued until real active x86 game DLLs pass their build and final package verification.
+
+## Server environment (user-confirmed)
+The game server uses **TrinityCore (TCCore / TC) 3.3.5 base**. The exact upstream commit/revision, fork and server-side customizations have not been established; do not assume stock TrinityCore behavior without checking the actual server or in-game evidence.
+
+Client-side DLLs target the exact selected WoW 3.3.5a build 12340 Windows x86 binary. TrinityCore 3.3.5 server code is a reference for server-side mechanics and diagnostic interpretation (for example, Pick Pocket eligibility and rejection), **not** evidence of client memory layouts, addresses, ABI or working in-game integration. Do not vendor the server source or change client/runtime manifests solely because of this environment note.
