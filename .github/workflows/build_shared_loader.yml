@@ -49,14 +49,17 @@ jobs:
             'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\AutoPickPocket335.dll src\AutoPickPocket\autopickpocket_core.c src\AutoPickPocket\autopickpocket_12340_adapter.c src\AutoPickPocket\autopickpocket_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib',
             'if errorlevel 1 exit /b 1',
             'cl.exe /nologo /LD /TC /O2 /W4 /WX /Brepro /Fe:dist\shared_loader\Wow335Loader.dll src\Loader12340\Wow335Loader.c /link /MACHINE:X86 /Brepro /DEF:src\Loader12340\Wow335Loader.def Advapi32.lib User32.lib',
+            'if errorlevel 1 exit /b 1',
+            'dumpbin.exe /exports dist\shared_loader\AutoLoot335.dll > dist\shared_loader\autoloot_exports.txt',
+            'if errorlevel 1 exit /b 1',
+            'dumpbin.exe /exports dist\shared_loader\AutoPickPocket335.dll > dist\shared_loader\pp_exports.txt',
+            'if errorlevel 1 exit /b 1',
+            'dumpbin.exe /exports dist\shared_loader\Wow335Loader.dll > dist\shared_loader\loader_exports.txt',
             'exit /b %errorlevel%'
           )
           [IO.File]::WriteAllLines('dist/shared_loader/build.cmd',$commands,[Text.Encoding]::ASCII)
           & cmd.exe /d /c "dist\shared_loader\build.cmd"
-          if ($LASTEXITCODE -ne 0) { throw "Windows PE32 x86 shared stack build failed ($LASTEXITCODE)" }
-          dumpbin /exports dist/shared_loader/AutoLoot335.dll | Out-File dist/shared_loader/autoloot_exports.txt
-          dumpbin /exports dist/shared_loader/AutoPickPocket335.dll | Out-File dist/shared_loader/pp_exports.txt
-          dumpbin /exports dist/shared_loader/Wow335Loader.dll | Out-File dist/shared_loader/loader_exports.txt
+          if ($LASTEXITCODE -ne 0) { throw "Windows PE32 x86 shared stack build or exports failed ($LASTEXITCODE)" }
           @'
           import hashlib, json, sys
           from pathlib import Path
