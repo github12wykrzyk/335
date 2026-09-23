@@ -9,6 +9,7 @@ on:
       - 'tests/test_shared_loader.py'
       - 'tests/test_native_npc_recognition.py'
       - 'tests/test_autopickpocket_work_loader.py'
+      - 'tests/test_autopickpocket_spell_result_policy.py'
       - '.github/workflows/build_shared_loader.yml'
   workflow_dispatch:
 permissions:
