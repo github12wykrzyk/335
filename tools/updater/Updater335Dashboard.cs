@@ -104,18 +104,16 @@ namespace WoW335Updater
             Text = "WoW335 Updater v" + UpdaterVersion + " • 3.3.5a / 12340";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
 
-            var root = UiGrid(1, 4);
+            var root = UiGrid(1, 5);
             root.Padding = new Padding(16);
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); // GitHub ribbon, dynamically expanded as branches are discovered.
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
-            var header = UiGrid(2, 1);
-            header.ColumnStyles.Clear();
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+            var header = UiGrid(1, 1);
             var branding = UiGrid(1, 3);
             branding.RowStyles.Add(new RowStyle(SizeType.Absolute, 33));
             branding.RowStyles.Add(new RowStyle(SizeType.Absolute, 19));
@@ -127,8 +125,9 @@ namespace WoW335Updater
             connectionBadge.Dock = DockStyle.Fill;
             branding.Controls.Add(connectionBadge, 0, 2);
             header.Controls.Add(branding, 0, 0);
-            header.Controls.Add(Build335MonitorHeader(), 1, 0);
             root.Controls.Add(header, 0, 0);
+            Bind335MonitorRow(root.RowStyles[1]);
+            root.Controls.Add(Build335MonitorHeader(), 0, 1);
 
             var config = UiCard("KONFIGURACJA", 3);
             var path = UiGrid(2, 1);
@@ -152,7 +151,7 @@ namespace WoW335Updater
             token.Leave += delegate { SaveConfig(false); };
             config.Controls.Add(settings, 0, 2);
             config.Controls.Add(UiLabel("Jeden token do repo 335: Contents i Actions odczyt, Issues odczyt/zapis (RW). Zapis DPAPI. Bez zmian realmlist.", 8.5f, UiMuted), 0, 3);
-            root.Controls.Add(config, 0, 1);
+            root.Controls.Add(config, 0, 2);
 
             var build = UiCard("AKTUALIZACJA", 4);
             build.RowStyles.Clear();
@@ -181,7 +180,7 @@ namespace WoW335Updater
             actions.Controls.Add(UiButton(updatePlayButton, "Aktualizuj i uruchom", true), 2, 0);
 
             build.Controls.Add(actions, 0, 4);
-            root.Controls.Add(build, 0, 2);
+            root.Controls.Add(build, 0, 3);
 
             // Reporting shares the session journal, not the three game actions.
             var journal = UiGrid(1, 2);
@@ -201,7 +200,7 @@ namespace WoW335Updater
             log.Dock = DockStyle.Fill; log.BackColor = UiCanvas; log.ForeColor = UiMuted;
             log.Font = new Font("Consolas", 9f); log.BorderStyle = BorderStyle.FixedSingle;
             journal.Controls.Add(log, 0, 1);
-            root.Controls.Add(journal, 0, 3);
+            root.Controls.Add(journal, 0, 4);
 
             dashboardReady = true;
             gameDir.TextChanged += delegate { availableBuild.Text = "Katalog zmieniony • sprawdź ponownie."; lastRemote = null; };
