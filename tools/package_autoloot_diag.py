@@ -27,7 +27,7 @@ def build(output: Path, git_sha: str, branch: str) -> dict:
     if branch != "feature/autoloot-12340":
         raise ValueError("diagnostic belongs only to the isolated AutoLoot experiment")
     data = {name: (SOURCE / name).read_bytes() for name in FILES}
-    if not data[FILES[1]].startswith(b"## Interface: 30300\n"):
+    if not data[FILES[1]].splitlines() or data[FILES[1]].splitlines()[0].strip() != b"## Interface: 30300":
         raise ValueError("incorrect 3.3.5 addon interface version")
     meta = {
         "kind": "MANUAL_LOOT_WINDOW_DIAGNOSTIC_ADDON_NOT_GAME_PACKAGE",
