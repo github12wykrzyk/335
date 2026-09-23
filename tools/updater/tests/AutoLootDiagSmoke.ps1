@@ -54,16 +54,23 @@ WoW335AutoLootDiagLog = {
 '@
 [IO.File]::WriteAllText($savedFile, $fixture)
 try {
-    $events = [string]$collect.Invoke($null, [object[]]@($folder))
+    $single = New-Object 'object[]' 1
+    $single[0] = [string]$folder
+    $events = [string]$collect.Invoke($null, $single)
     if ($events -notmatch 'LOOT_OPENED' -or $events -notmatch 'LOOT_CLOSED') { throw "Failed to collect expected diagnostic lines" }
     if ($events -match 'DO_NOT_UPLOAD_ME|NEVER_INCLUDE_ME|REALM_PRIVATE') { throw "Raw account or SavedVariables data leaked" }
-    $safe = [string]$sanitize.Invoke($null, [object[]]@($events))
+    $single[0] = [string]$events
+    $safe = [string]$sanitize.Invoke($null, $single)
     if ($safe -notmatch '<EMAIL>' -or $safe -notmatch '<IP>' -or $safe -match 'contact@example.com|192.168.1.2') {
         throw "Diagnostic privacy redaction failed"
     }
     $rejected = $false
     try {
-        $install.Invoke($null, [object[]]@($folder, $assembly, $false)) | Out-Null
+        $triple = New-Object 'object[]' 3
+        $triple[0] = [string]$folder
+        $triple[1] = $assembly
+        $triple[2] = $false
+        $install.Invoke($null, $triple) | Out-Null
     } catch [Reflection.TargetInvocationException] {
         $rejected = $_.Exception.InnerException.Message -match 'Wow.exe'
     }
