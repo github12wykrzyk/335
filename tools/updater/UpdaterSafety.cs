@@ -7,7 +7,7 @@ namespace WoW335Updater
 {
     internal static class UpdaterBuildInfo
     {
-        public const string Version = "0.3.1-335";
+        public const string Version = "0.3.2-335";
     }
 
     internal static class UpdaterSafety

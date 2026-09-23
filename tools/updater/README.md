@@ -12,3 +12,6 @@ as slim outlined text strips in the header (10 s refresh). The standalone
 of both updater and bootstrap Windows x86 executables; the main window explicitly
 uses its executable icon. The badges display CI state only, not proof of a
 verified runnable WoW game package.
+
+## 0.3.2-335 — exact HEAD/package identity and managed-file protection
+TEST/STABLE game artifacts must belong to current branch HEAD, not a stale successful run. The inner package metadata must match exact run SHA, channel, game build and x86. Existing unmanaged DLL/dlls.txt filename collisions are blocked before writes; the explicitly selected target EXE is backed up. Full-package rollback remains supported. No active 12340 game DLL has been certified by this updater build.
