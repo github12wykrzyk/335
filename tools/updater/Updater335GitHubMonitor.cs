@@ -11,7 +11,8 @@ namespace WoW335Updater
     // Read-only Actions monitor: only github12wykrzyk/335, never an artifact selector.
     internal sealed partial class MainForm
     {
-        private readonly Timer monitorTimer = new Timer { Interval = 10000 };
+        private readonly Timer monitorTimer = new Timer { Interval = 20000 };
+        private TableLayoutPanel monitorStrips;
         private readonly Button monitorButton = new Button();
         private readonly Dictionary<string, Label> monitorBadges = new Dictionary<string, Label>
         {
@@ -28,37 +29,53 @@ namespace WoW335Updater
 
         private TableLayoutPanel Build335MonitorHeader()
         {
-            // Slim status strips centered within the fixed header on Windows DPI scaling.
-            var frame = UiGrid(1, 3);
-            frame.RowStyles.Add(new RowStyle(SizeType.Absolute, 10f));
-            frame.RowStyles.Add(new RowStyle(SizeType.Absolute, 38f));
-            frame.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            var strips = UiGrid(2, 1);
-            strips.ColumnStyles.Clear();
-            strips.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            strips.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            strips.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            int index = 0;
-            foreach (var branch in new[] { "work", "main" })
-            {
-                var badge = monitorBadges[branch];
-                badge.Dock = DockStyle.Fill;
-                badge.AutoEllipsis = true;
-                badge.Margin = Padding.Empty;
-                badge.Padding = new Padding(8, 0, 4, 0);
-                badge.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
-                badge.TextAlign = ContentAlignment.MiddleLeft;
-                var outline = monitorBadgeFrames[branch];
-                outline.Dock = DockStyle.Fill;
-                outline.Margin = new Padding(4, 2, 4, 2);
-                outline.Padding = new Padding(1);
-                outline.Controls.Add(badge);
-                Set335Badge(branch, "UNKNOWN", "", "Oczekiwanie na pierwsze sprawdzenie.");
-                strips.Controls.Add(outline, index++, 0);
-            }
-            frame.Controls.Add(strips, 0, 1);
+            // Six compact, evenly sized branch badges fit into the header.
+            var frame = UiGrid(1, 1);
+            monitorStrips = UiGrid(3, 2);
+            monitorStrips.RowStyles.Clear();
+            monitorStrips.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            monitorStrips.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            Arrange335MonitorBadges(new[] { "work", "main" });
+            frame.Controls.Add(monitorStrips, 0, 0);
             monitorButton.Click += delegate { Open335Monitor(); };
             return frame;
+        }
+
+        private void Arrange335MonitorBadges(IList<string> branches)
+        {
+            if (monitorStrips == null) return;
+            monitorStrips.SuspendLayout();
+            try
+            {
+                monitorStrips.Controls.Clear();
+                for (var i = 0; i < branches.Count && i < 6; i++)
+                {
+                    var name = branches[i];
+                    Label badge;
+                    Panel outline;
+                    if (!monitorBadges.TryGetValue(name, out badge))
+                    {
+                        badge = new Label();
+                        outline = new Panel();
+                        monitorBadges[name] = badge;
+                        monitorBadgeFrames[name] = outline;
+                    }
+                    else outline = monitorBadgeFrames[name];
+                    badge.Dock = DockStyle.Fill;
+                    badge.AutoEllipsis = true;
+                    badge.Margin = Padding.Empty;
+                    badge.Padding = new Padding(6, 0, 3, 0);
+                    badge.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular);
+                    badge.TextAlign = ContentAlignment.MiddleLeft;
+                    outline.Dock = DockStyle.Fill;
+                    outline.Margin = new Padding(3, 2, 3, 2);
+                    outline.Padding = new Padding(1);
+                    if (!outline.Controls.Contains(badge)) outline.Controls.Add(badge);
+                    monitorStrips.Controls.Add(outline, i % 3, i / 3);
+                    Set335Badge(name, "UNKNOWN", "", "Oczekiwanie na odczyt aktualnego HEAD.");
+                }
+            }
+            finally { monitorStrips.ResumeLayout(true); }
         }
 
         private void Set335Badge(string branch, string state, string head, string detail)
@@ -76,7 +93,9 @@ namespace WoW335Updater
                 : yellow ? Color.FromArgb(255, 221, 153)
                 : red ? Color.FromArgb(255, 178, 188) : UiMuted;
             var shortHead = string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length));
-            badge.Text = branch.ToUpperInvariant() + "   |   " + shortHead + "   |   " + state;
+            var compactName = branch.Replace("feature/", "").Replace("promote/", "promote/");
+            badge.Text = compactName + "  •  " + state;
+            dashboardTips.SetToolTip(badge, branch + " • " + shortHead);
             var tooltip = detail + "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss");
             dashboardTips.SetToolTip(outline, tooltip);
             dashboardTips.SetToolTip(badge, tooltip);
@@ -174,11 +193,12 @@ namespace WoW335Updater
             {
                 var output = new StringBuilder();
                 output.AppendLine("WOW 335 / GITHUB   " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-                output.AppendLine("Odczyt co 10 sekund, tylko repozytorium github12wykrzyk/335.");
+                output.AppendLine("Odczyt co 20 sekund, tylko github12wykrzyk/335.");
                 if (string.IsNullOrWhiteSpace(token.Text))
                 {
                     output.AppendLine("Brak tokenu (Contents: Read, Actions: Read).");
-                    foreach (var b in monitorBadges.Keys) Set335Badge(b, "UNKNOWN", "", "Brak tokenu GitHub.");
+                    foreach (var b in new List<string>(monitorBadges.Keys))
+                        Set335Badge(b, "UNKNOWN", "", "Brak tokenu GitHub.");
                     monitorReport = output.ToString();
                     return;
                 }
@@ -186,61 +206,70 @@ namespace WoW335Updater
                 using (var client = CreateClient())
                 {
                     client.Timeout = TimeSpan.FromSeconds(18);
-                    foreach (var b in new[] { "work", "main" })
+                    var rows = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase);
+                    try
+                    {
+                        var refs = AsArray(json.DeserializeObject(
+                            await GetStringAsync(client, ApiRoot + "/branches?per_page=100")));
+                        foreach (var item in refs)
+                        {
+                            var row = AsDictionary(item);
+                            var name = GetString(row, "name");
+                            if (ValidGameBranch(name) && !rows.ContainsKey(name)) rows[name] = row;
+                        }
+                        if (refs.Length >= 100)
+                        {
+                            hasErrors = true;
+                            output.AppendLine("Lista branchy ma 100 lub więcej wpisów; pełny wykaz w konfiguracji.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        hasErrors = true;
+                        output.AppendLine("Lista branchy: " + ex.Message);
+                    }
+                    var branches = new List<string>(rows.Keys);
+                    branches.Sort(StringComparer.OrdinalIgnoreCase);
+                    branches.Remove("work");
+                    branches.Remove("main");
+                    branches.Insert(0, "main");
+                    branches.Insert(0, "work");
+                    Arrange335MonitorBadges(branches);
+                    if (branches.Count > 6)
+                        output.AppendLine("Belka pokazuje pierwsze 6 branchy; pozostałe są w szczegółach poniżej.");
+                    foreach (var b in branches)
                     {
                         try
                         {
-                            var branchData = await GetStringAsync(client, ApiRoot + "/branches/" + b);
-                            var runsData = await GetStringAsync(client, ApiRoot + "/actions/runs?branch=" + b + "&per_page=40");
-                            var badge = Read335Badge(b, branchData, runsData);
-                            Set335Badge(b, badge.State, badge.Head, badge.Info);
-                            output.AppendLine(b.ToUpperInvariant() + "  " + badge.State + "  " + badge.Head);
+                            Dictionary<string, object> row;
+                            if (!rows.TryGetValue(b, out row))
+                                throw new InvalidOperationException("Branch nie został zwrócony przez GitHub.");
+                            var runsData = await GetStringAsync(client, ApiRoot +
+                                "/actions/runs?branch=" + Uri.EscapeDataString(b) + "&per_page=40");
+                            var badge = Read335Badge(b, json.Serialize(row), runsData);
+                            if (monitorBadges.ContainsKey(b)) Set335Badge(b, badge.State, badge.Head, badge.Info);
+                            output.AppendLine(b + "  " + badge.State + "  " + badge.Head);
                             output.AppendLine(badge.Info);
                         }
                         catch (Exception ex)
                         {
                             hasErrors = true;
-                            Set335Badge(b, "UNKNOWN", "", ex.Message);
-                            output.AppendLine(b.ToUpperInvariant() + ": błąd odczytu " + ex.Message);
+                            if (monitorBadges.ContainsKey(b)) Set335Badge(b, "UNKNOWN", "", ex.Message);
+                            output.AppendLine(b + ": błąd odczytu " + ex.Message);
                         }
                         output.AppendLine();
-                    }
-                    try
-                    {
-                        var refs = AsArray(json.DeserializeObject(await GetStringAsync(client, ApiRoot + "/branches?per_page=100")));
-                        output.AppendLine("FEATURE / PROMOTE • tylko podgląd, bez instalacji:");
-                        int count = 0;
-                        foreach (var item in refs)
-                        {
-                            var row = AsDictionary(item);
-                            var name = GetString(row, "name");
-                            if (!name.StartsWith("feature/", StringComparison.OrdinalIgnoreCase) &&
-                                !name.StartsWith("promote/", StringComparison.OrdinalIgnoreCase)) continue;
-                            var sha = GetString(AsDictionary(GetValue(row, "commit")), "sha");
-                            output.AppendLine("  " + name + "   " + sha.Substring(0, Math.Min(8, sha.Length)));
-                            count++;
-                        }
-                        if (count == 0) output.AppendLine("  Brak.");
-                        if (refs.Length >= 100) output.AppendLine("  Uwaga: lista branchy może być ucięta.");
-                    }
-                    catch (Exception ex)
-                    {
-                        hasErrors = true;
-                        output.AppendLine("Eksperymenty: błąd odczytu " + ex.Message);
                     }
                 }
                 monitorReport = output.ToString();
                 monitorButton.Text = hasErrors ? "GH: błąd" : "GH: " + DateTime.Now.ToString("HH:mm:ss");
-                if (string.IsNullOrEmpty(connectionBadge.Text) || connectionBadge.Text != "GitHub: połączono")
-                {
-                    connectionBadge.Text = hasErrors ? "GitHub: częściowy odczyt" : "GitHub: połączono";
-                    connectionBadge.ForeColor = hasErrors ? UiMuted : Color.FromArgb(151, 235, 190);
-                }
+                connectionBadge.Text = hasErrors ? "GitHub: częściowy odczyt" : "GitHub: połączono";
+                connectionBadge.ForeColor = hasErrors ? UiMuted : Color.FromArgb(151, 235, 190);
             }
             catch (Exception ex)
             {
                 monitorReport = "Monitor GitHub: " + ex.Message;
-                foreach (var b in monitorBadges.Keys) Set335Badge(b, "UNKNOWN", "", monitorReport);
+                foreach (var b in new List<string>(monitorBadges.Keys))
+                    Set335Badge(b, "UNKNOWN", "", monitorReport);
             }
             finally
             {
@@ -248,5 +277,6 @@ namespace WoW335Updater
                 monitorBusy = false;
             }
         }
+
     }
 }

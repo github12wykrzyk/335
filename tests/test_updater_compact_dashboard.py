@@ -17,6 +17,15 @@ class CompactUpdaterDashboardTests(unittest.TestCase):
         self.assertIn('UiButton(autoLootReport, "Wyślij log AutoLoot")', ui)
         self.assertIn('UiButton(monitorButton, "Szczegóły GitHub")', ui)
 
+    def test_live_branch_badges_are_small_and_dynamic(self):
+        monitor = (ROOT / "tools/updater/Updater335GitHubMonitor.cs").read_text(encoding="utf-8")
+        self.assertIn("monitorStrips = UiGrid(3, 2);", monitor)
+        self.assertIn("Arrange335MonitorBadges(branches)", monitor)
+        self.assertIn('"/branches?per_page=100"', monitor)
+        self.assertIn('"branch=" + Uri.EscapeDataString(b)', monitor)
+        self.assertIn("i < branches.Count && i < 6", monitor)
+        self.assertIn("Interval = 20000", monitor)
+
     def test_module_list_comes_only_from_installed_state(self):
         ui = (ROOT / "tools/updater/Updater335Dashboard.cs").read_text(encoding="utf-8")
         code = (ROOT / "tools/updater/WoW335Updater.cs").read_text(encoding="utf-8")

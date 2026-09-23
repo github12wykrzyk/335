@@ -46,3 +46,8 @@ wznowienia aktualizacji gry po restarcie updatera. Ustawienia zapisują się
 po opuszczeniu pola lub zmianie brancha; token DPAPI pozostaje chroniony.
 Widoczna linia DLL pochodzi z lokalnego manifestu zainstalowanej paczki,
 nie z eksperymentów GitHub; status CI nie jest testem w grze.
+
+Belka GitHub pokazuje w dwóch ciasnych rzędach do 6 bieżących branchy,
+wykrywanych z GitHuba; kolejne branche i pełne SHA są dostępne w szczegółach.
+Każda plakietka dotyczy aktualnego HEAD danego brancha. Odczyt co 20 sekund
+ogranicza liczbę zapytań; status Actions nie poświadcza działania w grze.
