@@ -109,3 +109,16 @@ policy eligibility and the 5-yard 3D distance. A moving player or despawned
 NPC can invalidate a preceding scan. Failure uses existing bounded retry and
 backoff. This safety guard does not supply the still-missing authoritative
 NPC/spell/result policies, game-thread loader or in-game validation.
+
+## Delivery gate (2026-09-23)
+
+`.github/workflows/autopickpocket_delivery.yml` is an independent mandatory
+full-TEST gate for this feature branch. A green isolated adapter job does NOT
+mean the requested gameplay feature or installable package exists. The gate
+uploads an exact-SHA blocker report even when integration is incomplete.
+It requires native hostile-NPC/spell/attempt policies, one game-thread loader
+handling AutoLoot and AutoPickPocket, an updater that installs and launches the
+verified two-DLL manifest, active module registration, a strict reproducible
+x86 build and FINAL_PACKAGE: PASS. Only then may an exact-SHA player game test
+be requested. Failed readiness is work to implement, not a reason to relabel
+an isolated x86 artifact as an AutoPickPocket game package.

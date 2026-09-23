@@ -1,0 +1,79 @@
+name: AutoPickPocket 12340 full TEST delivery
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/autopickpocket-12340]
+permissions:
+  contents: read
+concurrency:
+  group: autopickpocket-delivery-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  integration-and-game-candidate:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify repository and tests on exact feature SHA
+        shell: pwsh
+        run: |
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_module_registry.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Require full PP policies loader updater and registered x86 module
+        shell: pwsh
+        run: |
+          python tools/autopickpocket_delivery.py --report dist/autopickpocket_delivery.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload exact-SHA readiness or blocker report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoPickPocket-DELIVERY-STATUS-${{ github.sha }}
+          path: dist/autopickpocket_delivery.json
+          if-no-files-found: warn
+      - name: Audit exact 12340 EXE and version resource
+        shell: pwsh
+        run: |
+          python tools/verify_client_exe.py --exe Wow.exe --require-target --report dist/client_exe_audit.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $audit = Get-Content dist/client_exe_audit.json -Raw | ConvertFrom-Json
+          $ver = (Get-Item -LiteralPath Wow.exe).VersionInfo
+          $valid = ($ver.FileMajorPart -eq 3 -and $ver.FileMinorPart -eq 3 -and $ver.FileBuildPart -eq 5 -and $ver.FilePrivatePart -eq 12340)
+          $audit | Add-Member -Force NoteProperty version_resource_matches_12340 ([bool]$valid)
+          $audit | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath dist/client_exe_audit.json -Encoding UTF8
+          if (-not $valid) { throw "Game client version resource is not 3.3.5.12340" }
+          python tools/candidate_readiness.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Strictly rebuild every registered Windows PE32 x86 game module
+        shell: pwsh
+        run: |
+          python tools/build_active.py --all --report dist/native_build.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Strict game package SHA256 and FINAL_PACKAGE gate
+        shell: pwsh
+        run: |
+          python tools/package_candidate.py --package dist/WoW335_AUTOPICKPOCKET_TEST.zip --metadata dist/candidate_metadata.json --native-build-report dist/native_build.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_candidate_package.py --package dist/WoW335_AUTOPICKPOCKET_TEST.zip --metadata dist/candidate_metadata.json --finalize
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host 'AUTOPICKPOCKET_TEST: FINAL_PACKAGE PASS for exact SHA; in-game behavior NOT yet verified'
+      - name: Publish only full verified installable AutoPickPocket TEST
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoW335-AUTOPICKPOCKET-TEST-${{ github.sha }}
+          path: |
+            dist/WoW335_AUTOPICKPOCKET_TEST.zip
+            dist/candidate_metadata.json
+            dist/native_build.json
+          if-no-files-found: error
+          compression-level: 0
