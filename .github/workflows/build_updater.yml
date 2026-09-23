@@ -5,14 +5,17 @@ on:
     branches:
       - work
       - main
-      - 'feature/autoloot-12340'
+      - parallel
+      - 'feature/**'
+      - 'promote/**'
     paths:
       - 'tools/updater/**'
-      - 'src/AutoLoot/autoloot_win32_launcher.c'
-      - 'runtime/current.json'
-      - 'runtime/AutoLoot335.dll'
-      - 'src/AutoLoot/diagnostics/**'
-      - 'runtime/client_exe_target.json'
+      - 'src/**'
+      - 'runtime/**'
+      - 'tests/**'
+      - 'tools/verify*.py'
+      - 'AI_INDEX.json'
+      - 'CURRENT.json'
       - 'Wow.exe'
       - '.github/workflows/build_updater.yml'
   workflow_dispatch:
@@ -31,9 +34,18 @@ jobs:
       - name: Checkout current tree
         uses: actions/checkout@v5
 
-      - name: Verify current repository state
+      - name: Verify repository, runtime, module contracts and unit tests
         shell: pwsh
-        run: python tools/verify_current.py
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_module_registry.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify pinned EXE identity embedded in updater
         shell: pwsh
@@ -204,6 +216,18 @@ jobs:
       - name: Copy updater README
         shell: pwsh
         run: Copy-Item tools\updater\README.md dist\README_UPDATER.md
+
+      - name: Reject outdated branch HEAD before uploading updater
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $remote = git ls-remote --exit-code origin "refs/heads/$env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0 -or -not $remote) { throw 'Unable to verify current remote branch HEAD' }
+          $actual = (($remote -split '\s+')[0]).Trim()
+          if ($actual -ne $env:GITHUB_SHA) {
+            throw "STALE_HEAD: $env:GITHUB_REF_NAME is now $actual, this run checked out $env:GITHUB_SHA"
+          }
+          Write-Host "CURRENT_HEAD: PASS $actual"
 
       - name: Upload updater
         uses: actions/upload-artifact@v4
