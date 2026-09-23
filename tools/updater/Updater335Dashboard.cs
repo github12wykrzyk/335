@@ -91,7 +91,6 @@ namespace WoW335Updater
             if (dashboardReady) return;
             // Capture wired controller buttons before removing absolute layout.
             var reportButton = TakeFeatureButton("WYŚLIJ RAPORT");
-            var reportTokenButton = TakeFeatureButton("TOKEN RAPORTU");
             Controls.Clear(); // Remove only the obsolete absolute-position labels from feature attachment.
             SuspendLayout();
             Font = new Font("Segoe UI", 9f);
@@ -152,7 +151,7 @@ namespace WoW335Updater
             UiInput(token); settings.Controls.Add(token, 3, 0);
             token.Leave += delegate { SaveConfig(false); };
             config.Controls.Add(settings, 0, 2);
-            config.Controls.Add(UiLabel("Dostęp do github12wykrzyk/335 • token tylko do odczytu (Contents + Actions), zapis DPAPI. Nie nadpisujemy realmlist.", 8.5f, UiMuted), 0, 3);
+            config.Controls.Add(UiLabel("Jeden token do repo 335: Contents i Actions odczyt, Issues odczyt/zapis (RW). Zapis DPAPI. Bez zmian realmlist.", 8.5f, UiMuted), 0, 3);
             root.Controls.Add(config, 0, 1);
 
             var build = UiCard("AKTUALIZACJA", 4);
@@ -188,19 +187,15 @@ namespace WoW335Updater
             var journal = UiGrid(1, 2);
             journal.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
             journal.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var logHeader = UiGrid(3, 1);
+            var logHeader = UiGrid(2, 1);
             logHeader.ColumnStyles.Clear();
-            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 57));
-            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18));
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72));
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
 
             logHeader.Controls.Add(UiLabel("DZIENNIK SESJI", 9, UiAccent, true), 0, 0);
             logHeader.Controls.Add(UiButton(reportButton, "WYŚLIJ RAPORT"), 1, 0);
-            logHeader.Controls.Add(UiButton(reportTokenButton, "TOKEN RAPORTU"), 2, 0);
             dashboardTips.SetToolTip(reportButton,
-                "Podgląd i wysyłka diagnostyki AutoLoot/Epoch do GitHub Issues.");
-            dashboardTips.SetToolTip(reportTokenButton,
-                "Osobny token z uprawnieniem Issues: Read and write, zapisany przez DPAPI.");
+                "Podgląd i wysyłka raportu do GitHub Issues wspólnym tokenem z konfiguracji.");
 
             journal.Controls.Add(logHeader, 0, 0);
             log.Dock = DockStyle.Fill; log.BackColor = UiCanvas; log.ForeColor = UiMuted;

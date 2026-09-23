@@ -211,7 +211,7 @@ namespace WoW335Updater
                 {
                     if (maintenanceBusy) return false;
                     if (string.IsNullOrWhiteSpace(token.Text))
-                        throw new InvalidOperationException("Wpisz GitHub token z prawem odczytu repozytorium i Actions.");
+                        throw new InvalidOperationException("Wpisz token do repo 335: Contents i Actions Read, Issues Read and write do raportów.");
 
                     SetBusy(true, "Sprawdzanie aktualizacji updatera...");
                     var remote = await DownloadLatestUpdaterAsync();
@@ -580,7 +580,7 @@ namespace WoW335Updater
                 if (string.IsNullOrWhiteSpace(gameDir.Text) || !Directory.Exists(gameDir.Text.Trim()))
                     throw new InvalidOperationException("Wybierz istniejący katalog gry.");
                 if (string.IsNullOrWhiteSpace(token.Text))
-                    throw new InvalidOperationException("Wpisz GitHub token z prawem odczytu repozytorium i Actions.");
+                    throw new InvalidOperationException("Wpisz token do repo 335: Contents i Actions Read, Issues Read and write do raportów.");
             }
 
             private HttpClient CreateClient()

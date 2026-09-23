@@ -206,7 +206,7 @@ namespace WoW335Updater
             if (string.IsNullOrWhiteSpace(gameDir.Text) || !Directory.Exists(gameDir.Text.Trim()))
                 throw new InvalidOperationException("Wybierz istniejący katalog gry.");
             if (string.IsNullOrWhiteSpace(token.Text))
-                throw new InvalidOperationException("Wpisz GitHub token z prawem odczytu repozytorium i Actions.");
+                throw new InvalidOperationException("Wpisz token do repo 335: Contents i Actions Read, Issues Read and write do raportów.");
         }
 
         private async Task CheckAsync()

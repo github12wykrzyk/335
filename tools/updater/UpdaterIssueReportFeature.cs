@@ -33,9 +33,9 @@ namespace WoW335Updater
             private readonly TextBox gameDir;
             private readonly RichTextBox log;
             private readonly Label status;
+            private readonly TextBox token;
             private readonly Button sendButton = new Button();
             private readonly Button autoLootDiagSendButton = new Button();
-            private readonly Button tokenButton = new Button();
             private readonly JavaScriptSerializer json = new JavaScriptSerializer();
             private bool busy;
 
@@ -45,11 +45,12 @@ namespace WoW335Updater
                 gameDir = GetPrivateField<TextBox>(form, "gameDir");
                 log = GetPrivateField<RichTextBox>(form, "log");
                 status = GetPrivateField<Label>(form, "status");
+                token = GetPrivateField<TextBox>(form, "token");
             }
 
             public void Attach()
             {
-                if (gameDir == null) return;
+                if (gameDir == null || token == null) return;
                 var oldHeight = form.ClientSize.Height;
                 form.ClientSize = new Size(form.ClientSize.Width, oldHeight + AddedHeight);
                 form.MinimumSize = new Size(form.MinimumSize.Width, form.MinimumSize.Height + AddedHeight);
@@ -63,20 +64,7 @@ namespace WoW335Updater
                 form.Controls.Add(autoLootDiagSendButton);
                 form.Controls.Add(sendButton);
 
-                tokenButton.Text = "TOKEN RAPORTU";
-                tokenButton.SetBounds(240, oldHeight + 8, 145, 32);
-                tokenButton.Click += delegate { ChangeReportToken(); };
-                form.Controls.Add(tokenButton);
 
-                var note = new Label
-                {
-                    Text = "GitHub Issues R/W, osobny token DPAPI; raport sanityzowany.",
-                    AutoSize = true,
-                    Left = 400,
-                    Top = oldHeight + 16,
-                    ForeColor = Color.DimGray
-                };
-                form.Controls.Add(note);
             }
 
             private async Task SendReportAsync(bool onlyAutoLoot)
@@ -137,17 +125,12 @@ namespace WoW335Updater
                         }
                     }
 
-                    var reportToken = LoadReportToken();
+                    // One DPAPI-backed token shared with the updater, Actions
+                    // monitor and report delivery. No second credential prompt.
+                    var reportToken = token.Text.Trim();
                     if (string.IsNullOrWhiteSpace(reportToken))
-                    {
-                        reportToken = PromptForToken();
-                        if (string.IsNullOrWhiteSpace(reportToken))
-                        {
-                            finalStatus = "Wysyłanie raportu anulowane.";
-                            return;
-                        }
-                        SaveReportToken(reportToken);
-                    }
+                        throw new InvalidOperationException(
+                            "Wpisz token GitHub w KONFIGURACJA (Issues: Read and write).");
 
                     SetBusy(true, "Tworzenie raportu diagnostycznego...");
                     string headSha;
@@ -195,7 +178,7 @@ namespace WoW335Updater
                                 if (!response.IsSuccessStatusCode)
                                 {
                                     HandleAuthenticationFailure(response.StatusCode);
-                                    throw new InvalidOperationException("GitHub Issues HTTP " + (int)response.StatusCode + ": " + TrimForError(text) + "\n\nToken raportowy musi mieć Issues: Read and write tylko dla repo 335.");
+                                    throw new InvalidOperationException("GitHub Issues HTTP " + (int)response.StatusCode + ": " + TrimForError(text) + "\n\nWspólny token repo 335 wymaga Issues: Read and write do wysyłania raportów.");
                                 }
                                 var created = AsDictionary(json.DeserializeObject(text));
                                 var number = GetLong(created, "number");
@@ -215,23 +198,6 @@ namespace WoW335Updater
                 finally
                 {
                     SetBusy(false, finalStatus);
-                }
-            }
-
-            private void ChangeReportToken()
-            {
-                try
-                {
-                    var value = PromptForToken();
-                    if (string.IsNullOrWhiteSpace(value)) return;
-                    SaveReportToken(value);
-                    Log("Token raportowy został zastąpiony i zapisany przez DPAPI.");
-                    MessageBox.Show(form, "Token raportowy zapisany.", "WoW335 Updater", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                catch (Exception ex)
-                {
-                    Log("BŁĄD zapisu tokenu raportowego: " + ex.Message);
-                    MessageBox.Show(form, ex.Message, "WoW335 Updater", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
 
@@ -480,99 +446,19 @@ namespace WoW335Updater
                 return client;
             }
 
-            private string PromptForToken()
-            {
-                using (var dialog = new Form())
-                using (var box = new TextBox())
-                using (var ok = new Button())
-                using (var cancel = new Button())
-                {
-                    dialog.Text = "GitHub report token";
-                    dialog.ClientSize = new Size(620, 150);
-                    dialog.StartPosition = FormStartPosition.CenterParent;
-                    dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
-                    dialog.MaximizeBox = false;
-                    dialog.MinimizeBox = false;
-                    dialog.Controls.Add(new Label { Text = "Osobny fine-grained token dla repo 335: Issues = Read and write", Left = 16, Top = 16, AutoSize = true });
-                    box.Left = 16;
-                    box.Top = 45;
-                    box.Width = 588;
-                    box.UseSystemPasswordChar = true;
-                    dialog.Controls.Add(box);
-                    ok.Text = "ZAPISZ";
-                    ok.SetBounds(378, 92, 108, 32);
-                    ok.DialogResult = DialogResult.OK;
-                    cancel.Text = "ANULUJ";
-                    cancel.SetBounds(496, 92, 108, 32);
-                    cancel.DialogResult = DialogResult.Cancel;
-                    dialog.Controls.Add(ok);
-                    dialog.Controls.Add(cancel);
-                    dialog.AcceptButton = ok;
-                    dialog.CancelButton = cancel;
-                    return dialog.ShowDialog(form) == DialogResult.OK ? box.Text.Trim() : string.Empty;
-                }
-            }
-
-            private static string ReportTokenPath()
-            {
-                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WoW335Updater", "report_token.dpapi");
-            }
-
-            private static byte[] ReportEntropy()
-            {
-                return Encoding.UTF8.GetBytes("WoW335Updater-report-token-v1");
-            }
-
-            private string LoadReportToken()
-            {
-                try
-                {
-                    var path = ReportTokenPath();
-                    if (!File.Exists(path)) return string.Empty;
-                    var protectedBytes = Convert.FromBase64String(File.ReadAllText(path, Encoding.ASCII));
-                    return Encoding.UTF8.GetString(ProtectedData.Unprotect(protectedBytes, ReportEntropy(), DataProtectionScope.CurrentUser));
-                }
-                catch (Exception ex)
-                {
-                    Log("Ostrzeżenie: nie udało się odczytać tokenu raportowego: " + ex.Message);
-                    DeleteReportToken();
-                    return string.Empty;
-                }
-            }
-
-            private static void SaveReportToken(string value)
-            {
-                var path = ReportTokenPath();
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(value.Trim()), ReportEntropy(), DataProtectionScope.CurrentUser);
-                File.WriteAllText(path, Convert.ToBase64String(protectedBytes), Encoding.ASCII);
-            }
-
-            private static void DeleteReportToken()
-            {
-                try
-                {
-                    var path = ReportTokenPath();
-                    if (File.Exists(path)) File.Delete(path);
-                }
-                catch
-                {
-                }
-            }
-
             private void HandleAuthenticationFailure(System.Net.HttpStatusCode statusCode)
             {
-                var code = (int)statusCode;
-                if (code != 401 && code != 403) return;
-                DeleteReportToken();
-                Log("Token raportowy został odrzucony przez GitHub i usunięty z lokalnego magazynu. Przy następnej próbie updater poprosi o nowy token.");
+                int code = (int)statusCode;
+                if (code == 401 || code == 403)
+                    Log("GitHub Issues odmówił dostępu (HTTP " + code +
+                        "). Sprawdź Issues: Read and write w polu Token GitHub. " +
+                        "Nie usuwam wspólnego tokenu z konfiguracji.");
             }
 
             private void SetBusy(bool value, string text)
             {
                 busy = value;
                 sendButton.Enabled = !value;
-                tokenButton.Enabled = !value;
                 autoLootDiagSendButton.Enabled = !value;
                 if (status != null) status.Text = text;
                 form.Cursor = value ? Cursors.WaitCursor : Cursors.Default;

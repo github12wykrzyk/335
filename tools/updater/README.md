@@ -245,3 +245,6 @@ label is not a chat-output gating signal. The loader records per-250-pulse
 success/timeout counts outside the game window thread to distinguish failed
 message dispatch from native interaction rejection. In-game responsiveness
 remains unverified until a report and exact-SHA game test are available.
+
+## 0.3.16-335-epoch-test — jeden token GitHub
+Pole Token GitHub jest jedynym źródłem poświadczeń dla aktualizacji updatera, loadera, listy branchy/Actions i wysyłania raportów Issues. Jeden fine-grained token ograniczony do repo github12wykrzyk/335: Metadata Read, Contents Read, Actions Read, Issues Read and write. Token pozostaje zapisany lokalnie w dotychczasowym config.json przez DPAPI (CurrentUser) i nie pojawia się w raporcie. Nie żądamy Contents Write ani Actions Write, gdyż te operacje ich nie potrzebują. Nie używamy starszego osobnego magazynu report_token.dpapi. Odrzucenie przez Issues nie usuwa wspólnego tokenu; przed wysyłką wymagana jest zgoda na podglądzie.

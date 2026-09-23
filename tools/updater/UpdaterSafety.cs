@@ -7,7 +7,7 @@ namespace WoW335Updater
 {
     internal static class UpdaterBuildInfo
     {
-        public const string Version = "0.3.15-335-epoch-test";
+        public const string Version = "0.3.16-335-epoch-test";
         public const string PinnedClientSha256 = "2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d";
     }
 
