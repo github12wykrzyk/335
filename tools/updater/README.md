@@ -174,3 +174,17 @@ of managed files. Use the separate Epoch rollback first.
 Unknown or future work DLL versions are not implicitly trusted: the interop
 pin needs a new verified compatibility set with dependency/resource review.
 The current feature runtime manifest still does not claim a full game package.
+
+## 0.3.10-335-epoch-test — legacy work state and diagnostic stage
+
+The feature updater now handles the precise work/149a2523, successful run
+35855470746, installed by an older updater that omitted managed_sha256 in
+installed.json. This compatibility path still requires an installed state
+from the exact work SHA, exact artifact name and run id, managed file names,
+an allowlisted one-module dlls.txt order, and the pinned SHA256 of the actual
+AutoLoot335.dll bytes. Any malformed hash map or unknown work installation
+remains a hard error, and no client file is modified on preflight failure.
+
+Epoch TEST errors include the exact phase (local work manifest, branch HEAD,
+runs, artifacts, pair metadata, pre-install validation, backup/install).
+Do not log token values or raw GitHub API payloads.

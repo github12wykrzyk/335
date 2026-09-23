@@ -154,12 +154,35 @@ namespace WoW335Updater
             if (!managed.Contains(EpochWorkAutoLoot, StringComparer.OrdinalIgnoreCase) ||
                 !managed.Contains("dlls.txt", StringComparer.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Epoch TEST: AutoLoot / dlls.txt nie są zarządzane przez updater.");
-            var hashes = AsDictionary(GetValue(state, "managed_sha256"));
-            if (GetString(hashes, EpochWorkAutoLoot) != EpochWorkAutoLootSha ||
-                !string.Equals(GetString(hashes, "dlls.txt"), Sha256File(listPath),
-                    StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Epoch TEST: manifest work nie zgadza się z dlls.txt / AutoLoot.");
+            // The first updater installations of this same pinned work run may
+            // predate managed_sha256. Their file identities are reconstructed
+            // from exact on-disk hashes, not from a guessed file name. Other
+            // work versions or ambiguous/malformed manifests remain blocked.
+            var hashValue = GetValue(state, "managed_sha256");
+            var hashes = hashValue as Dictionary<string, object>;
+            if (hashValue != null && hashes == null)
+                throw new InvalidOperationException("Epoch TEST: nieprawidłowy format manifestu SHA256 work.");
             EpochCheckFile(Path.Combine(root, EpochWorkAutoLoot), EpochWorkAutoLootSha);
+            if (hashes != null)
+            {
+                if (!string.Equals(GetString(hashes, EpochWorkAutoLoot), EpochWorkAutoLootSha,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(GetString(hashes, "dlls.txt"), Sha256File(listPath),
+                        StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Epoch TEST: manifest work nie zgadza się z dlls.txt / AutoLoot.");
+            }
+            else
+            {
+                // Pin legacy acceptance to the precise, successful work run;
+                // reject any other state that has no per-file SHA256 evidence.
+                if (GetLong(state, "run_id") != 35855470746L ||
+                    GetString(state, "artifact_name") !=
+                        "WoW335-WORK-CANDIDATE-" + EpochWorkAutoLootCommit)
+                    throw new InvalidOperationException(
+                        "Epoch TEST: starszy stan updatera nie ma zaufanego manifestu SHA256.");
+                Log("Epoch TEST: starszy manifest work bez managed_sha256; " +
+                    "potwierdzono SHA256 AutoLoot335.dll i zachowano istniejący dlls.txt.");
+            }
             return order;
         }
 
@@ -167,6 +190,7 @@ namespace WoW335Updater
         {
             if (busy) return;
             string statusText = "Epoch TEST: nie zainstalowano.";
+            string stage = "wstępna kontrola lokalnych plików";
             bool acquired = false;
             try
             {
@@ -188,6 +212,7 @@ namespace WoW335Updater
                 // Validate a previously installed *managed* work AutoLoot, not an
                 // arbitrary user-provided filename. Leave its DLL and list unchanged.
                 var activeOrder = EpochExistingManagedOrder(root, listPath);
+                stage = "zapytanie o HEAD gałęzi Epoch na GitHubie";
                 SetBusy(true, "Epoch TEST: sprawdzam aktualny HEAD i Windows CI...");
                 acquired = true;
                 string sha, archiveUrl;
@@ -198,6 +223,7 @@ namespace WoW335Updater
                     sha = GetString(AsDictionary(GetValue(branch, "commit")), "sha");
                     if (!UpdaterSafety.IsSha256Hex(sha))
                         throw new InvalidOperationException("Epoch TEST: brak aktualnego SHA brancha.");
+                    stage = "pobieranie listy workflow Epoch";
                     var runs = AsArray(GetValue(AsDictionary(json.DeserializeObject(
                         await GetStringAsync(client, ApiRoot + "/actions/runs?branch=" + EpochBranch + "&per_page=50"))),
                         "workflow_runs"));
@@ -205,6 +231,7 @@ namespace WoW335Updater
                     if (!string.Equals(GetString(run, "head_sha"), sha, StringComparison.Ordinal))
                         throw new InvalidOperationException("Epoch TEST: udany CI jest dla starszego SHA.");
                     var runId = GetLong(run, "id");
+                    stage = "odczyt artefaktów workflow Epoch";
                     var artifacts = AsArray(GetValue(AsDictionary(json.DeserializeObject(
                         await GetStringAsync(client, ApiRoot + "/actions/runs/" + runId +
                             "/artifacts?per_page=100"))), "artifacts"));
@@ -216,6 +243,7 @@ namespace WoW335Updater
                         throw new InvalidOperationException("Epoch TEST: bieżący SHA nie ma artefaktu z pozytywnym wynikiem weryfikacji.");
                     archiveUrl = GetString(artifact, "archive_download_url");
                 }
+                stage = "pobieranie ZIP testowej pary DLL";
                 var downloaded = await DownloadBytesAsync(archiveUrl);
                 byte[] epoch, loader;
                 string epochSha, loaderSha;
@@ -226,6 +254,7 @@ namespace WoW335Updater
                     if (zip.Entries.Count != names.Length ||
                         zip.Entries.Any(e => !names.Contains(e.FullName, StringComparer.Ordinal)))
                         throw new InvalidOperationException("Epoch TEST: artefakt zawiera obce pliki.");
+                    stage = "manifest ZIP testowej pary DLL";
                     var manifest = AsDictionary(json.DeserializeObject(
                         Encoding.UTF8.GetString(ReadEntry(EpochZipEntry(zip, "epoch_test_pair.json")))));
                     if (GetLong(manifest, "schema_version") != 1 ||
@@ -273,6 +302,7 @@ namespace WoW335Updater
                     statusText = "Epoch TEST: anulowano.";
                     return;
                 }
+                stage = "weryfikacja stanu przed instalacją";
                 // Re-check after user confirmation and download, prior to any write.
                 if (IsGameRunning(root)) throw new InvalidOperationException("Gra została uruchomiona; instalacja zablokowana.");
                 EpochCheckFile(Path.Combine(root, "Wow.exe"), UpdaterBuildInfo.PinnedClientSha256);
@@ -283,6 +313,7 @@ namespace WoW335Updater
                 var checkedOrder = EpochExistingManagedOrder(root, listPath);
                 if (!activeOrder.SequenceEqual(checkedOrder, StringComparer.Ordinal))
                     throw new InvalidOperationException("Epoch TEST: kolejność DLL zmieniła się w czasie pobierania.");
+                stage = "instalacja i backup plików zarządzanych";
                 Directory.CreateDirectory(manager);
                 var backupId = Guid.NewGuid().ToString("N");
                 var backups = Path.Combine(manager, "backups");
@@ -352,8 +383,9 @@ namespace WoW335Updater
             }
             catch (Exception ex)
             {
-                Log("Epoch TEST: BŁĄD " + ex.Message);
-                MessageBox.Show(this, ex.Message, "EpochConnection TEST", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Log("Epoch TEST: BŁĄD [" + stage + "] " + ex.Message);
+                MessageBox.Show(this, "Etap: " + stage + "\n" + ex.Message,
+                    "EpochConnection TEST", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
