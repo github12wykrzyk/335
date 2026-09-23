@@ -12,7 +12,7 @@ on:
       - '.github/workflows/build_autoloot_frame.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   native-frame-x86:
     runs-on: windows-2022
@@ -67,6 +67,33 @@ jobs:
           print("FINAL_PACKAGE: NOT_RUN (isolated experiment)")
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve exact PE32 DLL bytes as an orphan Git blob (no channel activation)
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bytes=[IO.File]::ReadAllBytes('dist/frame/AutoLoot335.dll')
+          $hash=(Get-FileHash 'dist/frame/AutoLoot335.dll' -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'e2bf85df42ca8c434db5a99a7606a7d3cf82995ea525fa8acec2c8cc7587579a') {
+            throw "The exact compiled frame DLL hash changed. Do not silently re-pin unreviewed binary bytes: $hash"
+          }
+          $headers=@{Authorization="Bearer $env:GITHUB_TOKEN"; Accept='application/vnd.github+json'; 'X-GitHub-Api-Version'='2022-11-28'}
+          $payload=@{content=[Convert]::ToBase64String($bytes); encoding='base64'} | ConvertTo-Json -Compress
+          $blob=Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/${{ github.repository }}/git/blobs" -Headers $headers -ContentType 'application/json' -Body $payload
+          if ($blob.sha -notmatch '^[0-9a-f]{40}
+        with:
+          name: AutoLoot335-FRAME-ISOLATED-${{ github.sha }}
+          path: |
+            dist/frame/AutoLoot335.dll
+            dist/frame/manifest.json
+            dist/frame/exports.txt
+          if-no-files-found: error
+          compression-level: 0
+) {throw 'GitHub did not return a valid orphan blob SHA'}
+          Write-Host "FRAME_DLL_GIT_BLOB_SHA: $($blob.sha)"
+          Write-Host "FRAME_DLL_SHA256: $hash"
+          Write-Host 'FRAME_BLOB_ONLY: no branch ref, no managed DLL installed'
       - uses: actions/upload-artifact@v4
         with:
           name: AutoLoot335-FRAME-ISOLATED-${{ github.sha }}
