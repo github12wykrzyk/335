@@ -21,6 +21,15 @@ class UniversalPPStack(unittest.TestCase):
         self.assertIn("System.Diagnostics.Process.Start(start)",updater)
         self.assertFalse((ROOT/"src/Loader12340/Wow335Loader.c").exists())
 
+    def test_packet_sender_signature_is_real_imm8_instruction(self):
+        # A wrong imm32 CMP silently denied bind on every game-thread pulse.
+        host=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.c").read_text()
+        audit=(ROOT/"tools/audit_pp_packet_12340.py").read_text()
+        self.assertIn("0xF1,0x83,0xBE",host)
+        self.assertIn("0x34,0x05,0x00,0x00,0x05",host)
+        self.assertNotIn("0xF1,0x81,0xBE",host)
+        self.assertIn('0x00632B50,"native_head","55 8b ec 56 8b f1 83 be 34 05 00 00 05"',audit)
+
     def test_registered_pp_is_complete_or_stays_inactive(self):
         runtime=json.loads((ROOT/"runtime/current.json").read_text())
         registry=json.loads((ROOT/"runtime/module_registry.json").read_text())

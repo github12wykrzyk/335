@@ -5,6 +5,7 @@ on:
     branches: [feature/autopickpocket-packets-12340]
     paths:
       - tools/audit_pp_packet_12340.py
+      - src/AutoPickPocket/autopickpocket_win32_host.c
       - src/AutoPickPocket/autopickpocket_packet_12340.c
       - src/AutoPickPocket/autopickpocket_packet_12340.h
       - tests/autopickpocket_packet_test.c

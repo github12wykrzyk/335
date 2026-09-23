@@ -41,3 +41,16 @@ Run `python tools/verify_repo.py`,
 module registration and exact SHA rebuild in the feature-only workflow.
 Only a successful `FINAL_PACKAGE: PASS` for its exact feature HEAD is a
 downloadable game TEST package; a codec-only x86 harness is not.
+
+## 1.1.1 TEST — verified native bind blocker (user report: no PP)
+
+A direct byte comparison of all the packet-mode DLL's native runtime signature
+checks against the pinned `Wow.exe` found the deterministic blocker:
+`0x00632B50` begins with `83 BE 34 05 00 00 05` (CMP imm8), not the
+previously expected `81 BE 34 05 00 00 05 00 00 00` (CMP imm32).
+The previous `packet_sender_abi()` always returned false, therefore
+`PP335_BindOnGameThread` refused activation without emitting any cast.
+Corrected to the exact verified bytes; packet sender ABI audit is now triggered
+by changes to the host as well. The byte check alone cannot prove in-game
+reception or success; the next exact-HEAD TEST requires a new PE32 x86 build,
+package gate and the user's actual in-game confirmation.

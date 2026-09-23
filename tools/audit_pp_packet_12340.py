@@ -137,7 +137,7 @@ for name,addr,n in [
 # Previous static audits showed xrefs but did not assert every runtime gate.
 checks=[
  (0x006B0B50,"send_head","55 8b ec 8b 0d f4 9c c7 00 85 c9 74 0b 8b 45 08 50 e8"),
- (0x00632B50,"native_head","55 8b ec 56 8b f1 81 be 34 05 00 00 05 00 00 00"),
+ (0x00632B50,"native_head","55 8b ec 56 8b f1 83 be 34 05 00 00 05"),
  (0x0080B4E3,"caller_head","8d 55 e4 52 c7 45 f8 00 00 00 00 e8"),
  (0x0080DA40,"cast_prefix","55 8b ec e8 48 5d cc ff 68 a0 00 00 00 68 40 23 9f 00"),
  (0x00510423,"caller_postfix","83 c4 14"),
