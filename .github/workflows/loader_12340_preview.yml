@@ -10,6 +10,8 @@ on:
       - 'tools/verify_epoch_test_pair.py'
       - 'tests/test_epoch_connection_loader_patch.py'
       - 'tests/test_epoch_test_pair_real.py'
+      - 'tests/test_updater_autoloot_delivery.py'
+      - 'tests/test_updater_epoch_loader.py'
       - 'tools/updater/**'
       - '.github/workflows/loader_12340_preview.yml'
   workflow_dispatch:

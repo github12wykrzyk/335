@@ -9,6 +9,8 @@ on:
       - 'feature/loader-12340'
     paths:
       - 'tools/updater/**'
+      - 'tests/test_updater_autoloot_delivery.py'
+      - 'tests/test_updater_epoch_loader.py'
       - 'tools/verify_epoch_test_pair.py'
       - '.github/workflows/loader_12340_preview.yml'
       - 'src/AutoLoot/diagnostics/**'
