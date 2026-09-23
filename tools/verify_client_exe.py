@@ -11,7 +11,7 @@ def inspect_exe(path: Path) -> dict:
     if len(data) < 512 or data[:2] != b"MZ":
         raise ValueError("missing/truncated MZ executable")
     pe = struct.unpack_from("<I", data, 0x3C)[0]
-    if pe < 0x40 or pe + 24 > len(data) or data[pe:pe + 4] != b"PE\\0\\0":
+    if pe < 0x40 or pe + 24 > len(data) or data[pe:pe + 4] != b"PE\0\0":
         raise ValueError("invalid PE signature or header bounds")
     machine, sections, _, _, _, optional_size, _ = struct.unpack_from("<HHIIIHH", data, pe + 4)
     if machine != 0x014C:

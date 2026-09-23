@@ -42,13 +42,13 @@ jobs:
           $versionInfo = (Get-Item -LiteralPath Wow.exe).VersionInfo
           $fileVersion = [string]$versionInfo.FileVersion
           $productVersion = [string]$versionInfo.ProductVersion
-          $matches = $fileVersion -match '(^|[^0-9])3\.3\.5\.12340([^0-9]|$)' -or $productVersion -match '(^|[^0-9])3\.3\.5\.12340([^0-9]|$)'
+          $is12340 = $fileVersion -match '(^|[^0-9])3\.3\.5\.12340([^0-9]|$)' -or $productVersion -match '(^|[^0-9])3\.3\.5\.12340([^0-9]|$)'
           $audit | Add-Member -Force NoteProperty file_version_resource $fileVersion
           $audit | Add-Member -Force NoteProperty product_version_resource $productVersion
-          $audit | Add-Member -Force NoteProperty version_resource_matches_12340 ([bool]$matches)
+          $audit | Add-Member -Force NoteProperty version_resource_matches_12340 ([bool]$is12340)
           $audit | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath dist/client_exe_audit.json -Encoding UTF8
-          Write-Host "Client EXE: PE32 x86 verified; file version: $fileVersion; product version: $productVersion; 12340 resource matches: $matches"
-          if (-not $matches) { Write-Warning "3.3.5.12340 cannot be confirmed from available version resource; game packaging will remain blocked." }
+          Write-Host "Client EXE: PE32 x86 verified; file version: $fileVersion; product version: $productVersion; 12340 resource matches: $is12340"
+          if (-not $is12340) { Write-Warning "3.3.5.12340 cannot be confirmed from available version resource; game packaging will remain blocked." }
       - name: Determine whether an actual game candidate can be built
         id: readiness
         shell: pwsh

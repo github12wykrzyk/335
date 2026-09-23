@@ -26,7 +26,7 @@ class ExeAuditTests(unittest.TestCase):
             data = bytearray(1024)
             data[:2] = b"MZ"
             struct.pack_into("<I", data, 0x3C, 128)
-            data[128:132] = b"PE\\0\\0"
+            data[128:132] = b"PE\0\0"
             struct.pack_into("<HHIIIHH", data, 132, 0x8664, 1, 0, 0, 0, 96, 0)
             p.write_bytes(data)
             with self.assertRaisesRegex(ValueError, "not x86"):
