@@ -403,7 +403,7 @@ namespace WoW335Updater
                         break;
                     }
                 }
-                if (artifact == null) throw new InvalidOperationException("Najnowszy udany workflow nie ma aktywnego artefaktu " + prefix + "*." );
+                if (artifact == null) throw new InvalidOperationException("Nie ma jeszcze paczki gry dla kanału " + branch + ". Zweryfikowano Wow.exe, ale brak gotowego zestawu DLL i FINAL_PACKAGE: PASS. Artefakt EXE-AUDIT nie jest instalatorem gry.");
 
                 return new RemotePackageInfo
                 {
