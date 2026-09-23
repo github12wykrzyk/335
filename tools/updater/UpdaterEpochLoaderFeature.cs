@@ -80,7 +80,7 @@ namespace WoW335Updater
             var state = AsDictionary(json.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)));
             if (GetString(state, "kind") != "EPOCH_CONNECTION_ISOLATED_TEST_PAIR" ||
                 GetString(state, "branch") != EpochBranch ||
-                !UpdaterSafety.IsSha256Hex(GetString(state, "git_sha")) ||
+                !UpdaterSafety.IsGitCommitSha(GetString(state, "git_sha")) ||
                 !UpdaterSafety.IsSha256Hex(GetString(state, "epoch_sha256")) ||
                 !UpdaterSafety.IsSha256Hex(GetString(state, "loader_sha256")) ||
                 !UpdaterSafety.IsSha256Hex(GetString(state, "dlls_sha256")))
@@ -221,7 +221,7 @@ namespace WoW335Updater
                     var branch = AsDictionary(json.DeserializeObject(
                         await GetStringAsync(client, ApiRoot + "/branches/" + EpochBranch)));
                     sha = GetString(AsDictionary(GetValue(branch, "commit")), "sha");
-                    if (!UpdaterSafety.IsSha256Hex(sha))
+                    if (!UpdaterSafety.IsGitCommitSha(sha))
                         throw new InvalidOperationException("Epoch TEST: brak aktualnego SHA brancha.");
                     stage = "pobieranie listy workflow Epoch";
                     var runs = AsArray(GetValue(AsDictionary(json.DeserializeObject(

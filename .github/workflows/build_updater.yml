@@ -110,6 +110,21 @@ jobs:
             tools\updater\UpdaterEpochLoaderFeature.cs
           if ($LASTEXITCODE -ne 0) { throw "updater csc failed with exit code $LASTEXITCODE" }
 
+      - name: Execute Git commit SHA-1 vs file SHA-256 validation smoke on Windows x86
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $vswhere="${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs=& $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if (-not $vs) { throw "MSBuild not available for Git SHA smoke" }
+          $csc=Join-Path $vs 'MSBuild\Current\Bin\Roslyn\csc.exe'
+          & $csc /nologo /target:exe /platform:x86 /out:dist\GitShaSmoke.exe `
+            tools\updater\UpdaterSafety.cs tools\updater\tests\GitShaSmoke.cs
+          if ($LASTEXITCODE -ne 0) { throw "Git SHA smoke build failed: $LASTEXITCODE" }
+          & .\dist\GitShaSmoke.exe
+          if ($LASTEXITCODE -ne 0) { throw "Git SHA smoke runtime failed: $LASTEXITCODE" }
+          Write-Host "GIT_SHA_VALIDATION_SMOKE: PASS"
+
       - name: Verify updater PE32 x86 and hashes
         shell: pwsh
         run: |

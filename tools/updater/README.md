@@ -188,3 +188,13 @@ remains a hard error, and no client file is modified on preflight failure.
 Epoch TEST errors include the exact phase (local work manifest, branch HEAD,
 runs, artifacts, pair metadata, pre-install validation, backup/install).
 Do not log token values or raw GitHub API payloads.
+
+## 0.3.11-335-epoch-test — Git branch SHA validator repair
+
+Epoch TEST was incorrectly rejecting a valid 40-character Git commit SHA
+with the 64-character SHA256 file-digest validator, both when reading GitHub
+branch HEAD and when reading the locally installed Epoch TEST state.
+The updater now uses a dedicated 40-lowercase-hex Git SHA check and retains
+64-hex SHA256 validation for all binary/dlls.txt hashes.
+An executable Windows x86 regression test covers real Git SHA length, file
+SHA256 length, malformed hex and case handling. No changes to game DLL bytes.
