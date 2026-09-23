@@ -48,6 +48,11 @@ jobs:
         run: |
           python tools/candidate_readiness.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Require feature experiment to include its actual game DLLs
+        shell: pwsh
+        run: |
+          python tools/ai_experiments.py verify-scope
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build all registered game DLLs (only when runtime is ready)
         if: steps.readiness.outputs.ready == 'true'
         shell: pwsh
