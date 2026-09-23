@@ -44,3 +44,7 @@ Każdy przyszły moduł wymaga kompletnego wpisu `runtime/module_registry.json`
 i weryfikacji w grze. Loader nie pobiera ani nie uruchamia dowolnych DLL
 znalezionych na GitHubie i nie obchodzi ochrony kolizji zasobów. Dodanie DLL
 zgodnej z ABI do poprawnego manifestu NIE wymaga ponownej kompilacji loadera.
+
+Kanoniczny updater nie zawiera odrębnego eksperymentalnego launchera AutoLoot.
+Oryginalna EpochConnection.dll pozostaje zależnością Wow.exe, a nie loaderem modułów.
+Instalacje ze starym patchem Epoch wymagają weryfikowanej migracji przed startem.

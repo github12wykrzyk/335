@@ -195,18 +195,14 @@ namespace WoW335Updater
             for (int i = 0; i < toolButtons.Length; i++)
                 utility.Controls.Add(UiButton(toolButtons[i], toolNames[i]), i, 0);
             tools.Controls.Add(utility, 0, 1);
-            var addonTools = UiGrid(3, 1);
+            var addonTools = UiGrid(2, 1);
             addonTools.ColumnStyles.Clear();
             addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
             addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
-            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             autoLootDiagInstallButton.Click += delegate { InstallAutoLootDiagnostic(); };
             dashboardFeatureButtons.Add(autoLootDiagInstallButton);
             addonTools.Controls.Add(UiButton(autoLootDiagInstallButton, "Instaluj test AutoLoot"), 0, 0);
             addonTools.Controls.Add(UiButton(autoLootReport, "Wyślij log AutoLoot"), 1, 0);
-            autoLootNativePreviewButton.Click += async delegate { await NativeAutoLootPreviewAsync(); };
-            dashboardFeatureButtons.Add(autoLootNativePreviewButton);
-            addonTools.Controls.Add(UiButton(autoLootNativePreviewButton, "Natywny AutoLoot TEST"), 2, 0);
             tools.Controls.Add(addonTools, 0, 2);
             var rollback = UiGrid(3, 1);
             rollback.ColumnStyles.Clear();

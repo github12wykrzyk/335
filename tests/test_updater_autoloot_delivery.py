@@ -21,7 +21,7 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
         self.assertIn('GetString(meta, "channel"), branch', maintenance)
         self.assertIn('TakeFeatureButton("WYŚLIJ LOG AUTOLOOT")', dashboard)
         self.assertIn('Instaluj test AutoLoot', dashboard)
-        self.assertIn('Natywny AutoLoot TEST', dashboard)
+        self.assertNotIn('Natywny AutoLoot TEST', dashboard)
         self.assertIn('SendReportAsync(true)', report)
         self.assertIn('ConfirmAutoLootReport', report)
         self.assertIn('AutoLootDiagSupport.CollectLog(root)', report)

@@ -114,7 +114,6 @@ jobs:
             tools\updater\UpdaterMaintenanceFeature.cs `
             tools\updater\UpdaterIssueReportFeature.cs `
             tools\updater\UpdaterAutoLootDiagFeature.cs `
-            tools\updater\UpdaterAutoLootNativePreviewFeature.cs `
             tools\updater\UpdaterAutoLootRuntimeFeature.cs
           if ($LASTEXITCODE -ne 0) { throw "updater csc failed with exit code $LASTEXITCODE" }
 

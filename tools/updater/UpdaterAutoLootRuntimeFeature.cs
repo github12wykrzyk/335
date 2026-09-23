@@ -13,6 +13,28 @@ namespace WoW335Updater
         private const string RegisteredRuntimeLoader = "WoW335RuntimeLoader.exe";
         private const string RegisteredRuntimeResource = "WoW335Runtime.Loader.exe";
 
+        // Shared preflight for the only updater-managed Windows x86 launcher.
+        private static void NativeRejectReparse(string path)
+        {
+            if ((Directory.Exists(path) || File.Exists(path)) &&
+                (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidOperationException(
+                    "Loader 335: odmowa uzycia dowiazania " + Path.GetFileName(path));
+        }
+
+        private static void NativeCheckX86(byte[] payload, bool isDll)
+        {
+            if (payload.Length < 512 || payload[0] != 'M' || payload[1] != 'Z')
+                throw new InvalidOperationException("Loader 335: brak naglowka MZ.");
+            var pe = BitConverter.ToInt32(payload, 0x3c);
+            if (pe < 64 || pe > payload.Length - 28 ||
+                BitConverter.ToInt32(payload, pe) != 0x00004550 ||
+                BitConverter.ToUInt16(payload, pe + 4) != 0x014c ||
+                BitConverter.ToUInt16(payload, pe + 24) != 0x010b ||
+                ((BitConverter.ToUInt16(payload, pe + 22) & 0x2000) != 0) != isDll)
+                throw new InvalidOperationException("Loader 335: wymagany plik PE32 x86.");
+        }
+
         private static byte[] InstalledLoaderBytes()
         {
             using (var stream = Assembly.GetExecutingAssembly()
