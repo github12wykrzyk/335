@@ -1,8 +1,8 @@
-name: Activate native AutoPickPocket in universal work loader
+name: Activate isolated packet AutoPickPocket on 12340 native x86
 on:
   workflow_dispatch:
   push:
-    branches: [feature/autopickpocket-12340]
+    branches: [feature/autopickpocket-packets-12340]
     paths:
       - 'src/AutoPickPocket/**'
       - 'tools/register_autopickpocket.py'
@@ -73,7 +73,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          $remote=git ls-remote --exit-code origin refs/heads/feature/autopickpocket-12340
+          $remote=git ls-remote --exit-code origin refs/heads/feature/autopickpocket-packets-12340
           if ($LASTEXITCODE -ne 0 -or (-split $remote)[0] -ne $env:GITHUB_SHA) { throw 'STALE_HEAD: PP registration aborted' }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -81,11 +81,11 @@ jobs:
           git add -f runtime/AutoPickPocket335.dll
           git commit -m 'build(pp): register exact PE32 x86 module in universal loader stack'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git push origin HEAD:refs/heads/feature/autopickpocket-12340
+          git push origin HEAD:refs/heads/feature/autopickpocket-packets-12340
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $registered=(git rev-parse HEAD).Trim()
           Write-Host "REGISTERED_NATIVE_PP_SHA=$registered"
           $headers=@{Authorization="Bearer $env:GH_TOKEN";'X-GitHub-Api-Version'='2022-11-28';Accept='application/vnd.github+json'}
           $url='https://api.github.com/repos/github12wykrzyk/335/actions/workflows/build_work_candidate.yml/dispatches'
-          Invoke-RestMethod -Method Post -Uri $url -Headers $headers -Body '{"ref":"feature/autopickpocket-12340"}' -ContentType 'application/json'
+          Invoke-RestMethod -Method Post -Uri $url -Headers $headers -Body '{"ref":"feature/autopickpocket-packets-12340"}' -ContentType 'application/json'
           Write-Host 'Dispatched exact-HEAD full game-package gate (no updater published on feature).'

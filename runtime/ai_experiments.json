@@ -5,7 +5,7 @@
   "experiments": [
     {
       "id": "autopickpocket-packets-12340",
-      "goal": "Separate 12340 native CMSG_CAST_SPELL packet transport and correlated GUID Pick Pocket; protocol codec audited, exact game sender ABI not yet verified",
+      "goal": "Isolated direct ClientServices::SendPacket AutoPickPocket for exact 12340, with 3.3.5 CMSG_CAST_SPELL codec, correlated spell-result policy and universal loader; requires first in-game verification",
       "branch": "feature/autopickpocket-packets-12340",
       "modules": [
         "AutoPickPocket"
@@ -19,8 +19,8 @@
         "logical:targeting",
         "logical:packet-send"
       ],
-      "status": "blocked",
-      "observed_head": "57064c5cc071e3212ee72c356bcc008dc1a1746d",
+      "status": "in_progress",
+      "observed_head": "1460427bfb8bec170e1f675c5a05f3b1a47e730c",
       "verified_commit": null,
       "tests": [],
       "package": null

@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "autopickpocket_win32_host.h"
+#include "autopickpocket_packet_12340.h"
 #pragma comment(lib,"Advapi32.lib")
 #pragma comment(lib,"User32.lib")
 #define PP_MIN_PTR 0x10000u
@@ -32,6 +33,7 @@ static unsigned g_desired_enable;
 static unsigned g_pulse_running;
 static uint32_t g_last_pulse_ms,g_pulse_delta_ms;
 static uint32_t g_last_cast_ms,g_last_result_ms,g_inflight_attempt;
+static uint8_t g_packet_cast_count;
 static int valid_memory(const void *p,SIZE_T length) {
     MEMORY_BASIC_INFORMATION m;
     uintptr_t at=(uintptr_t)p;
@@ -160,6 +162,49 @@ static uint32_t native_creature_type(uintptr_t obj) {
 #endif
     return creature_id;
 }
+/* The pinned 12340 client sends its own cast packet through
+ * ClientServices::SendPacket(CDataStore*) at 006B0B50 (cdecl, 1 stack arg).
+ * 0080B4E3 prepares the same one-argument call at 0080B4EE. Check the
+ * caller and native callee on every bind and immediately before submission.
+ * This is client packet dispatch, NOT raw socket send or 1.12 framing. */
+#define PP335_SEND_VA ((uintptr_t)0x006B0B50u)
+#define PP335_SESSION_VA ((uintptr_t)0x00C79CF4u)
+#define PP335_CDATASTORE_VTABLE ((uint32_t)0x009E0E24u)
+typedef struct {
+    uint32_t vtable;
+    uint8_t *buffer;
+    uint32_t base;
+    uint32_t alloc;
+    uint32_t size;
+    uint32_t read;
+} Pp335OutboundDataStore;
+typedef char Pp335_DataStore_x86_layout[(sizeof(Pp335OutboundDataStore)==24u)?1:-1];
+static int packet_sender_abi(void) {
+    static const BYTE send_head[]={
+        0x55,0x8B,0xEC,0x8B,0x0D,0xF4,0x9C,0xC7,0x00,
+        0x85,0xC9,0x74,0x0B,0x8B,0x45,0x08,0x50,0xE8
+    };
+    static const BYTE native_head[]={
+        0x55,0x8B,0xEC,0x56,0x8B,0xF1,0x81,0xBE,
+        0x34,0x05,0x00,0x00,0x05,0x00,0x00,0x00
+    };
+    static const BYTE caller_head[]={
+        0x8D,0x55,0xE4,0x52,0xC7,0x45,0xF8,0x00,
+        0x00,0x00,0x00,0xE8
+    };
+    uint32_t displacement=0u;
+    return byte_match(PP335_SEND_VA,send_head,sizeof(send_head)) &&
+        byte_match((uintptr_t)0x00632B50u,native_head,sizeof(native_head)) &&
+        byte_match((uintptr_t)0x0080B4E3u,caller_head,sizeof(caller_head)) &&
+        read32(NULL,(uintptr_t)0x0080B4EFu,&displacement) &&
+        (uint32_t)(0x0080B4F3u+displacement)==(uint32_t)PP335_SEND_VA;
+}
+static int packet_session_ready(void) {
+    uint32_t session=0u,state=0u;
+    return read32(NULL,PP335_SESSION_VA,&session) &&
+        session>=PP_MIN_PTR && session<PP_MAX_PTR-0x534u &&
+        read32(NULL,(uintptr_t)session+0x534u,&state) && state==5u;
+}
 static int verify_abi(void *ctx,uintptr_t spell,uintptr_t pos) {
     static const BYTE cast_prefix[]={
         0x55,0x8b,0xec,0xe8,0x48,0x5d,0xcc,0xff,
@@ -178,7 +223,7 @@ static int verify_abi(void *ctx,uintptr_t spell,uintptr_t pos) {
         byte_match(spell,cast_prefix,sizeof(cast_prefix)) &&
         byte_match(pos,pos_prefix,sizeof(pos_prefix)) &&
         byte_match((uintptr_t)0x00510423u,caller_postfix,sizeof(caller_postfix)) &&
-        verify_creature_type_abi();
+        verify_creature_type_abi() && packet_sender_abi();
 }
 static uint32_t thread_id(void *ctx){(void)ctx;return GetCurrentThreadId();}
 static uint32_t clock_ms(void *ctx){(void)ctx;return (uint32_t)GetTickCount();}
@@ -225,20 +270,44 @@ static int usable(void *ctx,uint32_t spell_id) {
         g_policy.spell_usable(g_policy.context,spell_id)==1;
 }
 static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target,uint32_t attempt_id) {
-    typedef void (__cdecl *cast_fn)(uint32_t,uint32_t,uint32_t,uint32_t,uint32_t);
+    typedef void (__cdecl *send_fn)(Pp335OutboundDataStore *);
+    Pp335OutboundDataStore packet;
+    uint8_t bytes[PP335_CAST_PACKET_CAP];
+    size_t count;
+    int submitted=0;
     (void)ctx;
+    /* The 12340 adapter has already re-resolved GUID, validated creature
+     * type, current 3-D range and stealth. Never switch the user's target.
+     * A pre-existing cast must finish before a second GUID is submitted. */
     if(!is_game_thread() || va!=PP12340_CAST_GUID_VA ||
-       spell!=PP12340_SPELL_ID || (target.lo|target.hi)==0u ||
-       !attempt_id || !g_policy.begin_attempt || !g_policy.spell_usable ||
-       g_policy.spell_usable(g_policy.context,spell)!=1 ||
-       g_policy.begin_attempt(g_policy.context,target,attempt_id)!=1)return 0;
-    /* Five cdecl arguments were audited in the pinned EXE, but the native
-     * function's return VALUE was not. Never interpret residual EAX as a
-     * server acknowledgement; submission means no local exception only. */
+       spell!=PP335_PICK_POCKET_SPELL || (target.lo|target.hi)==0u ||
+       !attempt_id || !g_policy.begin_attempt || !g_policy.end_attempt ||
+       !g_policy.spell_usable || !packet_sender_abi() ||
+       !packet_session_ready() ||
+       g_policy.spell_usable(g_policy.context,spell)!=1)
+        return 0;
+    count=pp335_build_cast_packet(bytes,sizeof(bytes),
+                                 ++g_packet_cast_count,target.lo,target.hi);
+    if(count<15u || count>sizeof(bytes))return 0;
+    memset(&packet,0,sizeof(packet));
+    packet.vtable=PP335_CDATASTORE_VTABLE;
+    packet.buffer=bytes;
+    packet.alloc=(uint32_t)sizeof(bytes);
+    packet.size=(uint32_t)count;
+    /* Native sender's CDataStore layout has been audited on this exact EXE:
+     * [vtable, buffer, base, alloc, size, read]. The spell cast call
+     * pushes &store and the cdecl wrapper cleans the one stack argument.
+     * Its transport consumes the store synchronously before return.
+     * A packet dispatch is not a confirmed server result. */
+    if(g_policy.begin_attempt(g_policy.context,target,attempt_id)!=1)
+        return 0;
     __try {
-        ((cast_fn)va)(spell,0u,target.lo,target.hi,0u);
-    }__except(EXCEPTION_EXECUTE_HANDLER){return 0;}
-    return 1;
+        ((send_fn)PP335_SEND_VA)(&packet);
+        submitted=1;
+    }__except(EXCEPTION_EXECUTE_HANDLER){submitted=0;}
+    if(!submitted)
+        g_policy.end_attempt(g_policy.context,target,attempt_id);
+    return submitted;
 }
 static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     (void)ctx;

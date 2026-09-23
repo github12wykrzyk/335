@@ -80,7 +80,9 @@
         "src/AutoPickPocket/autopickpocket_12340_adapter.h",
         "src/AutoPickPocket/autopickpocket_win32_host.c",
         "src/AutoPickPocket/autopickpocket_win32_host.h",
-        "src/AutoPickPocket/autopickpocket_game_policies.c"
+        "src/AutoPickPocket/autopickpocket_game_policies.c",
+        "src/AutoPickPocket/autopickpocket_packet_12340.c",
+        "src/AutoPickPocket/autopickpocket_packet_12340.h"
       ],
       "requires": [],
       "resources": [
@@ -91,10 +93,6 @@
         {
           "id": "wow12340:0x00819210-framescript-execute",
           "mode": "observe"
-        },
-        {
-          "id": "wow12340:0x0080DA40-guid-spell-cast",
-          "mode": "exclusive"
         },
         {
           "id": "wow12340:0x0071F300-native-creature-type",
@@ -121,6 +119,10 @@
           "id": "win32:WH_CALLWNDPROC",
           "mode": "chain",
           "arbitrator": "AutoLoot"
+        },
+        {
+          "id": "wow12340:0x006B0B50-client-send-packet",
+          "mode": "exclusive"
         }
       ],
       "build": {
@@ -129,7 +131,8 @@
           "src/AutoPickPocket/autopickpocket_core.c",
           "src/AutoPickPocket/autopickpocket_12340_adapter.c",
           "src/AutoPickPocket/autopickpocket_win32_host.c",
-          "src/AutoPickPocket/autopickpocket_game_policies.c"
+          "src/AutoPickPocket/autopickpocket_game_policies.c",
+          "src/AutoPickPocket/autopickpocket_packet_12340.c"
         ],
         "include_dirs": [
           "src/AutoPickPocket"

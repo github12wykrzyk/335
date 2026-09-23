@@ -26,6 +26,8 @@ SOURCES=[
  "src/AutoPickPocket/autopickpocket_win32_host.c",
  "src/AutoPickPocket/autopickpocket_win32_host.h",
  "src/AutoPickPocket/autopickpocket_game_policies.c",
+ "src/AutoPickPocket/autopickpocket_packet_12340.c",
+ "src/AutoPickPocket/autopickpocket_packet_12340.h",
 ]
 COMPILE=[p for p in SOURCES if p.endswith(".c")]
 HOOKS=("win32:WH_GETMESSAGE","win32:WH_CALLWNDPROC")
@@ -34,7 +36,7 @@ def dump(path, data):
     path.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
 def main():
-    if os.name != "nt" or os.environ.get("GITHUB_REF_NAME")!="feature/autopickpocket-12340":
+    if os.name != "nt" or os.environ.get("GITHUB_REF_NAME")!="feature/autopickpocket-packets-12340":
         raise RuntimeError("PP registration is Windows-only and isolated to the PP feature branch")
     manifest_path=ROOT/"runtime/current.json"
     registry_path=ROOT/"runtime/module_registry.json"
@@ -67,7 +69,7 @@ def main():
         shutil.copyfile(compiled,target)
         if hashlib.sha256(target.read_bytes()).hexdigest()!=digest:
             raise RuntimeError("registered DLL changed during copy")
-        row["version"]="1.0.6-test+sha."+digest[:12]
+        row["version"]="1.1.0-packet-test+sha."+digest[:12]
         row["sha256"]=digest
         errors=validate(runtime,registry)
         if errors:
@@ -98,7 +100,7 @@ def main():
       "resources":[
         {"id":"wow12340:object-manager","mode":"observe"},
         {"id":"wow12340:0x00819210-framescript-execute","mode":"observe"},
-        {"id":"wow12340:0x0080DA40-guid-spell-cast","mode":"exclusive"},
+        {"id":"wow12340:0x006B0B50-client-send-packet","mode":"exclusive"},
         {"id":"wow12340:0x0071F300-native-creature-type","mode":"observe"},
         {"id":"logical:targeting","mode":"observe"},
         {"id":"logical:loot-ui","mode":"observe"},
@@ -130,14 +132,14 @@ def main():
     runtime["files"].append({
       "component":PP,
       "path":"runtime/"+NAME,
-      "version":"1.0.0-test+sha."+digest[:12],
+      "version":"1.1.0-packet-test+sha."+digest[:12],
       "sha256":digest,
       "arch":"x86",
       "canonical_source":"src/AutoPickPocket/autopickpocket_win32_host.c",
       "depends_on":[],
       "kind":"dll"
     })
-    runtime["release_id"]="feature-autopickpocket-universal-12340"
+    runtime["release_id"]="feature-autopickpocket-packets-12340"
     runtime["compatibility_sets"]=[{
       "id":"client12340-autoloot-autopickpocket",
       "components":["Client12340","AutoLoot",PP]
