@@ -49,7 +49,9 @@ int wmain(int argc, wchar_t **argv) {
     host=LoadLibraryW(command);
     if (!host) { fprintf(stderr,"Native module unavailable: %lu\n", GetLastError());return 5; }
     getmsg=(message_id_fn)GetProcAddress(host, "AL335_MessageId");
+    if (!getmsg) getmsg=(message_id_fn)GetProcAddress(host, "_AL335_MessageId@0");
     proc=(hook_fn)GetProcAddress(host, "AL335_HookProc");
+    if (!proc) proc=(hook_fn)GetProcAddress(host, "_AL335_HookProc@12");
     if (!getmsg || !proc || !(msg=getmsg())) {
         fputs("Native hook exports unavailable.\n", stderr);goto cleanup;
     }

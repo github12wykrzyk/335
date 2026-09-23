@@ -32,6 +32,11 @@ jobs:
           if errorlevel 1 exit /b 1
           cl /nologo /W4 /WX /O2 /TC /Fe:dist\AutoLoot335_Launcher_PREVIEW.exe src\AutoLoot\autoloot_win32_launcher.c /link /MACHINE:X86 /Brepro User32.lib
           if errorlevel 1 exit /b 1
+          dumpbin /EXPORTS dist\AutoLoot335_Host_UNREGISTERED.dll > dist\host_exports.txt
+          findstr /C:"AL335_MessageId" dist\host_exports.txt
+          if errorlevel 1 exit /b 1
+          findstr /C:"AL335_HookProc" dist\host_exports.txt
+          if errorlevel 1 exit /b 1
       - name: Verify exact-client host contract, PE32 x86 and exports
         shell: python
         run: |
