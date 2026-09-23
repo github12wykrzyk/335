@@ -132,4 +132,33 @@ for name,addr,n in [
 ]:
     print("DATASTORE_ABI_CANDIDATE",name,hex(addr))
     dump(addr,0,n)
+
+# Host's executable-byte safety gate MUST match the exact pinned image.
+# Previous static audits showed xrefs but did not assert every runtime gate.
+checks=[
+ (0x006B0B50,"send_head","55 8b ec 8b 0d f4 9c c7 00 85 c9 74 0b 8b 45 08 50 e8"),
+ (0x00632B50,"native_head","55 8b ec 56 8b f1 81 be 34 05 00 00 05 00 00 00"),
+ (0x0080B4E3,"caller_head","8d 55 e4 52 c7 45 f8 00 00 00 00 e8"),
+ (0x0080DA40,"cast_prefix","55 8b ec e8 48 5d cc ff 68 a0 00 00 00 68 40 23 9f 00"),
+ (0x00510423,"caller_postfix","83 c4 14"),
+ (0x006E6F10,"pos_prefix","55 8b ec"),
+ (0x00819210,"lua_exec_head","55 8b ec 51 83 05 a0 13 d4 00 01"),
+ (0x00818010,"lua_get_head","55 8b ec 8b 45 08 56 8b 35 8c f7 d3 00 57 50 56"),
+ (0x0071F300,"creature_head","80 b9 f4 09 00 00 00 74 04 33 c0 eb 0d 8b 81 d0 00 00 00 0f b6 80 d3 01 00 00"),
+ (0x004F7494,"creature_caller","8b ce e8 65 7e 22 00 83 f8 0c"),
+]
+def static_read(va,size):
+    for start,buf,name in secs:
+        if start<=va and va+size<=start+len(buf):
+            return buf[va-start:va-start+size]
+    raise RuntimeError(f"unmapped executable 0x{va:08x}")
+all_gates=True
+for va,name,hexes in checks:
+    expect=bytes.fromhex(hexes)
+    actual=static_read(va,len(expect))
+    status="PASS" if actual==expect else "FAIL"
+    if actual!=expect: all_gates=False
+    print("PP_RUNTIME_GATE",status,name,hex(va),"actual",actual.hex(),"expected",expect.hex())
+print("PP_RUNTIME_GATE_SUMMARY", "PASS" if all_gates else "FAIL")
+if not all_gates: raise SystemExit("PP_STATIC_ABI_RUNTIME_MISMATCH")
 print("PACKET_AUDIT: STATIC_ONLY; sender ABI not certified by opcode or xrefs alone")
