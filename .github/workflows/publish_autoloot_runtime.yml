@@ -41,7 +41,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $head = (git rev-parse HEAD).Trim()
-          if ($head -eq '${{ github.sha }}') { Write-Host 'Native bytes already match; no commit'; exit 0 }
+          if ($head -eq '${{ github.sha }}') {
+            Write-Host 'Native bytes already match; dispatching updater at the same exact work SHA'
+            gh api -X POST "repos/$env:GITHUB_REPOSITORY/actions/workflows/build_updater.yml/dispatches" -f ref=work
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to dispatch exact-SHA updater' }
+            exit 0
+          }
           git fetch origin work
           if ((git rev-parse FETCH_HEAD).Trim() -ne $head) { throw "work moved after runtime commit" }
           foreach ($workflow in @('verify.yml', 'build_work_candidate.yml', 'build_updater.yml')) {
