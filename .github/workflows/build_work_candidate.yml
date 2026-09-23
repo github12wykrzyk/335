@@ -56,7 +56,11 @@ jobs:
           $base = '${{ github.event.before }}'
           if (-not $base -or $base -match '^0+$') { $base = (git rev-parse HEAD^) }
           if (-not $base) { throw 'Missing incremental build base commit' }
-          python tools/build_active.py --base "$base" --report dist/native_build.json
+          # Source changes can precede a failed CI run: the previous commit is
+          # not proof of a successfully rebuilt DLL. Rebuild every registered
+          # module against this exact candidate until an attested incremental
+          # cache can prove each unchanged binary's source identity.
+          python tools/build_active.py --all --report dist/native_build.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/verify_current.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

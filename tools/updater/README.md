@@ -150,3 +150,9 @@ The legacy bootstrap registration workflow is explicitly skipped when an
 active DLL is already registered on TEST/work. Only the strict candidate
 workflow builds and verifies updates to the registered runtime. No CI step
 replaces an existing registered DLL with an unreviewed bootstrap build.
+
+## Candidate x86 reproducibility gate
+The work candidate workflow now rebuilds each registered active DLL with
+MSVC x86 for every candidate and requires exact binary SHA256 equality before
+FINAL_PACKAGE: PASS. A previous failed CI run cannot let a source change slip
+past an incremental build selection on the next commit.
