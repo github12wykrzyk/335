@@ -2,5 +2,24 @@
   "schema_version": 1,
   "repository": "github12wykrzyk/335",
   "purpose": "Experiment ownership, dependency and exact-SHA in-game test evidence. Live GitHub HEAD and runtime/current.json remain authoritative.",
-  "experiments": []
+  "experiments": [
+    {
+      "id": "loader-12340",
+      "branch": "feature/loader-12340",
+      "status": "in_progress",
+      "goal": "Read-only import and compatibility audit of the exact user-selected 12340 x86 Wow.exe before any loader implementation; module-selection design must follow exact runtime registry and CI provenance.",
+      "modules": [
+        "Loader12340"
+      ],
+      "dependencies": [],
+      "shared_resources": [
+        "logical:startup-loader",
+        "logical:dll-load-order"
+      ],
+      "observed_head": "18905f8c9d3ebc57588e12b1f2f76416572c2659",
+      "verified_commit": null,
+      "tests": [],
+      "package": null
+    }
+  ]
 }
