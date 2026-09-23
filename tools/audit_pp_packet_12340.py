@@ -161,4 +161,20 @@ for va,name,hexes in checks:
     print("PP_RUNTIME_GATE",status,name,hex(va),"actual",actual.hex(),"expected",expect.hex())
 print("PP_RUNTIME_GATE_SUMMARY", "PASS" if all_gates else "FAIL")
 if not all_gates: raise SystemExit("PP_STATIC_ABI_RUNTIME_MISMATCH")
+
+# New: trace exact 3.3.5 spell-target layout + network store forwarding.
+for name, address, nbytes in [
+    ("SpellCastTargets::Write?",0x00809F80,1100),
+    ("CDataStorePacketConstructor",0x0047AFA0,220),
+    ("CDataStoreByteWriter",0x0047AFE0,210),
+    ("NativeSendDatastore",0x00632B50,450),
+    ("OriginalCastPacketBuild",0x0080B2F5,650),
+    ("SpellInfoClientCastFlags",0x0080B3DB,240),
+]:
+    print("PP_CANDIDATE_DISASM",name,hex(address))
+    for start,buf,section in secs:
+        if start<=address<start+len(buf):
+            for ins in md.disasm(buf[address-start:address-start+nbytes],address):
+                print("PP_INS",hex(ins.address),ins.mnemonic,ins.op_str)
+            break
 print("PACKET_AUDIT: STATIC_ONLY; sender ABI not certified by opcode or xrefs alone")
