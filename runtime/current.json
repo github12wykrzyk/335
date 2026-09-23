@@ -8,9 +8,38 @@
     "platform": "Windows",
     "architecture": "x86"
   },
-  "release_id": null,
-  "state": "empty",
+  "release_id": "work-autoloot-12340",
+  "state": "test-candidate",
   "canonical_source_policy": "Each active runtime file must point to exact existing src/ lineage or documented external source.",
-  "files": [],
-  "compatibility_sets": []
+  "files": [
+    {
+      "component": "Client12340",
+      "path": "Wow.exe",
+      "version": "3.3.5.12340",
+      "sha256": "2236646eca33960431eb1c5331c0b8cce516f2f82e2885c17241b54e92c18c3d",
+      "arch": "x86",
+      "canonical_source": "runtime/client_exe_target.json",
+      "depends_on": [],
+      "kind": "exe"
+    },
+    {
+      "component": "AutoLoot",
+      "path": "runtime/AutoLoot335.dll",
+      "version": "1.0.0-test",
+      "sha256": "52bc5100d46c6edaa172ab5342d565454ea6629d7a0ec09bafc044f8f0f2b47e",
+      "arch": "x86",
+      "canonical_source": "src/AutoLoot/autoloot_win32_host.c",
+      "depends_on": [],
+      "kind": "dll"
+    }
+  ],
+  "compatibility_sets": [
+    {
+      "id": "client12340-autoloot",
+      "components": [
+        "Client12340",
+        "AutoLoot"
+      ]
+    }
+  ]
 }

@@ -2,5 +2,68 @@
   "schema_version": 1,
   "target_build": 12340,
   "purpose": "Machine-readable ownership and dependency contracts for active Windows x86 modules; declarations are not proof of in-game behavior.",
-  "modules": []
+  "modules": [
+    {
+      "component": "AutoLoot",
+      "sources": [
+        "src/AutoLoot/autoloot_core.c",
+        "src/AutoLoot/autoloot_core.h",
+        "src/AutoLoot/autoloot_12340_adapter.c",
+        "src/AutoLoot/autoloot_12340_adapter.h",
+        "src/AutoLoot/autoloot_win32_host.c",
+        "src/AutoLoot/autoloot_win32_launcher.c"
+      ],
+      "requires": [],
+      "resources": [
+        {
+          "id": "wow12340:object-manager",
+          "mode": "observe"
+        },
+        {
+          "id": "wow12340:0x00731260-unit-interact",
+          "mode": "exclusive"
+        },
+        {
+          "id": "wow12340:0x00819210-framescript-execute",
+          "mode": "exclusive"
+        },
+        {
+          "id": "win32:WH_GETMESSAGE",
+          "mode": "exclusive"
+        },
+        {
+          "id": "logical:loot-ui",
+          "mode": "exclusive"
+        },
+        {
+          "id": "logical:interaction",
+          "mode": "exclusive"
+        },
+        {
+          "id": "logical:input",
+          "mode": "observe"
+        }
+      ],
+      "build": {
+        "toolchain": "msvc_x86",
+        "sources": [
+          "src/AutoLoot/autoloot_core.c",
+          "src/AutoLoot/autoloot_12340_adapter.c",
+          "src/AutoLoot/autoloot_win32_host.c"
+        ],
+        "include_dirs": [
+          "src/AutoLoot"
+        ],
+        "libraries": [
+          "Advapi32.lib",
+          "User32.lib"
+        ],
+        "cflags": [
+          "/TC",
+          "/Brepro"
+        ],
+        "ldflags": []
+      }
+    }
+  ]
 }
