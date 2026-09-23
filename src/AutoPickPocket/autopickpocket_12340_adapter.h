@@ -48,6 +48,8 @@ int pp12340_bind(Pp12340Adapter *a, const Pp12340Host *host);
 void pp12340_enable(Pp12340Adapter *a, int enable);
 void pp12340_tick(Pp12340Adapter *a, uint32_t now_ms);
 void pp12340_reset(Pp12340Adapter *a);
+/* Silent slash argument dispatcher; loader must register /appp with WoW. */
+int pp12340_command(Pp12340Adapter *a, const char *arguments);
 #ifdef __cplusplus
 }
 #endif

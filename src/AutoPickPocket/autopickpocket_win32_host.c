@@ -258,6 +258,10 @@ PP335_EXPORT void __stdcall PP335_TickOnGameThread(uint32_t now_ms) {
 PP335_EXPORT void __stdcall PP335_ResetOnGameThread(void) {
     if(is_game_thread())pp12340_reset(&g_adapter);
 }
+PP335_EXPORT int __stdcall PP335_CommandOnGameThread(const char *arguments) {
+    if (!is_game_thread()) return 0;
+    return pp12340_command(&g_adapter,arguments);
+}
 BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,LPVOID reserved) {
     (void)reserved;
     if(reason==DLL_PROCESS_ATTACH)DisableThreadLibraryCalls(module);

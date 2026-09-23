@@ -1,6 +1,6 @@
 # AutoPickPocket / 12340 x86 — isolated source experiment
 
-NOT YET a game DLL; it is NOT in runtime/current.json or dlls.txt.
+An isolated PE32 x86 adapter exists, but it is NOT an activated game DLL and is NOT in runtime/current.json or dlls.txt.
 The portable C decision engine is implemented and unit-tested, but cannot be
 called a runnable module until an exact-client native adapter is audited and
 built on MSVC x86. No AutoLoot files, loot interaction, movement hooks or chat
@@ -32,7 +32,7 @@ pp_tick scans at most once per 100 ms while enabled, selects nearest
 eligible unblocked GUID, and does not count submission as success.
 Success, no pockets, and terminal errors are cached per GUID for the session;
 temporary failures are retried. pp_reset clears cache after a world change.
-Proposed /appp commands are NOT available until a native adapter exists.
+The native silent argument dispatcher accepts on/off/reset on the verified game thread, but /appp is NOT registered in WoW by the current loader; these commands are NOT yet available in-game.
 
 
 ## Online research leads (2026-09-23; NOT verified on pinned Wow.exe)
@@ -89,7 +89,7 @@ The isolated native adapter is a real PE32 x86 DLL with an internal cast
 entrypoint but will NOT activate on its own. PP335_BindOnGameThread requires
 a separately authorized shared loader and non-null, game-thread-safe policy
 callbacks for hostile pickpocketable NPCs, learned/usable spell and Stealth,
-and a verified result for the exact GUID and attempt. All unknown cases
+and a verified result for the exact GUID and monotonically increasing attempt nonce. The result observer must arm that GUID and nonce before submission; a late response from an older attempt never counts as success. All unknown cases
 must fail closed. No fallback to Lua targeting or to a different GUID.
 The loader on work currently supports ONLY the registered AutoLoot,
 and the experimental loader on feature/loader-12340 is a separate

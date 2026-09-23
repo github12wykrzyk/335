@@ -177,6 +177,26 @@ void pp12340_reset(Pp12340Adapter *a) {
     if (a && a->bound && a->host.thread_id(a->host.ctx)==a->owner_thread)
         pp_reset(&a->engine);
 }
+int pp12340_command(Pp12340Adapter *a,const char *arguments) {
+    const char *end;
+    size_t length;
+    if (!a || !a->bound || !arguments ||
+        a->host.thread_id(a->host.ctx)!=a->owner_thread) return 0;
+    while (*arguments==' ' || *arguments=='\t') ++arguments;
+    end=arguments+strlen(arguments);
+    while (end>arguments && (end[-1]==' ' || end[-1]=='\t')) --end;
+    length=(size_t)(end-arguments);
+    if (length==2u && !memcmp(arguments,"on",2u)) {
+        pp_enable(&a->engine,1);return 1;
+    }
+    if (length==3u && !memcmp(arguments,"off",3u)) {
+        pp_enable(&a->engine,0);return 1;
+    }
+    if (length==5u && !memcmp(arguments,"reset",5u)) {
+        pp_reset(&a->engine);return 1;
+    }
+    return 0; /* unknown/empty commands are silent and do not change state */
+}
 void pp12340_tick(Pp12340Adapter *a,uint32_t now_ms) {
     uint64_t world;
     if (!a || !a->bound ||

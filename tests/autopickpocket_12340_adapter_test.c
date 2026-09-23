@@ -133,6 +133,18 @@ static int test_attempt_correlation(void){
     pp12340_tick(&a,4502);CHECK(a.engine.successes==1);
     return 0;
 }
+static int test_silent_commands(void){
+    Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+    CHECK(pp12340_bind(&a,&h));
+    CHECK(!pp12340_command(&a,"invalid") && !a.engine.enabled);
+    CHECK(pp12340_command(&a,"  on\t") && a.engine.enabled);
+    pp12340_tick(&a,0);CHECK(m.casts==1);
+    CHECK(pp12340_command(&a,"reset") && !a.engine.active_valid);
+    CHECK(pp12340_command(&a,"off") && !a.engine.enabled);
+    m.thread=9u;CHECK(!pp12340_command(&a,"on") && !a.engine.enabled);
+    m.thread=1u;CHECK(!pp12340_command(&a,"") && !a.engine.enabled);
+    return 0;
+}
 static int test_fail_closed_filter(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
     CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
@@ -144,7 +156,7 @@ static int test_fail_closed_filter(void){
 }
 int main(void){
     if(test_bind_guard()||test_scan_cast_history_world()||
-       test_attempt_correlation()||test_fail_closed_filter())return 1;
+       test_attempt_correlation()||test_silent_commands()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");
     return 0;
 }

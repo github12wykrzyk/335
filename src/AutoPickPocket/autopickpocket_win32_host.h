@@ -28,6 +28,8 @@ PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy);
 PP335_EXPORT void __stdcall PP335_EnableOnGameThread(int enable);
 PP335_EXPORT void __stdcall PP335_TickOnGameThread(uint32_t now_ms);
 PP335_EXPORT void __stdcall PP335_ResetOnGameThread(void);
+/* Native dispatcher for the authorized in-game /appp slash registration. */
+PP335_EXPORT int __stdcall PP335_CommandOnGameThread(const char *arguments);
 #ifdef __cplusplus
 }
 #endif
