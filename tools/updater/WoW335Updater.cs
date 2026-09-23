@@ -279,7 +279,25 @@ namespace WoW335Updater
             {
                 if (!await MaintenanceFeature.EnsureCurrentUpdaterAsync(this))
                     return false; // newer updater will restart; no premature game launch
-                return await EpochInstallAsync();
+                var epochUpdated = await EpochInstallAsync();
+                if (epochUpdated)
+                {
+                    try
+                    {
+                        var refreshed = AutoLootDiagSupport.RefreshManagedIfPresent(
+                            Path.GetFullPath(gameDir.Text.Trim()),
+                            System.Reflection.Assembly.GetExecutingAssembly());
+                        if (!string.IsNullOrWhiteSpace(refreshed)) Log(refreshed);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Optional diagnostic addon must never invalidate a
+                        // committed, verified Epoch TEST runtime transaction.
+                        Log("Epoch TEST: pominięto aktualizację dodatku diagnostycznego: " +
+                            ex.Message);
+                    }
+                }
+                return epochUpdated;
             }
             try
             {
