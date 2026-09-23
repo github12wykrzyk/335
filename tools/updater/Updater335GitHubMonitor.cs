@@ -17,6 +17,10 @@ namespace WoW335Updater
         {
             { "work", new Label() }, { "main", new Label() }
         };
+        private readonly Dictionary<string, Panel> monitorBadgeFrames = new Dictionary<string, Panel>
+        {
+            { "work", new Panel() }, { "main", new Panel() }
+        };
         private bool monitorBusy;
         private Form monitorWindow;
         private RichTextBox monitorOutput;
@@ -24,43 +28,58 @@ namespace WoW335Updater
 
         private TableLayoutPanel Build335MonitorHeader()
         {
-            // One horizontal row: two stacked badges were taller than the header on
-            // scaled Windows desktops and the configuration card covered MAIN.
-            var panel = UiGrid(2, 1);
-            panel.ColumnStyles.Clear();
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            // Slim status strips centered within the fixed header on Windows DPI scaling.
+            var frame = UiGrid(1, 3);
+            frame.RowStyles.Add(new RowStyle(SizeType.Absolute, 10f));
+            frame.RowStyles.Add(new RowStyle(SizeType.Absolute, 38f));
+            frame.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            var strips = UiGrid(2, 1);
+            strips.ColumnStyles.Clear();
+            strips.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            strips.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            strips.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             int index = 0;
             foreach (var branch in new[] { "work", "main" })
             {
                 var badge = monitorBadges[branch];
                 badge.Dock = DockStyle.Fill;
                 badge.AutoEllipsis = true;
-                badge.Margin = new Padding(4, 9, 4, 9);
-                badge.Padding = new Padding(8, 0, 2, 0);
-                badge.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+                badge.Margin = Padding.Empty;
+                badge.Padding = new Padding(8, 0, 4, 0);
+                badge.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
                 badge.TextAlign = ContentAlignment.MiddleLeft;
+                var outline = monitorBadgeFrames[branch];
+                outline.Dock = DockStyle.Fill;
+                outline.Margin = new Padding(4, 2, 4, 2);
+                outline.Padding = new Padding(1);
+                outline.Controls.Add(badge);
                 Set335Badge(branch, "UNKNOWN", "", "Oczekiwanie na pierwsze sprawdzenie.");
-                panel.Controls.Add(badge, index++, 0);
+                strips.Controls.Add(outline, index++, 0);
             }
+            frame.Controls.Add(strips, 0, 1);
             monitorButton.Click += delegate { Open335Monitor(); };
-            return panel;
+            return frame;
         }
 
         private void Set335Badge(string branch, string state, string head, string detail)
         {
             var badge = monitorBadges[branch];
+            var outline = monitorBadgeFrames[branch];
             bool green = state == "SUCCESS", yellow = state == "RUNNING" || state == "PENDING", red = state == "FAIL";
-            badge.BackColor = green ? Color.FromArgb(27, 83, 65)
-                : yellow ? Color.FromArgb(105, 77, 33)
-                : red ? Color.FromArgb(107, 40, 50) : Color.FromArgb(44, 62, 79);
-            badge.ForeColor = green ? Color.FromArgb(169, 247, 202)
-                : yellow ? Color.FromArgb(255, 221, 145)
-                : red ? Color.FromArgb(255, 166, 177) : UiMuted;
-            badge.Text = branch.ToUpperInvariant() + "  " + state + "  " +
-                (string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length)));
-            dashboardTips.SetToolTip(badge, detail + "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss"));
+            outline.BackColor = green ? Color.FromArgb(52, 194, 199)
+                : yellow ? Color.FromArgb(191, 153, 74)
+                : red ? Color.FromArgb(209, 97, 111) : Color.FromArgb(69, 96, 116);
+            badge.BackColor = green ? Color.FromArgb(19, 52, 66)
+                : yellow ? Color.FromArgb(56, 49, 41)
+                : red ? Color.FromArgb(58, 39, 51) : Color.FromArgb(33, 51, 69);
+            badge.ForeColor = green ? Color.FromArgb(183, 241, 231)
+                : yellow ? Color.FromArgb(255, 221, 153)
+                : red ? Color.FromArgb(255, 178, 188) : UiMuted;
+            var shortHead = string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length));
+            badge.Text = branch.ToUpperInvariant() + "   |   " + shortHead + "   |   " + state;
+            var tooltip = detail + "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss");
+            dashboardTips.SetToolTip(outline, tooltip);
+            dashboardTips.SetToolTip(badge, tooltip);
         }
 
         private void Start335Monitor()

@@ -43,6 +43,7 @@ jobs:
           if (-not (Test-Path $ref)) { throw ".NET Framework 4.8 reference assemblies not found" }
 
           & $csc /nologo /target:winexe /platform:x86 /optimize+ /langversion:latest `
+            /win32icon:tools\updater\assets\WoW335_ice.ico `
             /out:dist\WoW335UpdaterBootstrap.exe `
             /reference:"$ref\mscorlib.dll" `
             /reference:"$ref\System.dll" `
@@ -52,6 +53,7 @@ jobs:
 
           & $csc /nologo /target:winexe /platform:x86 /optimize+ /langversion:latest `
             /out:dist\WoW335Updater.exe `
+            /win32icon:tools\updater\assets\WoW335_ice.ico `
             /reference:"$ref\mscorlib.dll" `
             /reference:"$ref\System.dll" `
             /reference:"$ref\System.Core.dll" `
@@ -103,6 +105,20 @@ jobs:
           bootstrap = Path('dist/WoW335UpdaterBootstrap.exe')
           updater_data, updater_machine = inspect(updater)
           bootstrap_data, bootstrap_machine = inspect(bootstrap)
+          icon = Path('tools/updater/assets/WoW335_ice.ico').read_bytes()
+          if len(icon) < 32 or icon[:6] != bytes((0, 0, 1, 0, 1, 0)):
+              raise SystemExit('Invalid WoW335_ice.ico header')
+          icon_size = struct.unpack_from('<I', icon, 14)[0]
+          icon_offset = struct.unpack_from('<I', icon, 18)[0]
+          if icon_offset + icon_size != len(icon):
+              raise SystemExit('Invalid WoW335_ice.ico image length')
+          icon_image = icon[icon_offset:]
+          if not icon_image.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10))):
+              raise SystemExit('WoW335_ice.ico must contain the verified ice icon PNG')
+          for binary, binary_data in ((updater, updater_data), (bootstrap, bootstrap_data)):
+              if icon_image not in binary_data:
+                  raise SystemExit(f'{binary}: ice icon resource not embedded in PE')
+          print('Embedded ice icon: PASS')
           meta = {
               'name': updater.name,
               'updater_version': updater_version,
