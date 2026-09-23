@@ -649,6 +649,18 @@ namespace WoW335Updater
                 return sb.ToString();
             }
 
+            private static string Sha256File(string path)
+            {
+                using (var sha = SHA256.Create())
+                using (var stream = File.OpenRead(path))
+                {
+                    var hash = sha.ComputeHash(stream);
+                    var result = new StringBuilder(hash.Length * 2);
+                    foreach (var value in hash) result.Append(value.ToString("x2"));
+                    return result.ToString();
+                }
+            }
+
             private static string Sha256Text(string text)
             {
                 using (var sha = SHA256.Create())
