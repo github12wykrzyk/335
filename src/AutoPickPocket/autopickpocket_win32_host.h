@@ -27,6 +27,9 @@ typedef struct {
     int (*begin_attempt)(void *,PpGuid target,uint32_t attempt_id);
     PpResult (*cast_result)(void *,PpGuid target,uint32_t attempt_id);
     uint64_t (*world_token)(void *);
+    /* Optional game-thread notification after a GUID-correlated success.
+     * May clear only that GUID if it is still the player's current target. */
+    void (*on_success)(void *,PpGuid target,uint32_t attempt_id);
 } Pp335Policy;
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy);
 PP335_EXPORT void __stdcall PP335_EnableOnGameThread(int enable);

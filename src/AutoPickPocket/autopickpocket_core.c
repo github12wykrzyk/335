@@ -149,15 +149,19 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             ++engine->successes;
             emit(engine,PP_EVENT_SUCCESS,engine->active);
             engine->active_valid=0u;
-            if (engine->probe_mode) engine->enabled=0u;
-            return;
+            if (engine->probe_mode) {engine->enabled=0u;return;}
+            /* A terminal GUID is excluded from the very next scan.
+             * Reuse this pulse for a different nearby target. */
+            engine->scan_started=0u;
+            goto scan_next;
         case PP_RESULT_EMPTY:
             block(engine,engine->active,now,0u,1);
             ++engine->empty;
             emit(engine,PP_EVENT_EMPTY,engine->active);
             engine->active_valid=0u;
-            if (engine->probe_mode) engine->enabled=0u;
-            return;
+            if (engine->probe_mode) {engine->enabled=0u;return;}
+            engine->scan_started=0u;
+            goto scan_next;
         case PP_RESULT_PERMANENT:
             block(engine,engine->active,now,0u,1);
             emit(engine,PP_EVENT_INELIGIBLE,engine->active);
@@ -180,6 +184,7 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         if (engine->probe_mode) engine->enabled=0u;
         return;
     }
+scan_next:
     if (engine->probe_mode) return;
     if (engine->scan_started && (uint32_t)(now-engine->last_scan_ms)<PP_SCAN_INTERVAL_MS)
         return;

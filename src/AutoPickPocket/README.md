@@ -13,3 +13,18 @@ Do not present compilation as in-game proof. The first verified game test must c
 The exact Wow.exe is pinned and unchanged. WoW Error #134 names `PP335_LootOpened` and an invalid function pointer inside `AutoPickPocket335.dll`. The old policy registered a DLL C function in the client's Lua VM. The new policy never registers a DLL callback from Lua: a normal Lua frame records nonce-scoped `LOOT_OPENED`, failure and spell-921 server cast events. A native loot-source GUID, if still available before the game's automatic looting closes the window, corroborates the exact target. An independently GUID-correlated server cast success is sufficient to mark the *cast* complete after a short grace period, not proof that loot reached inventory. Without matching evidence the existing bounded timeout/retry logic applies.
 
 The registered DLL must be refreshed with a genuine MSVC PE32 x86 rebuild and the manifest SHA256 updated together on this feature branch. A source-only commit will fail the strict game-package gate; install only the subsequent exact-HEAD `FINAL_PACKAGE: PASS` candidate through the existing universal updater. Do not reuse the previously crashed 1.0.0 DLL; keep `work` (AutoLoot-only) as the rollback. The user must test actual Pick Pocket, stable startup, no Lua callback crash, native loot and coexistence with AutoLoot in-game.
+
+## Target release and faster next-NPC scan (1.0.2 TEST)
+
+Only after a GUID-correlated `PP_RESULT_SUCCESS` does the game-thread
+policy conditionally call `ClearTarget()` if `UnitGUID('target')` still equals
+the just-pickpocketed GUID. Other manually selected targets are untouched;
+no target is cleared for an unsuccessful cast, timeout or rejected NPC.
+
+After success or confirmed empty pockets, the core immediately scans for a
+*different* eligible GUID in the same loader pulse, instead of waiting for
+the next 100 ms scan cycle. Routine scans are bounded to 50 ms. The native
+adapter first rejects distant units by range and only invokes the expensive
+native creature-type/eligibility policy for nearby NPCs. The actual cadence
+remains limited by game-thread pulses, stealth, skill cooldown and server
+result delivery; no changes to AutoLoot or the loader are required.

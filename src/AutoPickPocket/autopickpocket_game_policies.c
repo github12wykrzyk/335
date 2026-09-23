@@ -166,6 +166,20 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
     }
     return PP_RESULT_PENDING;
 }
+/* Never blindly ClearTarget(): the player may have selected another NPC
+ * while the Pick Pocket result was pending. Compare the *current* target
+ * GUID against the completed attempt GUID inside the same Lua execution. */
+static void release_completed_target(void *ctx,PpGuid guid,uint32_t nonce){
+    char script[288];int n;(void)ctx;
+    if(!is_owner() || !nonce || !(guid.lo|guid.hi))return;
+    n=sprintf_s(script,sizeof(script),
+      "if UnitGUID and ClearTarget and UnitGUID('target') and "
+      "string.upper(UnitGUID('target'))=='0X%08lX%08lX' "
+      "then ClearTarget() end",
+      (unsigned long)guid.hi,(unsigned long)guid.lo);
+    if(n<=0 || n>=(int)sizeof(script))return;
+    (void)run(script);
+}
 PP335_EXPORT const Pp335Policy *__stdcall PP335_VerifiedPolicyV1(void){
     if(!owner)owner=GetCurrentThreadId();
     memset(&policy,0,sizeof(policy));
@@ -173,5 +187,6 @@ PP335_EXPORT const Pp335Policy *__stdcall PP335_VerifiedPolicyV1(void){
     policy.begin_attempt=begin_attempt;
     policy.cast_result=cast_result;
     policy.world_token=world_token;
+    policy.on_success=release_completed_target;
     return &policy;
 }

@@ -16,6 +16,7 @@ typedef struct {
     unsigned casts,cast_spell,callbacks,events[16];
     uint32_t last_attempt,expected_result_attempt;
     unsigned player_pos_calls,move_player_after_scan;
+    unsigned eligible_calls;
     PpGuid last_guid;
 } Mock;
 static int digest(void *p,const char *expected){
@@ -67,6 +68,7 @@ static int pos(void *p,uintptr_t obj,float out[3]){
 }
 static int eligible(void *p,uintptr_t obj,PpGuid g){
     Mock *m=(Mock*)p;
+    ++m->eligible_calls;
     if (obj==NPC_A)return m->eligible_a && g.lo==111 && g.hi==10;
     if (obj==NPC_B)return m->eligible_b && g.lo==222 && g.hi==20;
     return 0;
@@ -175,8 +177,16 @@ static int test_fail_closed_filter(void){
     m.eligible_a=1;pp12340_tick(&a,200);CHECK(m.casts==1 && m.last_guid.lo==111);
     return 0;
 }
+static int test_spatial_gate_avoids_distant_eligibility_calls(void){
+ Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+ CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ m.move_player_after_scan=1u; /* after player located: scan still near */
+ pp12340_tick(&a,0u);
+ CHECK(m.eligible_calls<=3u); /* only candidates within reach */
+ return 0;
+}
 int main(void){
-    if(test_bind_guard()||test_scan_cast_history_world()||
+    if(test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
        test_attempt_correlation()||test_silent_commands()||
        test_moving_player_rechecked_before_cast()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");

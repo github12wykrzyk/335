@@ -59,6 +59,9 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
     for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
         uint32_t type=0u,health=0u;
         if (!guid_at(a,obj,&guid)) break;
+        /* Spatial gate first: native creature-type ABI and policy checks
+         * are expensive (VirtualQuery + code byte checks) and must not
+         * run for the thousands of distant units in the object manager. */
         if (!same(player_guid,guid) &&
             read32(a,(uintptr_t)obj+PP_OBJ_TYPE,&type) &&
             type==PP12340_UNIT_TYPE &&
@@ -66,12 +69,12 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
             ptr_ok(desc) &&
             read32(a,(uintptr_t)desc+4u*PP_UNIT_HEALTH_FIELD,&health) &&
             health>0u &&
-            a->host.eligible_npc(a->host.ctx,obj,guid)==1 &&
             a->host.position(a->host.ctx,obj,pos)==1) {
             float dx=pos[0]-me[0],dy=pos[1]-me[1],dz=pos[2]-me[2];
             float d2=dx*dx+dy*dy+dz*dz;
             if (d2>=0.0f && d2<=PP12340_REACH*PP12340_REACH &&
-                d2<FLT_MAX) {
+                d2<FLT_MAX &&
+                a->host.eligible_npc(a->host.ctx,obj,guid)==1) {
                 size_t far=0u,n;
                 if (count<cap) {
                     out[count].guid=guid;

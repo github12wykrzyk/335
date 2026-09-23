@@ -248,6 +248,8 @@ static uint64_t world_token(void *ctx) {
     return g_policy.world_token(g_policy.context);
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
+    if (kind==PP_EVENT_SUCCESS && is_game_thread() && g_policy.on_success)
+        g_policy.on_success(g_policy.context,guid,attempt_id);
     wchar_t path[MAX_PATH],dir[MAX_PATH],*slash;
     char line[224];
     const char *reason="attempt";

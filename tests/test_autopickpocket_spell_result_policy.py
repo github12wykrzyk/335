@@ -40,5 +40,10 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn("verify_hash(NULL,PP12340_CLIENT_SHA256)",HOST)
         self.assertIn("if (g_initialized && command==2u)",HOST)
         self.assertNotIn("LootSlot(",POLICY)
+        self.assertIn("policy.on_success=release_completed_target",POLICY)
+        self.assertIn("string.upper(UnitGUID('target'))=='0X",POLICY)
+        self.assertIn("then ClearTarget() end",POLICY)
+        self.assertIn("kind==PP_EVENT_SUCCESS",HOST)
+        self.assertNotIn("ClearTarget()",HOST)
 if __name__=="__main__":
     unittest.main()
