@@ -94,6 +94,7 @@ namespace WoW335Updater
             var selfUpdate = TakeFeatureButton("AKTUALIZUJ UPDATER");
             var report = TakeFeatureButton("WYŚLIJ RAPORT");
             var reportToken = TakeFeatureButton("TOKEN RAPORTU");
+            var autoLootReport = TakeFeatureButton("WYŚLIJ LOG AUTOLOOT");
             Controls.Clear(); // Remove only the obsolete absolute-position labels from feature attachment.
             SuspendLayout();
             Font = new Font("Segoe UI", 9f);
@@ -112,7 +113,7 @@ namespace WoW335Updater
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 115));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 156));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
@@ -187,13 +188,24 @@ namespace WoW335Updater
             build.Controls.Add(actions, 0, 4);
             root.Controls.Add(build, 0, 2);
 
-            var tools = UiCard("NARZĘDZIA I PRZYWRACANIE", 2);
+            var tools = UiCard("NARZĘDZIA I PRZYWRACANIE", 3);
             var utility = UiGrid(5, 1);
             var toolButtons = new[] { repair, diagnostics, report, reportToken, selfUpdate };
             var toolNames = new[] { "Sprawdź / napraw", "Diagnostyka ZIP", "Wyślij raport", "Token raportu", "Aktualizuj updater" };
             for (int i = 0; i < toolButtons.Length; i++)
                 utility.Controls.Add(UiButton(toolButtons[i], toolNames[i]), i, 0);
             tools.Controls.Add(utility, 0, 1);
+            var addonTools = UiGrid(3, 1);
+            addonTools.ColumnStyles.Clear();
+            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
+            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
+            addonTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            autoLootDiagInstallButton.Click += delegate { InstallAutoLootDiagnostic(); };
+            dashboardFeatureButtons.Add(autoLootDiagInstallButton);
+            addonTools.Controls.Add(UiButton(autoLootDiagInstallButton, "Instaluj test AutoLoot"), 0, 0);
+            addonTools.Controls.Add(UiButton(autoLootReport, "Wyślij log AutoLoot"), 1, 0);
+            addonTools.Controls.Add(UiLabel("Dodatek Lua: test okna lootu, bez DLL i paczki gry", 8.2f, UiMuted), 2, 0);
+            tools.Controls.Add(addonTools, 0, 2);
             var rollback = UiGrid(3, 1);
             rollback.ColumnStyles.Clear();
             rollback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 119));
@@ -202,7 +214,7 @@ namespace WoW335Updater
             rollback.Controls.Add(UiLabel("Przywróć kopię", 9, UiMuted), 0, 0);
             UiInput(rollbackChoice); rollback.Controls.Add(rollbackChoice, 1, 0);
             rollback.Controls.Add(UiButton(rollbackButton, "Rollback"), 2, 0);
-            tools.Controls.Add(rollback, 0, 2);
+            tools.Controls.Add(rollback, 0, 3);
             root.Controls.Add(tools, 0, 3);
 
             var journal = UiGrid(1, 2);

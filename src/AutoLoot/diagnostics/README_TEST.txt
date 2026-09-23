@@ -7,7 +7,9 @@ klienta na OTWARTE RECZNIE okno lootu i zlecanie zbierania slotow.
 Nie wyszukuje samodzielnie zwlok, nie wykonuje ruchu ani spoofingu,
 nie integruje sie z updaterem i nie naprawia komunikatu EXE_ONLY.
 
-1. Rozpakuj folder WoW335AutoLootDiag do katalogu gry
+1. W updaterze WoW335 v0.3.4-335 z eksperymentalnego buildu
+   wybierz katalog gry i kliknij Instaluj test AutoLoot. Alternatywnie:
+   rozpakuj folder WoW335AutoLootDiag do katalogu gry
    World of Warcraft/Interface/AddOns/WoW335AutoLootDiag/
    (pliki .toc i .lua musza byc bezposrednio w tym folderze).
 2. Uruchom WoW.exe, w ekranie wyboru postaci: AddOns -> wlacz
@@ -28,3 +30,9 @@ W razie zachowania niepozadanego /al335 off.
 Wynik tego testu nie dowodzi dzialania natywnego AutoLoot. Ostateczna
 paczka WoW335 wymaga zintegrowanej, zweryfikowanej DLL PE32 x86 i
 FINAL_PACKAGE: PASS dla dokładnego SHA oraz zestawu DLL.
+
+6. W nowym updaterze kliknij Wyslij log AutoLoot. Zostana wczytane
+   tylko linie zdarzen z zapisanych SavedVariables; zaakceptuj podglad
+   przed wyslaniem do GitHub Issues. Oddzielny token raportu musi miec
+   uprawnienia Issues: Read and write. Nie musisz wysylac surowych plikow
+   WTF ani danych konta. Dziala niezaleznie od pustego manifestu DLL.
