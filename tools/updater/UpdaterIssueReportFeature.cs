@@ -158,7 +158,14 @@ namespace WoW335Updater
                     var signatureSeed = onlyAutoLoot
                         ? "AUTOLOOT335-DIAG-V1\n" + headSha + "\n" + autoLootLog
                         : BuildSignatureSeed(root, headSha, runId);
-                    var signature = Sha256Text(signatureSeed).Substring(0, 12);
+                    // All reports, not only addon-only reports, require explicit
+                // preview and user confirmation before any GitHub write.
+                if (!ConfirmAutoLootReport(bodyCore))
+                {
+                    finalStatus = "Wysyłanie raportu anulowane.";
+                    return;
+                }
+                var signature = Sha256Text(signatureSeed).Substring(0, 12);
                     var marker = "[diag:" + signature + "]";
                     var title = onlyAutoLoot
                         ? "[AUTOLOOT-DIAG 335] " + ShortSha(headSha) + " " + marker
@@ -287,6 +294,38 @@ namespace WoW335Updater
                     }
                 }
 
+                // Native Epoch loader traces are independent of chat/Lua addon
+                // events. Include only bounded, sanitized lines, with explicit
+                // preview before posting an Issue.
+                var epochLog = Path.Combine(root, "Wow335Loader.log");
+                sb.AppendLine();
+                sb.AppendLine("### Native Epoch loader");
+                var epochStatePath = Path.Combine(root, ".wow335_updater", "epoch_test", "installed.json");
+                if (File.Exists(epochStatePath))
+                {
+                    var epochState = AsDictionary(json.DeserializeObject(
+                        File.ReadAllText(epochStatePath, Encoding.UTF8)));
+                    sb.AppendLine("Loader commit: " + GetString(epochState, "git_sha"));
+                    sb.AppendLine("AutoLoot source commit: " + GetString(epochState, "source_commit"));
+                    sb.AppendLine("Managed module SHA256: " + GetString(epochState, "module_sha256"));
+                    sb.AppendLine("Loader SHA256: " + GetString(epochState, "loader_sha256"));
+                }
+                else sb.AppendLine("Epoch install state: missing");
+                foreach (var fileName in new[] { "AutoLoot335.dll", "Wow335Loader.dll", "EpochConnection.dll" })
+                {
+                    var binary = Path.Combine(root, fileName);
+                    sb.AppendLine(fileName + ": " + (File.Exists(binary)
+                        ? Sha256File(binary) : "missing"));
+                }
+                if (File.Exists(epochLog))
+                {
+                    sb.AppendLine("Wow335Loader.log (recent lines):");
+                    sb.AppendLine("```text");
+                    sb.AppendLine(Sanitize(TailFile(epochLog, 10000), root, 10000));
+                    sb.AppendLine("```");
+                }
+                else sb.AppendLine("Wow335Loader.log: missing");
+                
                 var autoLootEvents = AutoLootDiagSupport.SanitizeLog(
                     AutoLootDiagSupport.CollectLog(root));
                 if (!string.IsNullOrWhiteSpace(autoLootEvents))
@@ -364,13 +403,13 @@ namespace WoW335Updater
                 using (var yes = new Button())
                 using (var no = new Button())
                 {
-                    dialog.Text = "Potwierdź wysłanie logu AutoLoot do GitHub Issues";
+                    dialog.Text = "Potwierdź wysłanie raportu do GitHub Issues";
                     dialog.StartPosition = FormStartPosition.CenterParent;
                     dialog.ClientSize = new Size(720, 460);
                     dialog.MinimumSize = new Size(600, 370);
                     var caption = new Label {
-                        Text = "Podgląd dokładnych zdarzeń wysyłanych do repo github12wykrzyk/335. " +
-                            "Nie wysyłamy surowych plików WTF ani nazw katalogów kont.",
+                        Text = "Sprawdź zawartość raportu przed wysłaniem do github12wykrzyk/335. " +
+                            "Raport zawiera ograniczone logi Epoch i zdarzenia AutoLoot; bez tokenów i surowego WTF.",
                         Dock = DockStyle.Top, Height = 45,
                         Padding = new Padding(10, 8, 10, 3)
                     };

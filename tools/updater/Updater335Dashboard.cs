@@ -89,6 +89,9 @@ namespace WoW335Updater
         private void Build335Dashboard()
         {
             if (dashboardReady) return;
+            // Capture wired controller buttons before removing absolute layout.
+            var reportButton = TakeFeatureButton("WYŚLIJ RAPORT");
+            var reportTokenButton = TakeFeatureButton("TOKEN RAPORTU");
             Controls.Clear(); // Remove only the obsolete absolute-position labels from feature attachment.
             SuspendLayout();
             Font = new Font("Segoe UI", 9f);
@@ -181,14 +184,23 @@ namespace WoW335Updater
             build.Controls.Add(actions, 0, 4);
             root.Controls.Add(build, 0, 2);
 
+            // Reporting shares the session journal, not the three game actions.
             var journal = UiGrid(1, 2);
             journal.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
             journal.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var logHeader = UiGrid(1, 1);
+            var logHeader = UiGrid(3, 1);
             logHeader.ColumnStyles.Clear();
-            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 57));
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+            logHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18));
+
             logHeader.Controls.Add(UiLabel("DZIENNIK SESJI", 9, UiAccent, true), 0, 0);
+            logHeader.Controls.Add(UiButton(reportButton, "WYŚLIJ RAPORT"), 1, 0);
+            logHeader.Controls.Add(UiButton(reportTokenButton, "TOKEN RAPORTU"), 2, 0);
+            dashboardTips.SetToolTip(reportButton,
+                "Podgląd i wysyłka diagnostyki AutoLoot/Epoch do GitHub Issues.");
+            dashboardTips.SetToolTip(reportTokenButton,
+                "Osobny token z uprawnieniem Issues: Read and write, zapisany przez DPAPI.");
 
             journal.Controls.Add(logHeader, 0, 0);
             log.Dock = DockStyle.Fill; log.BackColor = UiCanvas; log.ForeColor = UiMuted;

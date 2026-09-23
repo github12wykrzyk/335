@@ -99,13 +99,29 @@ static DWORD activate_autoloot(HMODULE host) {
         goto cleanup;
     }
     log_event(L"AutoLoot335.dll",L"HOOK_ENABLED_RESPONSIVE",0);
-    while (IsWindow(game.hwnd)) {
-        DWORD owner=0;
-        GetWindowThreadProcessId(game.hwnd,&owner);
-        if (owner!=game.pid) break;
-        /* A timed-out pulse is retried, never queued or run on this thread. */
-        send_control(game.hwnd,message,2u,200u);
-        Sleep(40);
+    {
+        DWORD pulses=0u, delivered=0u, timeouts=0u;
+        while (IsWindow(game.hwnd)) {
+            DWORD owner=0;
+            GetWindowThreadProcessId(game.hwnd,&owner);
+            if (owner!=game.pid) break;
+            /* Logging runs on the loader worker only, never in the game
+             * callback. SendMessageTimeout success means dispatch was
+             * acknowledged, NOT that a corpse interaction succeeded. */
+            if (send_control(game.hwnd,message,2u,200u)) ++delivered;
+            else ++timeouts;
+            ++pulses;
+            if (pulses>=250u) {
+                log_event(L"AutoLoot335.dll",L"PULSE_DELIVERED",delivered);
+                log_event(L"AutoLoot335.dll",L"PULSE_TIMEOUT",timeouts);
+                pulses=delivered=timeouts=0u;
+            }
+            Sleep(40);
+        }
+        if (pulses) {
+            log_event(L"AutoLoot335.dll",L"PULSE_DELIVERED",delivered);
+            log_event(L"AutoLoot335.dll",L"PULSE_TIMEOUT",timeouts);
+        }
     }
     result=0;
 cleanup:

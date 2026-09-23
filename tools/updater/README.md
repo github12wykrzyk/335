@@ -232,3 +232,16 @@ Brak dodatkowego przycisku self-update na ekranie.
 
 ## 0.3.14-335-epoch-test — aktualizacja loadera i gry jednym przyciskiem
 TEST: „Aktualizuj” najpierw uruchamia istniejący mechanizm self-update updatera, następnie instaluje zweryfikowaną parę EpochConnection.dll/Wow335Loader.dll i migruje wyłącznie zarządzany AutoLoot335.dll 1.0.0-test do dokładnych bajtów 1.0.1-test z work/3cbc14b. Nowy loader instaluje WH_GETMESSAGE i WH_CALLWNDPROC oraz wysyła ograniczone czasowo impulsy do wątku gry co 40 ms. Nowe bajty AutoLoot są zagnieżdżone jako zasób updatera i weryfikowane SHA256/PE32 x86 w Actions. Lokalny stan starego AutoLoot i Epoch zachowuje backup/rollback; obce DLL nie są nadpisywane. „Sprawdź” rozróżnia aktualny loader i aktualny AutoLoot. Kanał STABLE/main bez zmian. Gra i łączność sieciowa wymagają testu konkretnego SHA.
+
+## 0.3.15-335-epoch-test — native AutoLoot diagnostic delivery
+The compact main screen retains three update actions. The session journal
+header now exposes WYŚLIJ RAPORT and TOKEN RAPORTU wired to the existing
+GitHub Issues controller (separate DPAPI token with Issues R/W). General
+reports include exact local SHA256 for AutoLoot335.dll, Wow335Loader.dll and
+EpochConnection.dll, verified Epoch install provenance and a bounded, sanitized
+Wow335Loader.log tail. An explicit preview is required for every report.
+Chat loot text is independent of the native AutoLoot scheduler; its Lua source
+label is not a chat-output gating signal. The loader records per-250-pulse
+success/timeout counts outside the game window thread to distinguish failed
+message dispatch from native interaction rejection. In-game responsiveness
+remains unverified until a report and exact-SHA game test are available.
