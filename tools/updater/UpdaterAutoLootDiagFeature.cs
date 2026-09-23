@@ -67,7 +67,9 @@ namespace WoW335Updater
             var marker = File.ReadAllText(mark, Encoding.UTF8);
             return marker.Contains("WOW335_AUTOLOOT_DIAG_MANAGED_V1") &&
                    marker.Contains(HashFile(Path.Combine(folder, ScriptName))) &&
-                   marker.Contains(HashFile(Path.Combine(folder, TocName)));
+                   marker.Contains(HashFile(Path.Combine(folder, TocName))) &&
+                   HashFile(Path.Combine(folder, ScriptName)) == Hash(script) &&
+                   HashFile(Path.Combine(folder, TocName)) == Hash(toc);
         }
 
         internal static string Install(string root, Assembly assembly, bool replaceExisting)
@@ -99,6 +101,11 @@ namespace WoW335Updater
 
             if (Directory.Exists(addonDir))
             {
+                foreach (var existingFile in Directory.GetFiles(addonDir)) RejectLink(existingFile);
+                foreach (var existingDir in Directory.GetDirectories(addonDir)) RejectLink(existingDir);
+                if (IsManagedDirectory(addonDir, script, toc))
+                    return "Dodatek AutoLoot DIAG jest już zainstalowany i zgodny z tym buildem (" +
+                           sourceSha.Substring(0, 10) + ").";
                 // An exact manual install may be adopted non-destructively.
                 var files = Directory.GetFiles(addonDir).Select(Path.GetFileName)
                     .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();

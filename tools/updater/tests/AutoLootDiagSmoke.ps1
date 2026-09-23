@@ -71,13 +71,53 @@ try {
         $triple[1] = $assembly
         $triple[2] = $false
         $install.Invoke($null, $triple) | Out-Null
-    } catch [Reflection.TargetInvocationException] {
-        $rejected = $_.Exception.InnerException.Message -match 'Wow.exe'
+    } catch {
+        $rejected = $_.Exception.ToString() -match 'Wow.exe różni się od wybranego klienta'
     }
     if (-not $rejected -or (Test-Path (Join-Path $folder 'Interface'))) {
         throw "Addon installer failed to reject missing exact pinned Wow.exe"
     }
-    Write-Host "AUTOLOOT_UPDATER_SMOKE: PASS embedded exact-SHA addon, saved-variable whitelist, privacy redaction, missing-client fail-closed"
+    [IO.File]::Copy((Resolve-Path 'Wow.exe').Path, (Join-Path $folder 'Wow.exe'))
+    $triple[2] = $false
+    $first = [string]$install.Invoke($null, $triple)
+    $addonDir = Join-Path $folder 'Interface\AddOns\WoW335AutoLootDiag'
+    $scriptPath = Join-Path $addonDir 'WoW335AutoLootDiag.lua'
+    $tocPath = Join-Path $addonDir 'WoW335AutoLootDiag.toc'
+    if (-not (Test-Path $scriptPath) -or -not (Test-Path $tocPath) -or
+        -not (Test-Path (Join-Path $addonDir '.wow335_diag_managed.txt'))) {
+        throw "Addon installation missing managed file set"
+    }
+    $scriptText = [IO.File]::ReadAllText($scriptPath)
+    if (-not $scriptText.Contains('local enabled = false')) { throw "Addon not disabled by default" }
+    $sourceScript = (Resolve-Path 'src\AutoLoot\diagnostics\WoW335AutoLootDiag\WoW335AutoLootDiag.lua').Path
+    if ([IO.File]::ReadAllText($sourceScript) -ne $scriptText) { throw "Installer wrote different script bytes" }
+    $idempotent = [string]$install.Invoke($null, $triple)
+    if ($idempotent -notmatch 'już zainstalowany' -or
+        (Test-Path (Join-Path $folder '.wow335_updater\autoloot_diag_backups'))) {
+        throw "Repeat install made an unnecessary backup or overwrote matching files"
+    }
+    [IO.File]::AppendAllText($scriptPath, [Environment]::NewLine + '-- existing content to preserve in backup')
+    [IO.File]::WriteAllText((Join-Path $addonDir 'unrelated.txt'), 'do not discard')
+    $blockedReplacement = $false
+    try { $install.Invoke($null, $triple) | Out-Null }
+    catch { $blockedReplacement = $_.Exception.ToString() -match 'Wymagana jawna zgoda' }
+    if (-not $blockedReplacement) { throw "Existing modified addon overwritten without consent" }
+    $triple[2] = $true
+    $second = [string]$install.Invoke($null, $triple)
+    if (-not (Test-Path $scriptPath) -or (Test-Path (Join-Path $addonDir 'unrelated.txt')) -or
+        [IO.File]::ReadAllText($scriptPath) -ne [IO.File]::ReadAllText($sourceScript)) {
+        throw "Addon replacement did not restore exact staged content"
+    }
+    $backupRoot = Join-Path $folder '.wow335_updater\autoloot_diag_backups'
+    $backups = @(Get-ChildItem -LiteralPath $backupRoot -Directory)
+    if ($backups.Count -ne 1 -or
+        -not (Test-Path (Join-Path $backups[0].FullName 'unrelated.txt'))) {
+        throw "Previous addon directory was not preserved in backup"
+    }
+    if ([IO.File]::ReadAllText((Join-Path $backups[0].FullName 'unrelated.txt')) -ne 'do not discard') {
+        throw "Existing user content lost during replacement"
+    }
+    Write-Host "AUTOLOOT_UPDATER_SMOKE: PASS x86 resources, exact SHA, log whitelist/privacy, wrong EXE rejection, addon install and backup/restore"
 } finally {
     if (Test-Path $folder) { Remove-Item -LiteralPath $folder -Recurse -Force }
 }
