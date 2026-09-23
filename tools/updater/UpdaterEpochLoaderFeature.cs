@@ -805,15 +805,48 @@ namespace WoW335Updater
             return completed;
         }
 
+        // Only isolated Epoch-managed files are restored: keep work installed.json
+        // and the work AutoLoot DLL intact for the canonical TEST package update.
+        internal async Task EpochPrepareWorkTransitionAsync(string targetSha)
+        {
+            if (IsStable()) throw new InvalidOperationException("Migracja Epoch wymaga kanału TEST.");
+            var available = await FindLatestPackageAsync();
+            if (available.Channel != "test" ||
+                !string.Equals(available.HeadSha, targetSha, StringComparison.Ordinal))
+                throw new InvalidOperationException("Paczka gry work nie odpowiada dokładnemu SHA nowego updatera.");
+            EpochDetachForWork();
+            Log("Migracja Epoch -> work: oryginalny EpochConnection.dll przywrócony; zaktualizuj teraz paczkę gry.");
+        }
+
         private void EpochRollback()
         {
             if (busy) return;
             try
             {
+                EpochDetachForWork();
+            }
+            catch (Exception ex)
+            {
+                Log("Epoch TEST rollback: BŁĄD " + ex.Message);
+                MessageBox.Show(this, ex.Message, "Epoch TEST rollback",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void EpochDetachForWork()
+        {
                 var root = Path.GetFullPath(gameDir.Text.Trim());
                 if (IsGameRunning(root)) throw new InvalidOperationException("Zamknij grę przed rollbackiem.");
                 var state = EpochInstalled(root);
-                if (state == null) throw new InvalidOperationException("Nie ma zarządzanej instalacji Epoch TEST.");
+                if (state == null)
+                {
+                    if (File.Exists(EpochStatePath(root)) ||
+                        File.Exists(Path.Combine(root, EpochLoader)) ||
+                        File.Exists(EpochModuleLockPath(root)))
+                        throw new InvalidOperationException("Epoch TEST: obce lub niekompletne pliki loadera; migracja zablokowana.");
+                    return;
+                }
+                EpochValidateLaunch(root);
                 var manager = EpochManager(root);
                 var backup = Path.Combine(manager, "backups", GetString(state, "backup_id"));
                 EpochNotLink(Path.Combine(manager, "backups"));
@@ -843,13 +876,6 @@ namespace WoW335Updater
                 File.Delete(EpochStatePath(root));
                 Log("Epoch TEST: przywrócono oryginalną DLL " + EpochOriginalSha);
                 status.Text = "Epoch TEST: rollback zakończony.";
-            }
-            catch (Exception ex)
-            {
-                Log("Epoch TEST rollback: BŁĄD " + ex.Message);
-                MessageBox.Show(this, ex.Message, "EpochConnection rollback",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
 
         private void EpochModules()

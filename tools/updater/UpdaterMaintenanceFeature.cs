@@ -237,6 +237,15 @@ namespace WoW335Updater
                     if (!string.Equals(Sha256File(bootstrapPath), remote.BootstrapSha, StringComparison.OrdinalIgnoreCase))
                         throw new InvalidOperationException("SHA256 bootstrapa nie zgadza się z updater_build.json.");
 
+                    if (remote.Branch == "work" &&
+                        UpdaterBuildInfo.Version == "0.3.19-335-epoch-test" &&
+                        (channel == null || channel.SelectedIndex != 1))
+                    {
+                        var game = form as MainForm;
+                        if (game == null) throw new InvalidOperationException("Brak okna gry do bezpiecznej migracji.");
+                        await game.EpochPrepareWorkTransitionAsync(remote.HeadSha);
+                    }
+
                     var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
                     var args = "--wait-pid " + pid
                         + " --source " + QuoteArg(stagedUpdater)
@@ -359,6 +368,7 @@ namespace WoW335Updater
             private async Task<RemoteUpdaterBuild> DownloadLatestUpdaterAsync()
             {
                 var branch = UpdaterBuildInfo.Version.EndsWith("-epoch-test", StringComparison.Ordinal) &&
+                    UpdaterBuildInfo.Version != "0.3.19-335-epoch-test" &&
                     (channel == null || channel.SelectedIndex != 1)
                     ? "feature/loader-12340"
                     : (channel != null && channel.SelectedIndex == 1 ? "main" : "work");
@@ -425,6 +435,8 @@ namespace WoW335Updater
                         return new RemoteUpdaterBuild
                         {
                             Version = version,
+                            Branch = branch,
+                            HeadSha = liveHead,
                             UpdaterSha = updaterSha,
                             BootstrapSha = bootstrapSha,
                             UpdaterBytes = updaterBytes,
@@ -916,6 +928,8 @@ namespace WoW335Updater
             private sealed class RemoteUpdaterBuild
             {
                 public string Version;
+                public string Branch;
+                public string HeadSha;
                 public string UpdaterSha;
                 public string BootstrapSha;
                 public byte[] UpdaterBytes;

@@ -75,6 +75,12 @@ namespace WoW335Updater
 
             BuildUi();
             MaintenanceFeature.Attach(this);
+            // The installed 0.3.18 Epoch updater downloads this signed bridge.
+            // On restart the bridge migrates to the canonical work updater.
+            if (UpdaterBuildInfo.Version == "0.3.19-335-epoch-test")
+                Shown += async delegate {
+                    if (!IsStable()) await MaintenanceFeature.EnsureCurrentUpdaterAsync(this);
+                };
             IssueReportFeature.Attach(this);
             Build335Dashboard();
             LoadConfig();

@@ -254,3 +254,17 @@ New native host ticks ONLY from the exact 12340 CGWorldFrame::OnLayerUpdate call
 
 ## 0.3.18-335-epoch-test — rollback Native Frame
 Native Frame did not loot in the user's game. The TEST updater intentionally reverts only the active Epoch/AutoLoot mechanism to the previous exact work/3cbc14b66aa2ed5687b0132190c4381494c0bdb6 PE32 x86 DLL and message-hook Epoch loader. It recognizes the abandoned exact frame DLL only as a migration source, backs up the game DLL and both managed states, atomically restores the previous module and truthful work provenance, and retains the newer branch monitor, shared-token and issue-report UI. Running game must be closed. main/STABLE and work untouched. Previous stationary loot should be rechecked in game; no claim that movement looting is possible.
+
+## 0.3.19-335-epoch-test — jednorazowy most do kanonicznego updatera work
+
+Użytkownik wersji 0.3.18 naciska `Aktualizuj` lub `Sprawdź`; dotychczasowy
+self-update z feature/loader-12340 dostarcza most 0.3.19 dla dokładnego SHA.
+Most po restarcie automatycznie pobiera wyłącznie najnowszy udany updater
+`work` z dokładnego HEAD i sprawdza, czy paczka gry `work` dla TEGO SAMEGO
+HEAD jest dostępna. Przed wymianą updatera przywraca oryginalny
+EpochConnection.dll wyłącznie z lokalnego zweryfikowanego backupu, usuwa
+własny Wow335Loader.dll, modules.lock i stan Epoch, nie zmieniając AutoLoot
+ani work/installed.json. Nie uruchamia dwóch loaderów równocześnie; gry nie
+wolno uruchamiać podczas migracji. Dalej aktualizacje TEST idą wyłącznie
+przez kanoniczny updater `work`, a każda kolejna DLL wymaga manifestu i
+właściwego buildu x86. Nie instaluj osobnych archiwów ani nie edytuj dlls.txt.
