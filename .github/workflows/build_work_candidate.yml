@@ -54,36 +54,7 @@ jobs:
         run: |
           if (-not (Test-Path tools/build_active.py)) { throw 'NO_ACTIVE_BUILDER: provide a verified Windows x86 builder for the active 12340 modules.' }
           $base = '${{ github.event.before }}'
-          if (-not $base -or $base -match '^0+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python tools/verify_current.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Package and strictly verify runnable client (only with DLLs)
-        if: steps.readiness.outputs.ready == 'true'
-        shell: pwsh
-        run: |
-          python tools/package_candidate.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --native-build-report dist/native_build.json
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python tools/verify_candidate_package.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Upload EXE audit and package readiness report
-        uses: actions/upload-artifact@v4
-        with:
-          name: WoW335-EXE-AUDIT-${{ github.sha }}
-          path: |
-            dist/client_exe_audit.json
-            dist/candidate_readiness.json
-          if-no-files-found: error
-      - name: Upload runnable package only after FINAL_PACKAGE PASS
-        if: steps.readiness.outputs.ready == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: WoW335-WORK-CANDIDATE-${{ github.sha }}
-          path: |
-            dist/WoW335_WORK_CANDIDATE.zip
-            dist/candidate_metadata.json
-          if-no-files-found: error
-          compression-level: 0
-) { $base = (git rev-parse HEAD^) }
+          if (-not $base -or $base -match '^0+$') { $base = (git rev-parse HEAD^) }
           if (-not $base) { throw 'Missing incremental build base commit' }
           python tools/build_active.py --base "$base" --report dist/native_build.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -93,7 +64,7 @@ jobs:
         if: steps.readiness.outputs.ready == 'true'
         shell: pwsh
         run: |
-          python tools/package_candidate.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json
+          python tools/package_candidate.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --native-build-report dist/native_build.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/verify_candidate_package.py --package dist/WoW335_WORK_CANDIDATE.zip --metadata dist/candidate_metadata.json --finalize
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

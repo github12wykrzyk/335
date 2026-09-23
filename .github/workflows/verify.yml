@@ -21,6 +21,8 @@ jobs:
         run: python tools/verify_repo.py
       - name: Verify active runtime
         run: python tools/verify_current.py
+      - name: Validate experiment ownership and exact-SHA evidence
+        run: python tools/ai_experiments.py validate
       - name: Unit tests
         run: python -m unittest discover -s tests -v
 

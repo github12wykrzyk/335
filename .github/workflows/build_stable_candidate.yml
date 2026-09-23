@@ -1,5 +1,7 @@
 name: Build 335 stable candidate
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

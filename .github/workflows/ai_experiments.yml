@@ -1,0 +1,22 @@
+name: Verify 335 experiment ledger
+on:
+  push:
+    branches: [work, main, parallel, 'feature/**']
+    paths:
+      - 'runtime/ai_experiments.json'
+      - 'tools/ai_experiments.py'
+      - 'tests/test_ai_experiments.py'
+      - '.github/workflows/ai_experiments.yml'
+  pull_request:
+    branches: [work, main, parallel]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  experiments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python tools/ai_experiments.py validate
+      - run: python -m unittest discover -s tests -p test_ai_experiments.py -v
+      - run: python tools/verify_current.py

@@ -28,7 +28,9 @@
     "module_registry_verifier": "tools/verify_module_registry.py",
     "active_builder": "tools/build_active.py",
     "exact_runtime_verifier": "tools/verify_exact_runtime_artifacts.py",
-    "exact_stable_packager": "tools/package_exact_current.py"
+    "exact_stable_packager": "tools/package_exact_current.py",
+    "experiment_router": "tools/ai_experiments.py",
+    "experiment_workflow": ".github/workflows/ai_experiments.yml"
   },
   "branches": {
     "stable": "main",
