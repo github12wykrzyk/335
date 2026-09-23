@@ -44,7 +44,8 @@ typedef enum {
     PP_EVENT_WORLD_RESET = 12,
     PP_EVENT_ENABLED = 13,
     PP_EVENT_DISABLED = 14,
-    PP_EVENT_RESET = 15
+    PP_EVENT_RESET = 15,
+    PP_EVENT_PROBE_REJECTED = 16
 } PpEvent;
 typedef struct {
     void *ctx;
@@ -74,6 +75,7 @@ typedef struct {
     uint32_t active_attempt_id, next_attempt_id;
     uint32_t started_ms, last_scan_ms;
     unsigned history_next, active_valid, enabled, scan_started;
+    unsigned probe_mode;
     uint32_t last_diagnostic_ms;
     unsigned diagnostic_started;
     uint32_t casts, successes, empty, retries, timeouts;
@@ -84,6 +86,9 @@ void pp_enable(PpEngine *engine, int enable);
 /* Clear when world/map/character changes; no implicit reset on movement. */
 void pp_reset(PpEngine *engine);
 void pp_tick(PpEngine *engine, uint32_t now_ms);
+/* One explicit attempt at selected GUID; 1 means submission, never success.
+ * No autonomous scanning or retry; only explicit reset permits same GUID again. */
+int pp_probe_once(PpEngine *engine, PpGuid selected, uint32_t now_ms);
 #ifdef __cplusplus
 }
 #endif

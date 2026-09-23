@@ -71,6 +71,7 @@ void pp_enable(PpEngine *engine, int enable) {
     engine->active_valid=0u;
     engine->active_attempt_id=0u;
     engine->scan_started=0u;
+    engine->probe_mode=0u;
 }
 void pp_reset(PpEngine *engine) {
     if (!engine) return;
@@ -78,8 +79,59 @@ void pp_reset(PpEngine *engine) {
     engine->history_next=0u;
     engine->diagnostic_started=0u;
     engine->active_valid=0u;
+    if (engine->probe_mode) engine->enabled=0u;
+    engine->probe_mode=0u;
     engine->active_attempt_id=0u; /* keep next_attempt_id across world resets */
     engine->scan_started=0u;
+}
+/* Reject an unverified target, rather than substituting a nearby NPC.
+ * Once submitted, pp_tick only observes the result or timeout.
+ */
+int pp_probe_once(PpEngine *e,PpGuid selected,uint32_t now) {
+    PpTarget targets[PP_SCAN_CAP];
+    PpHistory *h;
+    size_t i,count;
+    int found=0;
+    if (!e || !nonzero(selected) || e->enabled || e->active_valid) return 0;
+    e->active_attempt_id=0u;
+    h=entry(e,selected,0);
+    if (h && (h->attempts || h->terminal)) {
+        emit(e,PP_EVENT_PROBE_REJECTED,selected);
+        return 0;
+    }
+    if (e->api.can_cast(e->api.ctx)!=1) {
+        emit(e,PP_EVENT_NOT_CASTABLE,selected);
+        return 0;
+    }
+    count=e->api.scan(e->api.ctx,targets,PP_SCAN_CAP);
+    if (count>PP_SCAN_CAP) count=PP_SCAN_CAP;
+    for(i=0u;i<count;++i) {
+        if (same(targets[i].guid,selected) && targets[i].eligible &&
+            targets[i].distance_sq>=0.0f &&
+            targets[i].distance_sq<FLT_MAX) {found=1;break;}
+    }
+    if (!found) {
+        emit(e,PP_EVENT_PROBE_REJECTED,selected);
+        return 0;
+    }
+    h=entry(e,selected,1);
+    ++h->attempts;
+    if (++e->next_attempt_id==0u) ++e->next_attempt_id;
+    e->active_attempt_id=e->next_attempt_id;
+    if (e->api.cast_on_guid(e->api.ctx,selected,e->active_attempt_id)!=1) {
+        block(e,selected,now,0u,1);
+        ++e->retries;
+        emit(e,PP_EVENT_RETRY,selected);
+        return 0;
+    }
+    e->active=selected;
+    e->active_valid=1u;
+    e->started_ms=now;
+    e->enabled=1u;
+    e->probe_mode=1u;
+    ++e->casts;
+    emit(e,PP_EVENT_CAST,selected);
+    return 1;
 }
 void pp_tick(PpEngine *engine, uint32_t now) {
     PpTarget targets[PP_SCAN_CAP];
@@ -97,22 +149,26 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             ++engine->successes;
             emit(engine,PP_EVENT_SUCCESS,engine->active);
             engine->active_valid=0u;
+            if (engine->probe_mode) engine->enabled=0u;
             return;
         case PP_RESULT_EMPTY:
             block(engine,engine->active,now,0u,1);
             ++engine->empty;
             emit(engine,PP_EVENT_EMPTY,engine->active);
             engine->active_valid=0u;
+            if (engine->probe_mode) engine->enabled=0u;
             return;
         case PP_RESULT_PERMANENT:
             block(engine,engine->active,now,0u,1);
             emit(engine,PP_EVENT_INELIGIBLE,engine->active);
             engine->active_valid=0u;
+            if (engine->probe_mode) engine->enabled=0u;
             return;
         case PP_RESULT_RETRYABLE:
             failure(engine,engine->active,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
             ++engine->retries;
             engine->active_valid=0u;
+            if (engine->probe_mode) engine->enabled=0u;
             return;
         case PP_RESULT_PENDING: break;
         default: return; /* unknown result fails closed */
@@ -121,8 +177,10 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         failure(engine,engine->active,now,PP_TIMEOUT_DELAY_MS,PP_EVENT_TIMEOUT);
         ++engine->timeouts;
         engine->active_valid=0u;
+        if (engine->probe_mode) engine->enabled=0u;
         return;
     }
+    if (engine->probe_mode) return;
     if (engine->scan_started && (uint32_t)(now-engine->last_scan_ms)<PP_SCAN_INTERVAL_MS)
         return;
     engine->scan_started=1u;
