@@ -16,5 +16,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Static inspect exact pinned Wow.exe native spell function
+      - name: Static inspect exact pinned Wow.exe spell and NPC eligibility candidates
         run: python src/AutoPickPocket/audit_spell_abi.py

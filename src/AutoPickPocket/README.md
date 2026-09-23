@@ -122,3 +122,15 @@ verified two-DLL manifest, active module registration, a strict reproducible
 x86 build and FINAL_PACKAGE: PASS. Only then may an exact-SHA player game test
 be requested. Failed readiness is work to implement, not a reason to relabel
 an isolated x86 artifact as an AutoPickPocket game package.
+
+## NPC policy native ABI audit
+
+The exact pinned Wow.exe CI audit now prints executable section bytes and direct
+call sites for candidate creature type/reaction functions at 0x00605570,
+0x006061E0 and 0x0071F6E0 in addition to the existing cast audit. These
+addresses are unverified leads from public 3.3.5a code notes:
+https://drewkestell.us/Article/6/Chapter/17 and
+https://www.elitepvpers.com/forum/wow-bots/678970-offsets-3-3-5a.html .
+A function sharing a known name or executable address is NOT proof of its ABI,
+semantic hostility check, argument order or safe use on the selected client.
+Only the pinned binary and in-game evidence can close this part of the policy.
