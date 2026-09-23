@@ -24,20 +24,25 @@ namespace WoW335Updater
 
         private TableLayoutPanel Build335MonitorHeader()
         {
-            var panel = UiGrid(1, 2);
-            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
-            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+            // One horizontal row: two stacked badges were taller than the header on
+            // scaled Windows desktops and the configuration card covered MAIN.
+            var panel = UiGrid(2, 1);
+            panel.ColumnStyles.Clear();
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             int index = 0;
             foreach (var branch in new[] { "work", "main" })
             {
                 var badge = monitorBadges[branch];
                 badge.Dock = DockStyle.Fill;
-                badge.Margin = new Padding(4, 1, 4, 1);
+                badge.AutoEllipsis = true;
+                badge.Margin = new Padding(4, 9, 4, 9);
                 badge.Padding = new Padding(8, 0, 2, 0);
                 badge.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
                 badge.TextAlign = ContentAlignment.MiddleLeft;
                 Set335Badge(branch, "UNKNOWN", "", "Oczekiwanie na pierwsze sprawdzenie.");
-                panel.Controls.Add(badge, 0, index++);
+                panel.Controls.Add(badge, index++, 0);
             }
             monitorButton.Click += delegate { Open335Monitor(); };
             return panel;
@@ -53,10 +58,9 @@ namespace WoW335Updater
             badge.ForeColor = green ? Color.FromArgb(169, 247, 202)
                 : yellow ? Color.FromArgb(255, 221, 145)
                 : red ? Color.FromArgb(255, 166, 177) : UiMuted;
-            badge.Text = branch.ToUpperInvariant() + "   " + state + "   " +
-                (string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length))) +
-                "   " + DateTime.Now.ToString("HH:mm:ss");
-            dashboardTips.SetToolTip(badge, detail);
+            badge.Text = branch.ToUpperInvariant() + "  " + state + "  " +
+                (string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length)));
+            dashboardTips.SetToolTip(badge, detail + "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss"));
         }
 
         private void Start335Monitor()
