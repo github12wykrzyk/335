@@ -23,7 +23,9 @@ class NativeAutoLootDeliveryTests(unittest.TestCase):
         self.assertIn('DialogResult.Yes', source)
         self.assertIn('IsGameRunning(root)', source)
         self.assertNotIn('FINAL_PACKAGE: PASS', source)
-        self.assertIn('Natywny AutoLoot TEST', dashboard)
+        self.assertNotIn('Natywny AutoLoot TEST', dashboard)
+        self.assertEqual(dashboard.count('actions.Controls.Add(UiButton('), 3)
+        self.assertIn('return await EpochInstallAsync()', (ROOT/'tools/updater/WoW335Updater.cs').read_text(encoding='utf-8'))
         self.assertIn('UpdaterAutoLootNativePreviewFeature.cs', workflow)
 
 if __name__ == "__main__":
