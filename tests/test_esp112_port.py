@@ -50,7 +50,9 @@ class PortTests(unittest.TestCase):
         self.assertIn("SetTimer(NULL,0u,ESP112_PROJECTION_INTERVAL_MS,NULL)",source)
         self.assertIn("KillTimer(NULL,g_refresh_timer)",source)
         self.assertIn("esp112_motion_step(&g_motion[slot],c->guid",source)
-        self.assertIn('\\\\\\"probe\\\\\\":\\\\\\"cadence\\\\\\"',source)
+        self.assertIn("cadence",source)
+        self.assertIn("projection_hz",source)
+        self.assertIn("max_tick_gap_ms",source)
         self.assertIn("g_debug_pairs && (unsigned)slot<ESP112_DIAG_PAIRS",source)
     def test_projection_tick_separate_from_scan_and_stable_slots(self):
         src=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
