@@ -13,7 +13,8 @@ static Esp335Camera camera(void) {
 int main(void) {
     Esp335Core e;
     Esp335Camera c = camera();
-    Esp335Filter filter = {0, 0, 1, 50.f, 0};
+    Esp335Filter filter = {0};
+    filter.show_bg_opponents=1; filter.max_distance=50.f;
     Esp335Player p = {0};
     Esp335Label labels[ESP335_MAX_PLAYERS];
     uint64_t guid = 0;

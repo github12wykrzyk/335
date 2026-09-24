@@ -90,6 +90,7 @@ size_t esp335_d3d9_draw_labels(IDirect3DDevice9 *device,
     IDirect3DDevice9_SetRenderState(device,D3DRS_DESTBLEND,D3DBLEND_INVSRCALPHA);
     IDirect3DDevice9_SetRenderState(device,D3DRS_LIGHTING,FALSE);
     IDirect3DDevice9_SetRenderState(device,D3DRS_CULLMODE,D3DCULL_NONE);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_COLORWRITEENABLE,0x0Fu);
     IDirect3DDevice9_SetRenderState(device,D3DRS_SCISSORTESTENABLE,FALSE);
     IDirect3DDevice9_SetTextureStageState(device,0,D3DTSS_COLOROP,D3DTOP_SELECTARG2);
     IDirect3DDevice9_SetTextureStageState(device,0,D3DTSS_COLORARG2,D3DTA_DIFFUSE);
@@ -100,7 +101,7 @@ size_t esp335_d3d9_draw_labels(IDirect3DDevice9 *device,
         const Esp335Label *p=&labels[i];
         float x=p->screen_x,y=p->screen_y,health_ratio;
         unsigned distance, hundreds,tens,ones;
-        DWORD col=D3DCOLOR_ARGB(235,240,220,90);
+        DWORD col=p->kind==ESP335_KIND_NPC ? D3DCOLOR_ARGB(235,90,210,240) : D3DCOLOR_ARGB(235,240,220,90);
         DWORD bg=D3DCOLOR_ARGB(170,9,9,9);
         DWORD hp=D3DCOLOR_ARGB(235,60,210,100);
         if (!p->guid || !isfinite(x) || !isfinite(y) ||
@@ -134,7 +135,6 @@ size_t esp335_d3d9_draw_labels(IDirect3DDevice9 *device,
 static HRESULT STDMETHODCALLTYPE end_scene(IDirect3DDevice9 *device) {
     EspEndScene original=g_original;
     if (original && InterlockedCompareExchange(&g_enabled,0,0) &&
-        GetCurrentThreadId()==g_owner_thread &&
         InterlockedCompareExchange(&g_rendering,1,0)==0) {
         InterlockedIncrement(&g_frames);
         if (g_callback) g_callback(device,g_user);
@@ -218,4 +218,147 @@ unsigned esp335_d3d9_frames(void) {
 }
 unsigned esp335_d3d9_dropped(void) {
     return (unsigned)InterlockedCompareExchange(&g_dropped,0,0);
+}
+
+/* Minimal built-in 5x7 pixel typeface: no D3DX runtime, fonts or game UI edits. */
+typedef struct { char chr; unsigned char rows[7]; } GuiGlyph;
+static const GuiGlyph g_glyphs[] = {
+    {'0',{0x0e,0x13,0x15,0x15,0x15,0x19,0x0e}},
+    {'1',{0x04,0x0c,0x04,0x04,0x04,0x04,0x0e}},
+    {'2',{0x0e,0x11,0x01,0x02,0x04,0x08,0x1f}},
+    {'3',{0x1e,0x01,0x01,0x0e,0x01,0x01,0x1e}},
+    {'4',{0x02,0x06,0x0a,0x12,0x1f,0x02,0x02}},
+    {'5',{0x1f,0x10,0x10,0x1e,0x01,0x01,0x1e}},
+    {'6',{0x0f,0x10,0x10,0x1e,0x11,0x11,0x0e}},
+    {'7',{0x1f,0x01,0x02,0x04,0x08,0x08,0x08}},
+    {'8',{0x0e,0x11,0x11,0x0e,0x11,0x11,0x0e}},
+    {'9',{0x0e,0x11,0x11,0x0f,0x01,0x01,0x1e}},
+    {'A',{0x0e,0x11,0x11,0x1f,0x11,0x11,0x11}},
+    {'B',{0x1e,0x11,0x11,0x1e,0x11,0x11,0x1e}},
+    {'C',{0x0f,0x10,0x10,0x10,0x10,0x10,0x0f}},
+    {'D',{0x1e,0x11,0x11,0x11,0x11,0x11,0x1e}},
+    {'E',{0x1f,0x10,0x10,0x1e,0x10,0x10,0x1f}},
+    {'F',{0x1f,0x10,0x10,0x1e,0x10,0x10,0x10}},
+    {'G',{0x0f,0x10,0x10,0x17,0x11,0x11,0x0f}},
+    {'H',{0x11,0x11,0x11,0x1f,0x11,0x11,0x11}},
+    {'I',{0x1f,0x04,0x04,0x04,0x04,0x04,0x1f}},
+    {'J',{0x07,0x02,0x02,0x02,0x12,0x12,0x0c}},
+    {'K',{0x11,0x12,0x14,0x18,0x14,0x12,0x11}},
+    {'L',{0x10,0x10,0x10,0x10,0x10,0x10,0x1f}},
+    {'M',{0x11,0x1b,0x15,0x15,0x11,0x11,0x11}},
+    {'N',{0x11,0x19,0x15,0x13,0x11,0x11,0x11}},
+    {'O',{0x0e,0x11,0x11,0x11,0x11,0x11,0x0e}},
+    {'P',{0x1e,0x11,0x11,0x1e,0x10,0x10,0x10}},
+    {'Q',{0x0e,0x11,0x11,0x11,0x15,0x12,0x0d}},
+    {'R',{0x1e,0x11,0x11,0x1e,0x14,0x12,0x11}},
+    {'S',{0x0f,0x10,0x10,0x0e,0x01,0x01,0x1e}},
+    {'T',{0x1f,0x04,0x04,0x04,0x04,0x04,0x04}},
+    {'U',{0x11,0x11,0x11,0x11,0x11,0x11,0x0e}},
+    {'V',{0x11,0x11,0x11,0x11,0x11,0x0a,0x04}},
+    {'W',{0x11,0x11,0x11,0x15,0x15,0x15,0x0a}},
+    {'X',{0x11,0x11,0x0a,0x04,0x0a,0x11,0x11}},
+    {'Y',{0x11,0x11,0x0a,0x04,0x04,0x04,0x04}},
+    {'Z',{0x1f,0x01,0x02,0x04,0x08,0x10,0x1f}},
+    {':',{0x00,0x04,0x04,0x00,0x04,0x04,0x00}},
+    {' ',{0x00,0x00,0x00,0x00,0x00,0x00,0x00}},
+    {'-',{0x00,0x00,0x00,0x1f,0x00,0x00,0x00}},
+    {'/',{0x01,0x01,0x02,0x04,0x08,0x10,0x10}},
+    {'*',{0x00,0x15,0x0e,0x1f,0x0e,0x15,0x00}},
+    {'?',{0x0e,0x11,0x01,0x02,0x04,0x00,0x04}}
+};
+static const char *g_rows[]={
+    "ESP ON", "PLAYERS ALL", "HORDE", "ALLIANCE", "HOSTILE",
+    "BG ENEMY", "NPC ALL", "NPC HOSTILE", "UNKNOWN"
+};
+static void gui_char(float x,float y,char ch,DWORD color) {
+    unsigned i,row,col;
+    const unsigned char *bits=NULL;
+    if (ch>='a' && ch<='z') ch=(char)(ch-32);
+    for (i=0;i<sizeof(g_glyphs)/sizeof(g_glyphs[0]);++i)
+        if (g_glyphs[i].chr==ch) { bits=g_glyphs[i].rows; break; }
+    if (!bits) return;
+    for (row=0;row<7u;++row)
+        for (col=0;col<5u;++col)
+            if (bits[row] & (1u << (4u-col)))
+                append_quad(x+col*1.5f,y+row*1.5f,1.4f,1.4f,color);
+}
+static void gui_text(float x,float y,const char *text,DWORD color) {
+    while (*text && x<560.f) {
+        gui_char(x,y,*text,color); x+=9.f; ++text;
+    }
+}
+static void gui_number(float x,float y,unsigned value,DWORD color) {
+    char out[24];
+    _snprintf_s(out,sizeof(out),_TRUNCATE,"%u",value);
+    gui_text(x,y,out,color);
+}
+int esp335_d3d9_panel_hit(float x,float y) {
+    int idx;
+    if (!isfinite(x)||!isfinite(y)||x<18.f||x>=260.f||
+        y<60.f||y>=60.f+9.f*24.f) return -1;
+    idx=(int)((y-60.f)/24.f);
+    return idx>=0 && idx<9 ? idx : -1;
+}
+void esp335_d3d9_draw_panel(IDirect3DDevice9 *device,unsigned flags,
+                           unsigned scan_ok,unsigned players,
+                           unsigned npcs,unsigned camera_ok,
+                           unsigned markers,unsigned dropped) {
+    IDirect3DStateBlock9 *block=NULL;
+    D3DVIEWPORT9 vp;
+    unsigned i;
+    DWORD white=D3DCOLOR_ARGB(245,230,236,244);
+    DWORD green=D3DCOLOR_ARGB(235,72,205,120);
+    DWORD gray=D3DCOLOR_ARGB(245,99,118,138);
+    DWORD panel=D3DCOLOR_ARGB(216,16,25,34);
+    if (!device || FAILED(IDirect3DDevice9_GetViewport(device,&vp)) ||
+        vp.Width<320u || vp.Height<320u ||
+        FAILED(IDirect3DDevice9_CreateStateBlock(device,D3DSBT_ALL,&block)) ||
+        !block) return;
+    if (FAILED(IDirect3DStateBlock9_Capture(block))) {
+        IDirect3DStateBlock9_Release(block); return;
+    }
+    g_device=device;g_used=0;g_draw_failed=0;
+    IDirect3DDevice9_SetTexture(device,0,NULL);
+    IDirect3DDevice9_SetFVF(device,ESP335_FVF);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_ZENABLE,FALSE);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_ZWRITEENABLE,FALSE);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_ALPHABLENDENABLE,TRUE);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_SRCBLEND,D3DBLEND_SRCALPHA);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_DESTBLEND,D3DBLEND_INVSRCALPHA);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_LIGHTING,FALSE);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_CULLMODE,D3DCULL_NONE);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_COLORWRITEENABLE,0x0Fu);
+    IDirect3DDevice9_SetRenderState(device,D3DRS_SCISSORTESTENABLE,FALSE);
+    IDirect3DDevice9_SetTextureStageState(device,0,D3DTSS_COLOROP,D3DTOP_SELECTARG2);
+    IDirect3DDevice9_SetTextureStageState(device,0,D3DTSS_COLORARG2,D3DTA_DIFFUSE);
+    IDirect3DDevice9_SetTextureStageState(device,0,D3DTSS_ALPHAOP,D3DTOP_SELECTARG2);
+    IDirect3DDevice9_SetTextureStageState(device,0,D3DTSS_ALPHAARG2,D3DTA_DIFFUSE);
+    append_quad(18.f,30.f,244.f,277.f,panel);
+    append_quad(18.f,30.f,244.f,3.f,green);
+    gui_text(28.f,40.f,"ESP 335  INSERT MENU",white);
+    for (i=0;i<9u;++i) {
+        const int selected = (flags & (1u<<i)) != 0u;
+        const float y=60.f+24.f*i;
+        append_quad(28.f,y,12.f,12.f,selected?green:gray);
+        if (selected) gui_text(30.f,y+1.f,"X",panel);
+        gui_text(50.f,y+1.f,g_rows[i],selected?white:gray);
+    }
+    gui_text(28.f,280.f,"SCAN",white);
+    gui_number(76.f,280.f,scan_ok,green);
+    gui_text(112.f,280.f,"P",white);
+    gui_number(130.f,280.f,players,green);
+    gui_text(162.f,280.f,"N",white);
+    gui_number(180.f,280.f,npcs,green);
+    gui_text(204.f,280.f,"C",white);
+    gui_number(222.f,280.f,camera_ok,green);
+    gui_text(28.f,293.f,"M",white);
+    gui_number(46.f,293.f,markers,green);
+    gui_text(108.f,293.f,"DROP",white);
+    gui_number(150.f,293.f,dropped,gray);
+    if (g_used && !g_draw_failed)
+        IDirect3DDevice9_DrawPrimitiveUP(device,D3DPT_TRIANGLELIST,
+                        (UINT)(g_used/3u),g_vertices,sizeof(EspVertex));
+    IDirect3DStateBlock9_Apply(block);
+    IDirect3DStateBlock9_Release(block);
+    g_device=NULL;g_used=0;
 }
