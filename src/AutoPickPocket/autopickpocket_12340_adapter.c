@@ -166,6 +166,12 @@ static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
      * as well as targets that have left the validated cast radius. */
     dx=target[0]-me[0];dy=target[1]-me[1];dz=target[2]-me[2];
     d2=dx*dx+dy*dy+dz*dz;
+    if(d2>=0.0f && d2<FLT_MAX &&
+       d2>PP12340_REACH*PP12340_REACH){
+        if(a->host.event)a->host.event(a->host.ctx,
+            PP_EVENT_LOCAL_RANGE_REJECT,guid,attempt_id);
+        return 0;
+    }
     if (!(d2>=0.0f && d2<=PP12340_REACH*PP12340_REACH && d2<FLT_MAX) ||
         pp_can_cast(a)!=1) return 0;
     return a->host.cast_guid(a->host.ctx,PP12340_CAST_GUID_VA,
