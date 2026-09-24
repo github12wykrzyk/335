@@ -21,13 +21,11 @@ SOURCE = [
     "src/PlayerESP/player_esp_core.h",
     "src/PlayerESP/player_esp_scanner.c",
     "src/PlayerESP/player_esp_scanner.h",
-    "src/PlayerESP/player_esp_camera.c",
-    "src/PlayerESP/player_esp_camera.h",
-    "src/PlayerESP/player_esp_d3d9.c",
-    "src/PlayerESP/player_esp_d3d9.h",
-    "src/PlayerESP/player_esp_win32_host.c",
-    "src/PlayerESP/player_esp_lua.c",
-    "src/PlayerESP/player_esp_lua.h",
+    "src/PlayerESP112Port/esp112_geometry.c",
+    "src/PlayerESP112Port/esp112_geometry.h",
+    "src/PlayerESP112Port/esp112_overlay.c",
+    "src/PlayerESP112Port/esp112_overlay.h",
+    "src/PlayerESP112Port/esp112_host335.c",
 ]
 BUILD = [name for name in SOURCE if name.endswith(".c")]
 
@@ -35,12 +33,12 @@ def esp_contract():
     return {
         "component": "PlayerESP",
         "sources": SOURCE,
-        "requires": ["AutoLoot"],
+        "requires": [],
         "resources": [
-            {"id": "wow12340:0x00819210-framescript-execute", "mode": "observe"},
-            {"id": "logical:game-ui", "mode": "exclusive"},
             {"id": "wow12340:object-manager", "mode": "observe"},
-            {"id": "wow12340:d3d9-endscene-vtable", "mode": "exclusive"},
+            {"id": "wow12340:0x004f6d20-native-w2s", "mode": "observe"},
+            {"id": "wow12340:0x0047bff0-native-ddc", "mode": "observe"},
+            {"id": "win32:layered-label-overlay", "mode": "exclusive"},
             {"id": "logical:render", "mode": "exclusive"},
             {"id": "logical:input", "mode": "observe"},
             {"id": "win32:WH_GETMESSAGE", "mode": "chain",
@@ -51,8 +49,8 @@ def esp_contract():
         "build": {
             "toolchain": "msvc_x86",
             "sources": BUILD,
-            "include_dirs": ["src/PlayerESP"],
-            "libraries": ["Advapi32.lib", "User32.lib", "d3d9.lib"],
+            "include_dirs": ["src/PlayerESP", "src/PlayerESP112Port"],
+            "libraries": ["Advapi32.lib", "User32.lib", "Gdi32.lib"],
             "cflags": ["/TC", "/Brepro"],
             "ldflags": [],
         },
@@ -76,14 +74,19 @@ def prepare_registration(runtime, registry, index, dll_sha, loot_sha=None):
             [m["component"] for m in index["modules"]] != ["AutoLoot","PlayerESP"] or
             runtime["files"][2].get("path") != "runtime/PlayerESP335.dll" or
             runtime["files"][2].get("kind") != "dll" or
-            runtime["files"][2].get("canonical_source") != "src/PlayerESP/player_esp_win32_host.c" or
+            runtime["files"][2].get("canonical_source") not in (
+                "src/PlayerESP/player_esp_win32_host.c",
+                "src/PlayerESP112Port/esp112_host335.c") or
             registry["modules"][1].get("component") != "PlayerESP"):
             raise ValueError("existing ESP registration diverged; refusing overwrite")
         runtime["files"][2]["sha256"] = dll_sha
-        runtime["files"][2]["version"] = "0.3.0-native-ui-test"
-        runtime["files"][2]["depends_on"]=["AutoLoot"]
-        runtime["release_id"] = "feature-player-esp-12340-native-ui-npc-test"
+        runtime["files"][2]["version"] = "0.4.0-112-gdi-rebuild-test"
+        runtime["files"][2]["canonical_source"]="src/PlayerESP112Port/esp112_host335.c"
+        runtime["files"][2]["depends_on"]=[]
+        runtime["release_id"] = "feature-player-esp-12340-112-gdi-rebuild-test"
         registry["modules"][1] = esp_contract()
+        index["modules"][1]["source"]="src/PlayerESP112Port/esp112_host335.c"
+        index["modules"][1]["docs"]="src/PlayerESP112Port/README.md"
         return runtime, registry, index
     if current != ["Client12340", "AutoLoot"]:
         raise ValueError("unexpected runtime; refusing to overwrite")
@@ -107,20 +110,20 @@ def prepare_registration(runtime, registry, index, dll_sha, loot_sha=None):
     registry["modules"].append(esp_contract())
     runtime["files"].append({
         "component": "PlayerESP", "path": "runtime/PlayerESP335.dll",
-        "version": "0.1.0-visual-test",
+        "version": "0.4.0-112-gdi-rebuild-test",
         "sha256": dll_sha, "arch": "x86",
-        "canonical_source": "src/PlayerESP/player_esp_win32_host.c",
-        "depends_on": ["AutoLoot"], "kind": "dll",
+        "canonical_source": "src/PlayerESP112Port/esp112_host335.c",
+        "depends_on": [], "kind": "dll",
     })
-    runtime["release_id"] = "feature-player-esp-12340-visual-test"
+    runtime["release_id"] = "feature-player-esp-12340-112-gdi-rebuild-test"
     runtime["compatibility_sets"] = [{
         "id": "client12340-autoloot-player-esp-test",
         "components": ["Client12340", "AutoLoot", "PlayerESP"],
     }]
     index["modules"].append({
         "component": "PlayerESP",
-        "source": "src/PlayerESP/player_esp_win32_host.c",
-        "docs": "src/PlayerESP/README.md",
+        "source": "src/PlayerESP112Port/esp112_host335.c",
+        "docs": "src/PlayerESP112Port/README.md",
     })
     return runtime, registry, index
 
@@ -177,7 +180,7 @@ def main():
         raise ValueError("hook/module ownership conflict: " + "; ".join(errors))
     print("ESP_STAGE: real Windows PE32 x86 DLL sha256=",
           compiled["binary_sha256"])
-    print("ESP_STAGE: native UI runtime with real AutoLoot FrameScript bridge; gameplay unverified")
+    print("ESP_STAGE: clean 112 GDI/12340 native W2S+DDC; no Lua/D3D ESP hooks; gameplay unverified")
 
 if __name__ == "__main__":
     sys.exit(main())

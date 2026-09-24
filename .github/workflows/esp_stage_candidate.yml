@@ -4,6 +4,9 @@ on:
     branches: [feature/player-esp-12340]
     paths:
       - 'src/PlayerESP/**'
+      - 'src/PlayerESP112Port/**'
+      - 'tests/test_esp112_port.py'
+      - 'tests/esp112_geometry_harness.c'
       - 'tools/stage_esp_candidate.py'
       - 'tests/test_autoloot_normal_runtime.py'
       - 'tests/test_updater_autoloot_delivery.py'

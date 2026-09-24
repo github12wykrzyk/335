@@ -32,6 +32,9 @@ class ESPStageTests(unittest.TestCase):
                          ["AutoLoot", "PlayerESP"])
         self.assertEqual(validate(runtime, registry), [])
         self.assertEqual(esp_contract()["build"]["toolchain"], "msvc_x86")
+        self.assertNotIn("d3d9.lib",esp_contract()["build"]["libraries"])
+        self.assertIn("Gdi32.lib",esp_contract()["build"]["libraries"])
+        self.assertEqual(runtime["files"][-1]["canonical_source"],"src/PlayerESP112Port/esp112_host335.c")
     def test_rejects_stale_or_fake_registration(self):
         r, g, i = fixture()
         with self.assertRaises(ValueError):

@@ -1,6 +1,7 @@
 """The 112-style rewrite uses a separate native device-domain conversion and
 OS pixel labels; legacy 335 Lua/D3D renderers are not part of the new build."""
 import shutil
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -15,7 +16,7 @@ class PortTests(unittest.TestCase):
             cmd=[compiler,"-std=c11","-Wall","-Wextra","-Werror",
                  str(ROOT/"src/PlayerESP112Port/esp112_geometry.c"),
                  str(ROOT/"tests/esp112_geometry_harness.c"),
-                 "-o",str(executable),"-lm"]
+                 "-o",str(executable)]+(["-lm"] if sys.platform!="win32" else [])
             subprocess.run(cmd,check=True,capture_output=True,text=True,timeout=60)
             run=subprocess.run([str(executable)],capture_output=True,text=True,timeout=30)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
