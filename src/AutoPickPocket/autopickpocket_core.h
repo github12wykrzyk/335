@@ -58,7 +58,8 @@ typedef enum {
     PP_EVENT_CAST_REJECTED = 23,
     PP_EVENT_PREFETCH_ONLY = 24,
     PP_EVENT_LOCAL_RANGE_REJECT = 25,
-    PP_EVENT_LUA_EPOCH = 26 /* Lua observer recreated, including /reload */
+    PP_EVENT_LUA_EPOCH = 26 /* Lua observer recreated, including /reload */,
+    PP_EVENT_UI_OBSERVATION = 27 /* unscoped UI error, never a GUID result */
 } PpEvent;
 typedef struct {
     void *ctx;

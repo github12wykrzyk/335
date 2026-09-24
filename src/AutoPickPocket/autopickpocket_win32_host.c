@@ -34,6 +34,7 @@ static unsigned g_pulse_running;
 static uint32_t g_last_pulse_ms,g_pulse_delta_ms;
 static uint32_t g_last_cast_ms,g_last_result_ms,g_inflight_attempt;
 static uint32_t g_log_session;
+static unsigned g_ui_category,g_ui_count;
 static uint8_t g_packet_cast_count;
 static unsigned g_native_failover,g_packet_unanswered,g_last_submitted_native;
 static uint32_t g_packet_nonce,g_packet_started_ms;
@@ -362,7 +363,7 @@ static uint64_t world_token(void *ctx) {
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     wchar_t path[MAX_PATH],dir[MAX_PATH],older[MAX_PATH],newer[MAX_PATH],*slash;
-    char line[432];
+    char line[512];
     const char *reason="attempt";
     DWORD ignored;
     HANDLE file;
@@ -451,10 +452,17 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_DISABLED: reason="disabled";break;
     case PP_EVENT_RESET: reason="manual_reset";break;
     case PP_EVENT_LUA_EPOCH: reason="lua_observer_reinitialized";break;
+    case PP_EVENT_UI_OBSERVATION:
+        {static const char * const names[6]={
+          "ui_out_of_range_unattributed","ui_line_of_sight_unattributed",
+          "ui_not_stealthed_unattributed","ui_not_ready_unattributed",
+          "ui_no_pockets_unattributed","ui_other_error_unattributed"};
+         reason=names[g_ui_category<6u ? g_ui_category : 5u];}
+        break;
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"variant\":\"packet\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"transport\":\"%s\",\"no_ack_count\":%u}\n",
+       "{\"module\":\"AutoPickPocket\",\"variant\":\"packet\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"transport\":\"%s\",\"no_ack_count\":%u,\"count_since_poll\":%u}\n",
        (unsigned long)g_log_session,(unsigned long)now,(unsigned)kind,reason,
        (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi,
        (unsigned long)g_adapter.last_scan_duration_ms,
@@ -464,7 +472,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
        (unsigned long)cast_gap,(unsigned long)result_wait,
        (unsigned long)next_wait,
        g_last_submitted_native ? "native_fallback" : "packet",
-       g_packet_unanswered);
+       g_packet_unanswered,g_ui_count);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);
     CloseHandle(file);
 }
@@ -473,6 +481,15 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
 void PP335_LogLuaObserverEpoch(void) {
     PpGuid none={0u,0u};
     event(NULL,PP_EVENT_LUA_EPOCH,none,0u);
+}
+/* The UI message has no target GUID. Preserve category/count on the
+ * SAME rotated writer and native session as the cast lifecycle. */
+void PP335_LogUiObservation(unsigned category, unsigned count) {
+    PpGuid none={0u,0u};
+    if(!is_game_thread() || !count)return;
+    g_ui_category=category;g_ui_count=count;
+    event(NULL,PP_EVENT_UI_OBSERVATION,none,0u);
+    g_ui_count=0u;
 }
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     Pp12340Host h;
