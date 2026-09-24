@@ -44,7 +44,7 @@ int esp335_eligible(const Esp335Player *p, const Esp335Filter *filter,
     faction_mask = (p->faction == ESP335_HORDE) ? ESP335_HORDE :
                    (p->faction == ESP335_ALLIANCE) ? ESP335_ALLIANCE : 0u;
     /* Opposing BG team is independent of faction or ordinary hostility. */
-    return (in_bg && filter->show_bg_opponents &&
+    return filter->show_all || (in_bg && filter->show_bg_opponents &&
             p->bg_team == ESP335_BG_OPPONENT) ||
            (filter->show_hostile && p->relation == ESP335_REL_HOSTILE) ||
            ((filter->factions & faction_mask) != 0u);

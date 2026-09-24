@@ -27,6 +27,7 @@ typedef struct {
     unsigned factions;      /* bitmask ESP335_HORDE | ESP335_ALLIANCE */
     unsigned show_hostile;
     unsigned show_bg_opponents;
+    unsigned show_all; /* when metadata are UNKNOWN, still display players */
     float max_distance;     /* yards; 0 means no distance restriction */
 } Esp335Filter;
 
