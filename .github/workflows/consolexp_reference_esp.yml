@@ -12,6 +12,8 @@ on:
       - 'tests/player_esp_scanner_harness.c'
       - 'tests/test_player_esp_scanner.py'
       - 'tests/test_player_esp_core.py'
+      - 'tests/test_player_esp_win32_host.py'
+      - 'tools/verify_esp_native.py'
       - 'docs/CONSOLEXP_REFERENCE_ESP.md'
       - '.github/workflows/consolexp_reference_esp.yml'
   pull_request:
@@ -29,7 +31,7 @@ jobs:
       - name: Validate uploaded archive identity and CRC without executing binaries
         run: python tools/audit_consolexp_reference.py --report dist/consolexp_reference_audit.json
       - name: Test reference safety and portable ESP core
-        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v
+        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v && python -m unittest discover -s tests -p 'test_player_esp_win32_host.py' -v
       - name: Publish inert reference inventory (not game package)
         uses: actions/upload-artifact@v4
         with:
@@ -55,3 +57,19 @@ jobs:
           if errorlevel 1 exit /b 1
           tests\player_esp_scanner_harness.exe
           if errorlevel 1 exit /b 1
+      - name: Build real x86 diagnostic host DLL, NOT_GAME_PACKAGE
+        shell: cmd
+        run: |
+          if not exist dist\esp-native mkdir dist\esp-native
+          cl /nologo /LD /O2 /W4 /WX /TC /Brepro /Fo:dist\esp-native\ /Fe:dist\esp-native\PlayerESP335.dll src\PlayerESP\player_esp_core.c src\PlayerESP\player_esp_scanner.c src\PlayerESP\player_esp_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib
+          if errorlevel 1 exit /b 1
+          dumpbin /exports dist\esp-native\PlayerESP335.dll > dist\esp-native\exports.txt
+          if errorlevel 1 exit /b 1
+          python tools\verify_esp_native.py --dll dist\esp-native\PlayerESP335.dll --exports dist\esp-native\exports.txt --report dist\esp-native\report.json
+          if errorlevel 1 exit /b 1
+      - name: Publish build attestation only (not the DLL), NOT_GAME_PACKAGE
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp335-native-build-report-NOT_GAME_PACKAGE
+          path: dist/esp-native/report.json
+          if-no-files-found: error

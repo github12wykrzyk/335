@@ -38,3 +38,7 @@ Skaner nie modyfikuje targetu/ruchu/EXE, nie instaluje hooków i nie
 przechowuje adresów obiektów w snapshotach. Przy błędzie unieważnia stan.
 Weryfikacja jest wykonywana na symulowanej pamięci; poprawność ABI
 na dokładnym `Wow.exe` i połączenie z loaderem pozostają do wykonania.
+
+## Etap 3: rzeczywisty host x86 (nadal nie wizualne ESP)
+
+`player_esp_win32_host.c` eksportuje W335_* i korzysta z loadera. Przy inicjalizacji sprawdza SHA klienta i prolog pozycji, odczytuje zdrowie/max zdrowie i enumeruje graczy na watku gry. Nieznane frakcja/klasa/BG sa zerowane, nie zgadywane. Log zbiorczy (bez GUID i nazw): `.wow335_debug/PlayerESP.jsonl` co 5 s. Brak drugiego loadera, patchera i hooka D3D. Workflow kompiluje realna PE32 x86 DLL i sprawdza eksporty; publikuje wylacznie raport builda, NIE DLL, bo nadal brak renderera/targetowania, rejestracji aktywnego runtime i testu w grze. SHA/prolog nie sa dowodem pelnego ABI. Nie instalowac tej DLL samodzielnie.
