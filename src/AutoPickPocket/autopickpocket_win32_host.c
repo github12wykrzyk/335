@@ -43,6 +43,15 @@ static uint8_t g_packet_cast_count;
 static uint32_t g_packet_nonce;
 static PpGuid g_packet_guid;
 static unsigned g_spoof_restore_failed;
+#define PP335_SPOOF_HOLD_MAX_MS 750u
+typedef struct {
+    unsigned active;
+    PpGuid player,target;
+    uint32_t nonce,started_ms;
+    float real[3],facing;
+    uint64_t world;
+} Pp335SpoofHold;
+static Pp335SpoofHold g_spoof_hold;
 static int valid_memory(const void *p,SIZE_T length) {
     MEMORY_BASIC_INFORMATION m;
     uintptr_t at=(uintptr_t)p;
@@ -277,7 +286,8 @@ static int eligible(void *ctx,uintptr_t obj,PpGuid guid) {
 }
 static int usable(void *ctx,uint32_t spell_id) {
     (void)ctx;
-    return is_game_thread() && spell_id==PP12340_SPELL_ID &&
+    return is_game_thread() && !g_spoof_hold.active &&
+        spell_id==PP12340_SPELL_ID &&
         g_policy.spell_usable &&
         g_policy.spell_usable(g_policy.context,spell_id)==1;
 }
@@ -329,11 +339,48 @@ static int send_heartbeat(PpGuid player,const float xyz[3],float facing,uint32_t
     __try{((send_fn)PP335_SEND_VA)(&data);return 1;}
     __except(EXCEPTION_EXECUTE_HANDLER){return 0;}
 }
+/* The 112 source retains remote position through loot; old 335 sent the
+ * real-position heartbeat immediately after its spell packet. A bounded
+ * remote hold keeps server proximity for late native loot money/release.
+ * No client-side XYZ/target mutation or server success is inferred. */
+static void spoof_restore(PpEvent reason){
+    Pp335SpoofHold saved;
+    if(!g_spoof_hold.active || !is_game_thread())return;
+    saved=g_spoof_hold;
+    /* Never replay a previous player's movement across a world transition. */
+    if(saved.world!=g_adapter.current_world || !packet_session_ready()){
+        memset(&g_spoof_hold,0,sizeof(g_spoof_hold));
+        g_spoof_restore_failed=1u;
+        event(NULL,PP_EVENT_SPOOF_RESTORE_ERROR,saved.target,saved.nonce);
+        return;
+    }
+    if(!send_heartbeat(saved.player,saved.real,saved.facing,
+                       (uint32_t)GetTickCount())){
+        g_spoof_restore_failed=1u;
+        event(NULL,PP_EVENT_SPOOF_RESTORE_ERROR,saved.target,saved.nonce);
+        return; /* retain hold: retry restore at the next game-thread pulse */
+    }
+    memset(&g_spoof_hold,0,sizeof(g_spoof_hold));
+    event(NULL,reason,saved.target,saved.nonce);
+}
+static void spoof_service(uint32_t now){
+    Pp335SpoofHold *hold=&g_spoof_hold;
+    if(!hold->active || !is_game_thread())return;
+    if(hold->world!=g_adapter.current_world){
+        spoof_restore(PP_EVENT_SPOOF_RESTORE_TIMEOUT);
+    }else if(g_policy.spoof_transaction_done &&
+       g_policy.spoof_transaction_done(g_policy.context,hold->target,hold->nonce)==1){
+        spoof_restore(PP_EVENT_SPOOF_RESTORE_LOOT);
+    }else if((uint32_t)(now-hold->started_ms)>=PP335_SPOOF_HOLD_MAX_MS){
+        spoof_restore(PP_EVENT_SPOOF_RESTORE_TIMEOUT);
+    }
+}
 static int cast_guid_spoof(void *ctx,uintptr_t va,uint32_t spell,PpGuid guid,
     uint32_t nonce,PpGuid player,const float me[3],const float npc[3]){
     float dx,dy,dz,xy2,d2,xy,desired,ratio,spoof_xy[3],facing;
-    uint32_t started;int cast_sent,restored;
-    if(!is_game_thread() || g_spoof_restore_failed || !me || !npc ||
+    uint32_t started;int cast_sent;
+    if(!is_game_thread() || g_spoof_restore_failed || g_spoof_hold.active ||
+       !g_adapter.current_world || !me || !npc ||
        !g_policy.movement_facing || va!=PP12340_CAST_GUID_VA ||
        spell!=PP12340_SPELL_ID || !nonce || !(player.lo|player.hi) ||
        !(guid.lo|guid.hi) ||
@@ -353,13 +400,15 @@ static int cast_guid_spoof(void *ctx,uintptr_t va,uint32_t spell,PpGuid guid,
     if(!_finite(spoof_xy[0]) || !_finite(spoof_xy[1]))return 0;
     started=(uint32_t)GetTickCount();
     if(!send_heartbeat(player,spoof_xy,facing,started))return 0;
-    /* Always attempt restoration, even if the spell send faults. */
+    memset(&g_spoof_hold,0,sizeof(g_spoof_hold));
+    g_spoof_hold.active=1u;g_spoof_hold.player=player;
+    g_spoof_hold.target=guid;g_spoof_hold.nonce=nonce;
+    g_spoof_hold.started_ms=started;g_spoof_hold.facing=facing;
+    g_spoof_hold.world=g_adapter.current_world;
+    memcpy(g_spoof_hold.real,me,sizeof(g_spoof_hold.real));
     cast_sent=cast_guid(ctx,va,spell,guid,nonce);
-    restored=send_heartbeat(player,me,facing,started+1u);
-    if(!restored)g_spoof_restore_failed=1u; /* disable all future spoof */
-    if(!cast_sent || !restored){
-        if(cast_sent && g_policy.end_attempt)
-            g_policy.end_attempt(g_policy.context,guid,nonce);
+    if(!cast_sent){
+        spoof_restore(PP_EVENT_SPOOF_RESTORE_TIMEOUT);
         return 0;
     }
     event(NULL,PP_EVENT_SPOOF_SEQUENCE,guid,nonce);
@@ -370,6 +419,12 @@ static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     (void)ctx;
     if(!is_game_thread() || !g_policy.cast_result)return PP_RESULT_PENDING;
     outcome=g_policy.cast_result(g_policy.context,guid,attempt_id);
+    if(g_spoof_hold.active && g_spoof_hold.nonce==attempt_id &&
+       g_spoof_hold.target.lo==guid.lo &&
+       g_spoof_hold.target.hi==guid.hi &&
+       outcome!=PP_RESULT_PENDING && outcome!=PP_RESULT_CAST_ACK &&
+       outcome!=PP_RESULT_UI_RANGE_HINT)
+        spoof_restore(PP_EVENT_SPOOF_RESTORE_LOOT);
     if(g_packet_nonce==attempt_id &&
        g_packet_guid.lo==guid.lo && g_packet_guid.hi==guid.hi &&
        outcome!=PP_RESULT_PENDING && outcome!=PP_RESULT_UI_RANGE_HINT){
@@ -388,6 +443,10 @@ static void end_attempt(void *ctx,PpGuid guid,uint32_t attempt_id) {
     if(g_packet_nonce==attempt_id &&
        g_packet_guid.lo==guid.lo && g_packet_guid.hi==guid.hi)
         g_packet_nonce=0u;
+    if(g_spoof_hold.active && g_spoof_hold.nonce==attempt_id &&
+       g_spoof_hold.target.lo==guid.lo &&
+       g_spoof_hold.target.hi==guid.hi)
+        spoof_restore(PP_EVENT_SPOOF_RESTORE_TIMEOUT);
     if(g_policy.end_attempt)
         g_policy.end_attempt(g_policy.context,guid,attempt_id);
 }
@@ -475,7 +534,10 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     SetFilePointer(file,0,NULL,FILE_END);
     switch(kind) {
     case PP_EVENT_CAST: reason="cast_submitted";break;
-    case PP_EVENT_SPOOF_SEQUENCE: reason="move_cast_restore_submitted_unverified";break;
+    case PP_EVENT_SPOOF_SEQUENCE: reason="spoof_hold_move_cast_submitted_unverified";break;
+    case PP_EVENT_SPOOF_RESTORE_LOOT: reason="spoof_restored_after_loot_or_result_unverified";break;
+    case PP_EVENT_SPOOF_RESTORE_TIMEOUT: reason="spoof_restored_at_bounded_timeout_unverified";break;
+    case PP_EVENT_SPOOF_RESTORE_ERROR: reason="spoof_restore_send_failed_disable_spoof";break;
     case PP_EVENT_SUCCESS: reason="result_claim_requires_loot_confirmation";break;
     case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_guid_correlated_signal";break;
     case PP_EVENT_CAST_ACK: reason="cast_ack_guid_correlated_not_theft";break;
@@ -599,13 +661,22 @@ PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     return 1;
 }
 PP335_EXPORT void __stdcall PP335_EnableOnGameThread(int enable) {
-    if(is_game_thread())pp12340_enable(&g_adapter,enable);
+    if(is_game_thread()){
+        if(!enable)spoof_restore(PP_EVENT_SPOOF_RESTORE_TIMEOUT);
+        pp12340_enable(&g_adapter,enable);
+    }
 }
 PP335_EXPORT void __stdcall PP335_TickOnGameThread(uint32_t now_ms) {
-    if(is_game_thread())pp12340_tick(&g_adapter,now_ms);
+    if(is_game_thread()){
+        spoof_service(now_ms);
+        pp12340_tick(&g_adapter,now_ms);
+    }
 }
 PP335_EXPORT void __stdcall PP335_ResetOnGameThread(void) {
-    if(is_game_thread())pp12340_reset(&g_adapter);
+    if(is_game_thread()){
+        spoof_restore(PP_EVENT_SPOOF_RESTORE_TIMEOUT);
+        pp12340_reset(&g_adapter);
+    }
 }
 PP335_EXPORT int __stdcall PP335_CommandOnGameThread(const char *arguments) {
     if (!is_game_thread()) return 0;

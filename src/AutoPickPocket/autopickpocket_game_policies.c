@@ -131,7 +131,7 @@ static void report_ui_observation(void){
 static int observer(void){
     char flag[8];
     /* A GUID-scoped combat-log outcome is different from a UI error without a GUID. */
-    return run("if not _G.W335PP_F then\n local f=CreateFrame('Frame')\n if f then\n  local function category(m)\n   if not m then return 'U' end\n   if SPELL_FAILED_TARGET_NO_POCKETS and m==SPELL_FAILED_TARGET_NO_POCKETS then return 'E' end\n   if SPELL_FAILED_OUT_OF_RANGE and m==SPELL_FAILED_OUT_OF_RANGE or ERR_OUT_OF_RANGE and m==ERR_OUT_OF_RANGE or SPELL_FAILED_TOO_CLOSE and m==SPELL_FAILED_TOO_CLOSE then return 'R' end\n   if SPELL_FAILED_LINE_OF_SIGHT and m==SPELL_FAILED_LINE_OF_SIGHT or SPELL_FAILED_VISION_OBSCURED and m==SPELL_FAILED_VISION_OBSCURED then return 'L' end\n   if SPELL_FAILED_ONLY_STEALTHED and m==SPELL_FAILED_ONLY_STEALTHED or SPELL_FAILED_NOT_STEALTHED and m==SPELL_FAILED_NOT_STEALTHED then return 'S' end\n   if SPELL_FAILED_NOT_READY and m==SPELL_FAILED_NOT_READY or SPELL_FAILED_SPELL_IN_PROGRESS and m==SPELL_FAILED_SPELL_IN_PROGRESS then return 'C' end\n   return 'U'\n  end\n  f:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')\n  f:RegisterEvent('LOOT_OPENED')\n  f:RegisterEvent('PLAYER_MONEY')\n  f:RegisterEvent('UI_ERROR_MESSAGE')\n  f:SetScript('OnEvent',function(self,ev,...)\n   local n=_G.W335PP_N\n   if not n or n=='0' then return end\n   local t=GetTime()\n   if ev=='COMBAT_LOG_EVENT_UNFILTERED' then\n    local _,kind,src,_,_,dst,_,_,id=...\n    if id~=921 or not src or not dst or not UnitGUID('player') or string.upper(src)~=string.upper(UnitGUID('player')) then return end\n    local dg=string.upper(dst)\n    local rec=_G.W335PP_BURST and _G.W335PP_BURST[dg]\n    if not rec or t-rec.t>1.5 then return end\n    if kind=='SPELL_CAST_SUCCESS' then\n     rec.s='1'\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_S=n\n     end\n    elseif kind=='SPELL_CAST_FAILED' then\n     local why=category(select(12,...))\n     rec.f=why=='U' and 'F' or why\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=rec.f\n     end\n    end\n   elseif ev=='LOOT_OPENED' then\n    if _G.W335PP_T and t-_G.W335PP_T<=1.5 then _G.W335PP_O=n end\n   elseif ev=='PLAYER_MONEY' then\n    if GetMoney then\n     local balance=GetMoney()\n     local previous=_G.W335PP_WALLET_LAST or balance\n     if balance>previous then\n      _G.W335PP_WALLET_COUNT=tostring(tonumber(_G.W335PP_WALLET_COUNT or '0')+1)\n      _G.W335PP_WALLET_DELTA=tostring(tonumber(_G.W335PP_WALLET_DELTA or '0')+balance-previous)\n     end\n     _G.W335PP_WALLET_LAST=balance\n    end\n    if _G.W335PP_T and t-_G.W335PP_T<=0.4 and GetMoney and _G.W335PP_MB and _G.W335PP_MB>=0 then\n     local balance=GetMoney()\n     if balance>_G.W335PP_MB then\n      _G.W335PP_M=n\n      _G.W335PP_MD=tostring(balance-_G.W335PP_MB)\n     end\n    end\n   elseif ev=='UI_ERROR_MESSAGE' then\n    local why=category(select(1,...))\n    _G.W335PP_UI_SEQ=tostring(tonumber(_G.W335PP_UI_SEQ or '0')+1)\n    _G.W335PP_UI_KIND=why\n    local key='W335PP_UI_'..why\n    _G[key]=tostring(tonumber(_G[key] or '0')+1)\n    _G.W335PP_UI_TIME=t\n    if why=='R' and _G.W335PP_T and t-_G.W335PP_T<=0.8 and _G.W335PP_INFLIGHT=='1' then\n     _G.W335PP_UI_ACTIVE_RANGE=n\n    end\n   end\n  end)\n  _G.W335PP_BOOT=tostring(GetTime())\n  _G.W335PP_WALLET_LAST=GetMoney and GetMoney() or 0\n  _G.W335PP_F=f\n  _G.W335PP_INIT='1'\n end\nend") && value("W335PP_INIT",flag,sizeof(flag)) &&
+    return run("if not _G.W335PP_F then\n local f=CreateFrame('Frame')\n if f then\n  local function category(m)\n   if not m then return 'U' end\n   if SPELL_FAILED_TARGET_NO_POCKETS and m==SPELL_FAILED_TARGET_NO_POCKETS then return 'E' end\n   if SPELL_FAILED_OUT_OF_RANGE and m==SPELL_FAILED_OUT_OF_RANGE or ERR_OUT_OF_RANGE and m==ERR_OUT_OF_RANGE or SPELL_FAILED_TOO_CLOSE and m==SPELL_FAILED_TOO_CLOSE then return 'R' end\n   if SPELL_FAILED_LINE_OF_SIGHT and m==SPELL_FAILED_LINE_OF_SIGHT or SPELL_FAILED_VISION_OBSCURED and m==SPELL_FAILED_VISION_OBSCURED then return 'L' end\n   if SPELL_FAILED_ONLY_STEALTHED and m==SPELL_FAILED_ONLY_STEALTHED or SPELL_FAILED_NOT_STEALTHED and m==SPELL_FAILED_NOT_STEALTHED then return 'S' end\n   if SPELL_FAILED_NOT_READY and m==SPELL_FAILED_NOT_READY or SPELL_FAILED_SPELL_IN_PROGRESS and m==SPELL_FAILED_SPELL_IN_PROGRESS then return 'C' end\n   return 'U'\n  end\n  f:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')\n  f:RegisterEvent('LOOT_OPENED')\n  f:RegisterEvent('LOOT_CLOSED')\n  f:RegisterEvent('PLAYER_MONEY')\n  f:RegisterEvent('UI_ERROR_MESSAGE')\n  f:SetScript('OnEvent',function(self,ev,...)\n   local n=_G.W335PP_N\n   if not n or n=='0' then return end\n   local t=GetTime()\n   if ev=='COMBAT_LOG_EVENT_UNFILTERED' then\n    local _,kind,src,_,_,dst,_,_,id=...\n    if id~=921 or not src or not dst or not UnitGUID('player') or string.upper(src)~=string.upper(UnitGUID('player')) then return end\n    local dg=string.upper(dst)\n    local rec=_G.W335PP_BURST and _G.W335PP_BURST[dg]\n    if not rec or t-rec.t>1.5 then return end\n    if kind=='SPELL_CAST_SUCCESS' then\n     rec.s='1'\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_S=n\n     end\n    elseif kind=='SPELL_CAST_FAILED' then\n     local why=category(select(12,...))\n     rec.f=why=='U' and 'F' or why\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=rec.f\n     end\n    end\n   elseif ev=='LOOT_OPENED' then\n    if _G.W335PP_T and t-_G.W335PP_T<=1.5 then _G.W335PP_O=n end\n   elseif ev=='LOOT_CLOSED' then\n    if _G.W335PP_T and t-_G.W335PP_T<=1.5 then _G.W335PP_C=n end\n   elseif ev=='PLAYER_MONEY' then\n    if GetMoney then\n     local balance=GetMoney()\n     local previous=_G.W335PP_WALLET_LAST or balance\n     if balance>previous then\n      _G.W335PP_WALLET_COUNT=tostring(tonumber(_G.W335PP_WALLET_COUNT or '0')+1)\n      _G.W335PP_WALLET_DELTA=tostring(tonumber(_G.W335PP_WALLET_DELTA or '0')+balance-previous)\n     end\n     _G.W335PP_WALLET_LAST=balance\n    end\n    if _G.W335PP_T and t-_G.W335PP_T<=0.4 and GetMoney and _G.W335PP_MB and _G.W335PP_MB>=0 then\n     local balance=GetMoney()\n     if balance>_G.W335PP_MB then\n      _G.W335PP_M=n\n      _G.W335PP_MD=tostring(balance-_G.W335PP_MB)\n     end\n    end\n   elseif ev=='UI_ERROR_MESSAGE' then\n    local why=category(select(1,...))\n    _G.W335PP_UI_SEQ=tostring(tonumber(_G.W335PP_UI_SEQ or '0')+1)\n    _G.W335PP_UI_KIND=why\n    local key='W335PP_UI_'..why\n    _G[key]=tostring(tonumber(_G[key] or '0')+1)\n    _G.W335PP_UI_TIME=t\n    if why=='R' and _G.W335PP_T and t-_G.W335PP_T<=0.8 and _G.W335PP_INFLIGHT=='1' then\n     _G.W335PP_UI_ACTIVE_RANGE=n\n    end\n   end\n  end)\n  _G.W335PP_BOOT=tostring(GetTime())\n  _G.W335PP_WALLET_LAST=GetMoney and GetMoney() or 0\n  _G.W335PP_F=f\n  _G.W335PP_INIT='1'\n end\nend") && value("W335PP_INIT",flag,sizeof(flag)) &&
            !strcmp(flag,"1");
 }
 static PpResult classify_failure(char code){
@@ -178,7 +178,7 @@ static int begin_attempt(void *ctx,PpGuid guid,uint32_t nonce){
     clear();
     n=sprintf_s(script,sizeof(script),
       "_G.W335PP_N='%lu';_G.W335PP_G='0X%08lX%08lX';"
-      "_G.W335PP_S='0';_G.W335PP_O='0';_G.W335PP_E='0';"
+      "_G.W335PP_S='0';_G.W335PP_O='0';_G.W335PP_C='0';_G.W335PP_E='0';"
       "_G.W335PP_RANGE='0';_G.W335PP_M='0';_G.W335PP_UI_ACTIVE_RANGE='0';"
       "_G.W335PP_MB=GetMoney and GetMoney() or -1;"
       "_G.W335PP_FAIL='0';_G.W335PP_FAIL_CODE='0';_G.W335PP_T=GetTime();"
@@ -204,6 +204,21 @@ static int movement_facing(void *ctx,float *facing){
     angle=strtod(out,&end);
     if(!end || *end || !(angle>=0.0 && angle<=6.283186))return 0;
     *facing=(float)angle;return 1;
+}
+/* LOOT_CLOSED only gates remote-position restoration; it cannot confirm
+ * the server credited this GUID, since Lua's loot events lack source GUID.
+ * A spoofed attempt exclusively owns remote position until this completes.
+ */
+static int spoof_transaction_done(void *ctx,PpGuid guid,uint32_t nonce){
+    char want[32],opened[32],closed[32],money[32];
+    (void)ctx;
+    if(!is_owner() || !active || nonce!=current_attempt ||
+       !same(guid,current_target))return 0;
+    (void)sprintf_s(want,sizeof(want),"%lu",(unsigned long)nonce);
+    if(!value("W335PP_O",opened,sizeof(opened)) ||
+       strcmp(opened,want))return 0;
+    return (value("W335PP_C",closed,sizeof(closed)) && !strcmp(closed,want)) ||
+           (value("W335PP_M",money,sizeof(money)) && !strcmp(money,want));
 }
 static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
     char query[380],q_nonce[32],q_success[8],q_failure[8],want[32];
@@ -263,6 +278,7 @@ PP335_EXPORT const Pp335Policy *__stdcall PP335_VerifiedPolicyV1(void){
     memset(&policy,0,sizeof(policy));
     policy.spell_usable=spell_usable;
     policy.movement_facing=movement_facing;
+    policy.spoof_transaction_done=spoof_transaction_done;
     policy.begin_attempt=begin_attempt;
     policy.cast_result=cast_result;
     policy.end_attempt=end_attempt;

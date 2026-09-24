@@ -24,6 +24,9 @@ typedef struct {
     int (*spell_usable)(void *,uint32_t spell_id);
     /* Query real player facing only when ordinary ground movement is valid. */
     int (*movement_facing)(void *,float *facing);
+    /* Only a nonce-scoped reason to restore remote position, never proof
+     * of loot or successful Pick Pocket. Optional if Lua is unavailable. */
+    int (*spoof_transaction_done)(void *,PpGuid guid,uint32_t nonce);
     /* Arms authoritative correlation before each native cast. Return 0 if
      * the observer cannot associate a result with this GUID and nonce. */
     int (*begin_attempt)(void *,PpGuid target,uint32_t attempt_id);

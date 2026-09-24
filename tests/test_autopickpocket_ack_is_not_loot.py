@@ -17,6 +17,25 @@ class ResultSeparation(unittest.TestCase):
         self.assertIn("if(p->ack_seen)",p)
         self.assertIn("PP_EVENT_ACK_LOOT_UNKNOWN",p)
         self.assertIn("block(e,p->guid,now,0u,1);",p)
+    def test_spoof_position_held_then_bounded_restored_without_loot_claim(self):
+        h=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.c").read_text()
+        p=(ROOT/"src/AutoPickPocket/autopickpocket_game_policies.c").read_text()
+        for marker in ("PP335_SPOOF_HOLD_MAX_MS 750u",
+                       "g_spoof_hold.active=1u",
+                       "if(!enable)spoof_restore",
+                       "spoof_service(now_ms)",
+                       "spoof_restore(PP_EVENT_SPOOF_RESTORE_TIMEOUT)",
+                       "if(!cast_sent)",
+                       "spoof_restore(PP_EVENT_SPOOF_RESTORE_LOOT)",
+                       "spoof_restore_send_failed_disable_spoof"):
+            self.assertIn(marker,h)
+        self.assertIn("!g_spoof_hold.active",h)
+        self.assertIn("g_spoof_hold.world=g_adapter.current_world",h)
+        self.assertIn("spoof_transaction_done",p)
+        self.assertIn("f:RegisterEvent('LOOT_CLOSED')",p)
+        self.assertIn("_G.W335PP_C=n",p)
+        self.assertNotIn("return PP_RESULT_MONEY_SUCCESS;",h)
+        self.assertNotIn("send_heartbeat(player,me,facing,started+1u)",h)
     def test_no_native_fallback(self):
         p=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.c").read_text()
         self.assertIn("((send_fn)PP335_SEND_VA)(&packet)",p)

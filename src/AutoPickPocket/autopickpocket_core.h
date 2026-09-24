@@ -80,7 +80,10 @@ typedef enum {
     PP_EVENT_BURST_RANGE_RELEASE = 32, /* geometry verified: cancel old pending nonce; short GUID backoff */
     PP_EVENT_SPOOF_SEQUENCE = 33, /* local packet submissions, not server ACK */
     PP_EVENT_CAST_ACK = 34, /* GUID-scoped cast acknowledged; no theft proven */
-    PP_EVENT_ACK_LOOT_UNKNOWN = 35 /* ACK observed, loot not correlated; do not retry same NPC */
+    PP_EVENT_ACK_LOOT_UNKNOWN = 35, /* ACK observed, loot not correlated; do not retry same NPC */
+    PP_EVENT_SPOOF_RESTORE_LOOT = 36, /* local loot-closed or result; not proof of theft */
+    PP_EVENT_SPOOF_RESTORE_TIMEOUT = 37, /* bounded remote position hold elapsed */
+    PP_EVENT_SPOOF_RESTORE_ERROR = 38 /* restore send failed; future spoof disabled */
 } PpEvent;
 typedef struct {
     void *ctx;

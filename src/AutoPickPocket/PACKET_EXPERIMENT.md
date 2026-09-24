@@ -76,3 +76,37 @@ Live result policy now reports GUID-scoped `SPELL_CAST_SUCCESS` as `PP_RESULT_CA
 The exact-HEAD report #22 for `862e273f5a42e9d63ec32e063447e849ba171c15` contains a burst session with 69 submissions across 32 GUIDs and no GUID-attributed wallet/loot results; a later observed wallet increment of 70 copper remained unscoped. Retained older sessions in that report must not be pooled into the current result. The previous engine recycled ACKed GUIDs after a 900ms unknown result and 200ms backoff, leading to repeat submissions on potentially already picked targets.
 
 Now an ACKed GUID with no correlated loot is logged as `cast_ack_loot_unconfirmed_guid_quarantined` and excluded from repeats until explicit reset/world change. It is NOT a confirmed theft. Other pending GUIDs and a fresh NPC continue asynchronously; genuinely unanswered casts retain the short per-GUID retry. No inferred correlation from global wallet deltas, no native fallback and no spoof distance change. This is a retry/diagnostic correction, not a substitute for verified inbound loot-source and money packet correlation.
+
+## Report #23: bounded 12340 remote-position hold, comparison with active 112
+
+The active wow112 parallel LongPickPocket source is a functionally equivalent
+reconstruction for build 5875. It keeps remote spoofed position while loot
+money/release is processed, and restores on observed wallet change or a bounded
+timeout. The previous 335 implementation always sent real position immediately
+after the cast packet, before the server could process the delayed loot-money
+and loot-release steps.
+
+The isolated 12340 experiment now sends an exact-build stationary
+MSG_MOVE_HEARTBEAT to a checked position within 3.5 yd of the NPC, submits
+Pick Pocket 921 using the existing pinned x86 ClientServices::SendPacket ABI,
+and holds that remote server position until the current nonce observes
+LOOT_OPENED followed by LOOT_CLOSED or a positive wallet signal, a terminal
+GUID-scoped result, or a 750ms deadline. It restores the original position
+on completion, timeout, disable, reset, or failed submission. A failed
+restoration prevents further spoof casts and is logged. No obsolete
+character GUID is used for movement after a world transition. No local
+player XYZ or selected target is changed.
+
+While spoofed remote position is held, subsequent cast submissions are
+paused (including other GUIDs); normal <=4yd bursts preserve asynchronous
+multi-GUID processing. This serializes the potentially unsafe long-range
+movement transaction instead of restoring server position before loot.
+
+The movement/loot lifecycle is STILL experimental, not proof that TrinityCore
+accepted the movement or that money was successfully collected. Lua
+LOOT_OPENED/LOOT_CLOSED has no independently verified 12340 source GUID:
+spoof_transaction_done is ONLY a remote-restoration hint and cannot mark
+theft success. Actual inbound packet-hook ABI, server GUID-to-wallet
+transaction correlation, verified CMSG_LOOT_MONEY/CMSG_LOOT_RELEASE interception
+and in-game testing are outstanding. Never copy 5875 opcodes, DLLs or
+movement detours to 12340.
