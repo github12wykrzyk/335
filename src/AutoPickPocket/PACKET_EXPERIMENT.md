@@ -130,5 +130,8 @@ into a new loading screen, new area, new instance or changed character:
 the live Lua world-token must still match the original hold at restoration.
 Otherwise the stale hold is discarded and future spoof disabled until
 the module is restarted. A missing network session during restoration
-also fails closed. Those guard paths are local correctness checks, not
+also fails closed. Restoring movement now reads the current native player
+position (and verifies the same current player GUID) instead of replaying the
+up-to-750ms-old real position sampled at cast start; no stale XYZ is sent
+when the rogue moves while the remote spoof hold is active. Those guard paths are local correctness checks, not
 proof of success in-game.

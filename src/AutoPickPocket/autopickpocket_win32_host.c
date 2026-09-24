@@ -346,6 +346,9 @@ static int send_heartbeat(PpGuid player,const float xyz[3],float facing,uint32_t
 static void spoof_restore(PpEvent reason){
     Pp335SpoofHold saved;
     uint64_t live_world=0u;
+    uint32_t current_lo=0u,current_hi=0u;
+    uintptr_t player_obj;
+    float actual[3],actual_facing;
     if(!g_spoof_hold.active || !is_game_thread())return;
     saved=g_spoof_hold;
     /* Check the current world BEFORE sending the old character's GUID.
@@ -364,7 +367,28 @@ static void spoof_restore(PpEvent reason){
         event(NULL,PP_EVENT_SPOOF_RESTORE_ERROR,saved.target,saved.nonce);
         return; /* retry from the same world when connection is ready */
     }
-    if(!send_heartbeat(saved.player,saved.real,saved.facing,
+    /* The real character may have moved for up to 750ms. Restore using
+     * a fresh native position, not its stale cast-start snapshot. Only
+     * the same currently loaded player GUID may be the position source. */
+    player_obj=(uintptr_t)g_adapter.cached_player_obj;
+    if(!player_obj ||
+       !read32(NULL,player_obj+0x30u,&current_lo) ||
+       !read32(NULL,player_obj+0x34u,&current_hi) ||
+       current_lo!=saved.player.lo || current_hi!=saved.player.hi ||
+       !position(NULL,player_obj,actual)){
+        g_spoof_restore_failed=1u;
+        event(NULL,PP_EVENT_SPOOF_RESTORE_ERROR,saved.target,saved.nonce);
+        return; /* no guessed XYZ, no movement with another player's GUID */
+    }
+    actual_facing=saved.facing;
+    if(g_policy.movement_facing){
+        float live_facing=actual_facing;
+        if(g_policy.movement_facing(g_policy.context,&live_facing) &&
+           _finite(live_facing) &&
+           live_facing>=0.0f && live_facing<=6.283186f)
+            actual_facing=live_facing;
+    }
+    if(!send_heartbeat(saved.player,actual,actual_facing,
                        (uint32_t)GetTickCount())){
         g_spoof_restore_failed=1u;
         event(NULL,PP_EVENT_SPOOF_RESTORE_ERROR,saved.target,saved.nonce);
