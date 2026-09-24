@@ -5,7 +5,6 @@
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <tlhelp32.h>
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
@@ -13,7 +12,6 @@
 #define GUI_MSG "WoW335_SharedGUI_12340_v1"
 #define GUI_CLASS "WoW335_SharedGUI_Window_v1"
 #define MAX_MODS 32u
-#define MAX_DLLS 512u
 #define FIRST_FIELD 1000
 #define FIRST_RANGE 2000
 #define MAX_PAGE 11u
@@ -23,7 +21,7 @@ typedef struct {
     int min,max,value;
 } Field;
 typedef struct {
-    char id[48],filename[96],title[96];
+    char id[48],filename[97],title[96];
     unsigned count;
     Field fields[W335GUI_MAX_FIELDS];
     W335GUI_OnChange callback;
@@ -40,6 +38,55 @@ static int on_thread(void) {return g_tid && GetCurrentThreadId()==g_tid;}
 static void copy(char *out,size_t size,const char *input) {
     if (out && size) strncpy_s(out,size,input?input:"",_TRUNCATE);
 }
+/* The updater verifies dlls.txt against installed.json, runtime SHA and bytes
+ * before launching WoW. It is the authoritative managed-DLL allowlist here.
+ * Never enumerate system DLLs into the user module panel. */
+static char g_managed[MAX_MODS][97];
+static unsigned g_managed_count,g_manifest_checked,g_manifest_ok;
+static int valid_dll_name(const char *name) {
+    size_t i,n;
+    if (!name || (n=strlen(name))<5u || n>96u ||
+        name[0]=='.' || _stricmp(name+n-4u,".dll")) return 0;
+    for(i=0;i<n;++i) {
+        char c=name[i];
+        if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||
+             (c>='0'&&c<='9')||c=='_'||c=='-'||c=='.') ||
+             (c=='.' && i+1u<n && name[i+1u]=='.')) return 0;
+    }
+    return 1;
+}
+static void load_managed_manifest(void) {
+    wchar_t path[MAX_PATH],*slash;
+    FILE *fp=NULL;
+    char line[160];
+    unsigned count=0u,i;
+    if(g_manifest_checked || !on_thread())return;
+    g_manifest_checked=1u;
+    if(!GetModuleFileNameW(NULL,path,MAX_PATH) ||
+       !(slash=wcsrchr(path,L'\\')))return;
+    wcscpy_s(slash+1,MAX_PATH-(size_t)(slash+1-path),L"dlls.txt");
+    if(_wfopen_s(&fp,path,L"rb")!=0 || !fp)return;
+    while(fgets(line,sizeof(line),fp)) {
+        size_t n=strlen(line);
+        if(n==sizeof(line)-1u && line[n-1u]!='\n')break;
+        while(n && (line[n-1u]=='\r' || line[n-1u]=='\n'))line[--n]=0;
+        if(!n)continue;
+        if(count>=MAX_MODS || !valid_dll_name(line))break;
+        for(i=0;i<count;++i)if(!_stricmp(g_managed[i],line))break;
+        if(i!=count)break;
+        copy(g_managed[count],sizeof(g_managed[count]),line);
+        ++count;
+    }
+    if(!ferror(fp) && feof(fp) && count) {
+        g_managed_count=count;
+        g_manifest_ok=1u;
+    }else{
+        g_managed_count=0u;
+        memset(g_managed,0,sizeof(g_managed));
+    }
+    fclose(fp);
+}
+
 static int valid_key(const char *key) {
     size_t i,n;
     if (!key || !(n=strlen(key)) || n>47u) return 0;
@@ -130,44 +177,74 @@ static void populate_fields(void) {
     EnableWindow(g_prev,g_page>0u);
     EnableWindow(g_next,(g_page+1u)*MAX_PAGE<m->count);
 }
+/* Refresh only on a REAL membership/status change. Rebuilding LB every 2 s
+ * previously caused flashing, a jumping scrollbar and lost selection. */
 static void refresh_list(void) {
-    HANDLE snapshot;
-    MODULEENTRY32 e;
-    char selected[96]={0};
-    unsigned found=0;
-    if (!g_list || !on_thread())return;
-    if(g_mod_count && g_selected<g_mod_count)
-        copy(selected,sizeof(selected),g_modules[g_selected].filename);
-    SendMessageA(g_list,LB_RESETCONTENT,0,0);
-    snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32,
-                                      GetCurrentProcessId());
-    if(snapshot==INVALID_HANDLE_VALUE)return;
-    memset(&e,0,sizeof(e));e.dwSize=sizeof(e);
-    if(Module32First(snapshot,&e)) do {
-        char title[160];
-        int index,owner;
-        size_t n=strlen(e.szModule);
-        if(n<4u || _stricmp(e.szModule+n-4u,".dll"))continue;
-        owner=find_file(e.szModule);
-        _snprintf_s(title,sizeof(title),_TRUNCATE,"[%s] %s",
-           owner>=0?"READY":"LOADED",e.szModule);
-        index=(int)SendMessageA(g_list,LB_ADDSTRING,0,(LPARAM)title);
-        if(index>=0 && index!=LB_ERRSPACE) {
-            SendMessageA(g_list,LB_SETITEMDATA,(WPARAM)index,(LPARAM)owner);
-            if(owner>=0 && selected[0] && !_stricmp(selected,e.szModule))
-                found=(unsigned)index+1u;
-        }
-    }while(Module32Next(snapshot,&e));
-    CloseHandle(snapshot);
-    if(!found && g_mod_count) {
-        int index;
-        char match[160];
-        _snprintf_s(match,sizeof(match),_TRUNCATE,"[READY] %s",
-                     g_modules[g_selected].filename);
-        index=(int)SendMessageA(g_list,LB_FINDSTRINGEXACT,(WPARAM)-1,(LPARAM)match);
-        if(index>=0) found=(unsigned)index+1u;
+    char rows[MAX_MODS][160],names[MAX_MODS][97],previous[160]={0},text[160];
+    int owners[MAX_MODS],selected=-1,top=0,current_count;
+    char previous_file[97]={0};
+    unsigned i,count=0u;
+    int changed=0;
+    if(!g_list || !on_thread())return;
+    load_managed_manifest();
+    if(!g_manifest_ok) {
+        SetWindowTextA(g_page_label,"Verified dlls.txt unavailable");
+        return;
     }
-    if(found) SendMessageA(g_list,LB_SETCURSEL,(WPARAM)(found-1u),0);
+    for(i=0u;i<g_managed_count;++i) {
+        int owner;
+        if(!GetModuleHandleA(g_managed[i]))continue; /* loaded in Wow.exe */
+        owner=find_file(g_managed[i]);
+        _snprintf_s(rows[count],sizeof(rows[count]),_TRUNCATE,
+            "[%s] %s",owner>=0?"READY":"LOADED",g_managed[i]);
+        owners[count]=owner;
+        copy(names[count],sizeof(names[count]),g_managed[i]);
+        ++count;
+    }
+    current_count=(int)SendMessageA(g_list,LB_GETCOUNT,0,0);
+    if(current_count!=(int)count)changed=1;
+    if(!changed) {
+        for(i=0u;i<count;++i) {
+            if((int)SendMessageA(g_list,LB_GETTEXTLEN,(WPARAM)i,0)<0 ||
+               (int)SendMessageA(g_list,LB_GETTEXTLEN,(WPARAM)i,0)>=
+                    (int)sizeof(text)) {changed=1;break;}
+            SendMessageA(g_list,LB_GETTEXT,(WPARAM)i,(LPARAM)text);
+            if(strcmp(text,rows[i]) ||
+               (int)SendMessageA(g_list,LB_GETITEMDATA,(WPARAM)i,0)!=owners[i]) {
+                changed=1;break;
+            }
+        }
+    }
+    if(!changed)return; /* no repaint, no changes to selection/scroll */
+    selected=(int)SendMessageA(g_list,LB_GETCURSEL,0,0);
+    if(selected>=0 && selected<current_count &&
+       (int)SendMessageA(g_list,LB_GETTEXTLEN,(WPARAM)selected,0)>=0 &&
+       (int)SendMessageA(g_list,LB_GETTEXTLEN,(WPARAM)selected,0)<
+           (int)sizeof(previous))
+        SendMessageA(g_list,LB_GETTEXT,(WPARAM)selected,(LPARAM)previous);
+    if(previous[0]) {
+        const char *file=strstr(previous,"] ");
+        if(file)copy(previous_file,sizeof(previous_file),file+2);
+    }
+    selected=-1;
+    top=(int)SendMessageA(g_list,LB_GETTOPINDEX,0,0);
+    SendMessageA(g_list,WM_SETREDRAW,FALSE,0);
+    SendMessageA(g_list,LB_RESETCONTENT,0,0);
+    for(i=0u;i<count;++i) {
+        int item=(int)SendMessageA(g_list,LB_ADDSTRING,0,(LPARAM)rows[i]);
+        if(item<0)break;
+        SendMessageA(g_list,LB_SETITEMDATA,(WPARAM)item,(LPARAM)owners[i]);
+        if(previous_file[0] &&
+           !_stricmp(previous_file,names[i]))selected=item;
+        else if(!previous_file[0] && owners[i]>=0 &&
+                (unsigned)owners[i]==g_selected)selected=item;
+    }
+    if(selected>=0 && selected<(int)count)
+        SendMessageA(g_list,LB_SETCURSEL,(WPARAM)selected,0);
+    if(top>=0 && top<(int)count)
+        SendMessageA(g_list,LB_SETTOPINDEX,(WPARAM)top,0);
+    SendMessageA(g_list,WM_SETREDRAW,TRUE,0);
+    InvalidateRect(g_list,NULL,TRUE);
 }
 static void set_field(unsigned slot,int new_value) {
     Module *m;
@@ -349,6 +426,7 @@ static void control(UINT msg,WPARAM command,HWND hwnd) {
         else g_ini[0]=0;
     }
     g_enabled=1u;
+    load_managed_manifest();
     if(g_window && (DWORD)(GetTickCount()-g_last_refresh)>=2000u) {
         g_last_refresh=GetTickCount();
         refresh_list();

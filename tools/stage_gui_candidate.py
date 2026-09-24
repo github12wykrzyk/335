@@ -31,12 +31,14 @@ def gui_contract():
 
 def prepare_registration(runtime, registry, index, hashes):
     runtime,registry,index=[copy.deepcopy(x) for x in (runtime,registry,index)]
-    if [f["component"] for f in runtime["files"]] != ["Client12340","AutoLoot","PlayerESP"]:
-        raise ValueError("requires exact original PlayerESP runtime; refuse overwrite")
-    if [m["component"] for m in registry["modules"]] != ["AutoLoot","PlayerESP"]:
-        raise ValueError("unexpected module registry; refuse overwrite")
-    if [m["component"] for m in index["modules"]] != ["AutoLoot","PlayerESP"]:
-        raise ValueError("unexpected AI_INDEX; refuse overwrite")
+    active=[f["component"] for f in runtime["files"]]
+    owners=[m["component"] for m in registry["modules"]]
+    indexed=[m["component"] for m in index["modules"]]
+    if active not in (["Client12340","AutoLoot","PlayerESP"],
+                      ["Client12340","AutoLoot","SharedGUI","PlayerESP"]):
+        raise ValueError("unexpected active runtime; refuse overwrite")
+    if owners != active[1:] or indexed != active[1:]:
+        raise ValueError("registry/index differ from active runtime; refuse overwrite")
     if runtime["target"].get("build")!=12340:raise ValueError("wrong game build")
     for comp in ("AutoLoot","SharedGUI","PlayerESP"):
         value=hashes.get(comp)
@@ -44,12 +46,15 @@ def prepare_registration(runtime, registry, index, hashes):
             c not in "0123456789abcdef" for c in value):
             raise ValueError("no real PE32 x86 SHA256 for "+comp)
     runtime["files"][1]["sha256"]=hashes["AutoLoot"]
-    runtime["files"].insert(2,{
+    if "SharedGUI" not in active:
+        runtime["files"].insert(2,{
         "component":"SharedGUI","path":"runtime/WoW335GUI.dll",
         "version":"0.1.0-shared-gui-test",
         "sha256":hashes["SharedGUI"],"arch":"x86",
         "canonical_source":"src/SharedGUI/w335_gui_win32.c",
         "depends_on":[],"kind":"dll"})
+    runtime["files"][2]["sha256"]=hashes["SharedGUI"]
+    runtime["files"][2]["version"]="0.1.1-managed-dll-list-test"
     runtime["files"][3]["sha256"]=hashes["PlayerESP"]
     runtime["files"][3]["version"]="0.6.0-shared-gui-test"
     runtime["files"][3]["depends_on"]=["SharedGUI"]
@@ -57,16 +62,17 @@ def prepare_registration(runtime, registry, index, hashes):
     runtime["compatibility_sets"]=[{
         "id":"client12340-autoloot-sharedgui-playeresp-test",
         "components":["Client12340","AutoLoot","SharedGUI","PlayerESP"]}]
-    esp=registry["modules"][1]
+    esp=registry["modules"][-1]
     esp["requires"]=["SharedGUI"]
     if GUI_SRC[0] not in esp["sources"]:esp["sources"].append(GUI_SRC[0])
     if "src/SharedGUI" not in esp["build"]["include_dirs"]:
         esp["build"]["include_dirs"].append("src/SharedGUI")
-    registry["modules"].insert(1,gui_contract())
-    index["modules"].insert(1,{
-        "component":"SharedGUI",
-        "source":"src/SharedGUI/w335_gui_win32.c",
-        "docs":"src/SharedGUI/README.md"})
+    if "SharedGUI" not in owners:
+        registry["modules"].insert(1,gui_contract())
+        index["modules"].insert(1,{
+            "component":"SharedGUI",
+            "source":"src/SharedGUI/w335_gui_win32.c",
+            "docs":"src/SharedGUI/README.md"})
     errors=validate(runtime,registry)
     if errors:raise ValueError("resource/dependency conflict: "+"; ".join(errors))
     return runtime,registry,index
@@ -84,16 +90,18 @@ def main():
     runtime=load_json(ROOT/"runtime/current.json")
     registry=load_json(ROOT/"runtime/module_registry.json")
     index=load_json(ROOT/"AI_INDEX.json")
-    if [m["component"] for m in registry["modules"]] != ["AutoLoot","PlayerESP"]:
-        raise ValueError("no exact ESP baseline")
-    if (ROOT/"runtime/WoW335GUI.dll").exists():
-        raise ValueError("unregistered GUI binary exists: refuse overwrite")
-    esp=runtime["files"][2]
-    if esp["component"]!="PlayerESP" or sha256_file(ROOT/esp["path"])!=esp["sha256"]:
-        raise ValueError("ESP binary differs from registered SHA")
+    active=[m["component"] for m in registry["modules"]]
+    if active not in (["AutoLoot","PlayerESP"],["AutoLoot","SharedGUI","PlayerESP"]):
+        raise ValueError("unexpected native baseline")
+    for entry in runtime["files"]:
+        if entry["kind"]=="dll" and sha256_file(ROOT/entry["path"])!=entry["sha256"]:
+            raise ValueError(entry["component"]+": registered DLL SHA mismatch")
+    if "SharedGUI" not in active and (ROOT/"runtime/WoW335GUI.dll").exists():
+        raise ValueError("unexpected unregistered GUI binary")
     vcvars=find_vcvars()
     folder=ROOT/"dist/gui-stage"
-    descriptors=[registry["modules"][0],gui_contract(),copy.deepcopy(registry["modules"][1])]
+    descriptors=[copy.deepcopy(registry["modules"][0]),
+                 gui_contract(),copy.deepcopy(registry["modules"][-1])]
     descriptors[2]["requires"]=["SharedGUI"]
     if GUI_SRC[0] not in descriptors[2]["sources"]:
         descriptors[2]["sources"].append(GUI_SRC[0])

@@ -15,13 +15,20 @@ deep-copies metadata and calls every setting callback once with persisted
 defaults. Only GUI's game-window thread may access the ABI and UI.
 W335GUI_Unregister must be called on stop before the module is freed.
 
-Native enumeration uses Toolhelp32 snapshot of the **game process** and displays
-every mapped DLL as LOADED. Registered DLLs are READY; LOADED alone never
-implies initialized, working or verified gameplay. Legacy AutoLoot remains
-visible without changing its native runtime. Field controls are derived only
-from registered schemas; no loader rebuild is needed for a new UI-compatible
-module. The GUI stores values in WoW335GUI.ini beside Wow.exe. The updater
-must not remove this untracked user settings file.
+GUI reads the already updater-verified `dlls.txt` from the WoW executable
+directory as an allowlist, and uses `GetModuleHandleA` to show **only actual
+in-process DLLs named by the managed active package**. No Windows/system or
+third-party DLL is listed. If the allowlist is missing, invalid or unreadable,
+the list remains empty (fail closed). Registered UI modules show READY; other
+loaded managed DLLs show LOADED (legacy AutoLoot does not expose GUI status).
+Loaded alone never means initialized or confirmed working in-game.
+
+The managed DLL list retains manifest order, selected row and scroll position.
+It is rebuilt only when actual membership or registration status changes; the
+2-second status poll does not reset/repaint an unchanged list. New compatible
+modules appear automatically through `dlls.txt`, with no GUI source edits.
+Field controls are derived only from registered schemas. GUI stores values in
+WoW335GUI.ini beside Wow.exe; the updater must preserve this user settings file.
 
 The initial ESP adapter includes ESP visibility, Player/NPC toggles, Horde
 and Alliance toggles, Unknown players, numeric range, and diagnostic crosses.

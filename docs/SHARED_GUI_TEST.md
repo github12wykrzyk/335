@@ -13,9 +13,13 @@ After FINAL_PACKAGE: PASS on the **exact current branch HEAD**, check in game:
 2. Insert opens/closes the single GUI without toggling ESP labels. Verify mouse
    interaction; focus on the GUI must not hide ESP markers. Ctrl+Shift+Insert
    retains the separate ESP foot-marker diagnostic.
-3. The DLL list includes all DLLs mapped into Wow.exe, including system DLLs;
-   AutoLoot335.dll should be LOADED (legacy), PlayerESP335.dll READY once it
-   registers, and WoW335GUI.dll LOADED. LOADED does not prove module activity.
+3. DLL list shows **only managed DLLs from verified dlls.txt** that are mapped
+   in Wow.exe (AutoLoot335.dll, WoW335GUI.dll, PlayerESP335.dll). Windows,
+   NVIDIA, DirectX and unrelated libraries must not appear. AutoLoot335.dll
+   should be LOADED (legacy), PlayerESP335.dll READY when registered, and
+   WoW335GUI.dll LOADED. LOADED does not prove module activity.
+   Leave the panel open for 10 seconds and scroll/select another row: no
+   periodic flashing, jumping scrollbar or lost selection.
 4. ESP settings visibly affect Players, NPC, Horde, Alliance, Unknown players,
    and the configurable 5–100 yd distance; enable/disable the ESP labels.
    Hostility/mixed-BG teams and real unit names are not implemented; do not
