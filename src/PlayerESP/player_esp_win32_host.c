@@ -28,6 +28,9 @@ static HWND g_game_window;
 static DWORD g_install_try_ms;
 static unsigned g_camera_ok, g_camera_bad, g_markers_rendered;
 static unsigned g_install_attempts, g_install_failures, g_bind_failed;
+static unsigned g_hook_calls, g_insert_events, g_gui_toggles, g_init_attempts;
+static unsigned g_sha_rejects, g_layout_rejects;
+static DWORD g_bind_try_ms;
 static CRITICAL_SECTION g_frame_lock;
 static volatile LONG g_shared_ready, g_gui_open=1;
 static volatile LONG g_ui_flags=ESP335_GUI_DEFAULT;
@@ -77,7 +80,7 @@ static int check_client(void *ctx, const char *expected) {
     (void)ctx;
     if (!on_thread() ||
         strcmp(expected, ESP335_EXACT_EXE_SHA256) != 0 ||
-        !GetModuleFileNameW(NULL, path, MAX_PATH)) return 0;
+        !GetModuleFileNameW(NULL, path, MAX_PATH)) { ++g_sha_rejects; return 0; }
     file = CreateFileW(path, GENERIC_READ,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
@@ -103,6 +106,7 @@ done:
     if (digest) CryptDestroyHash(digest);
     if (provider) CryptReleaseContext(provider, 0);
     if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    if (!ok) ++g_sha_rejects;
     return ok;
 }
 static int check_layout(void *ctx, uintptr_t connection, uintptr_t offset) {
@@ -110,11 +114,16 @@ static int check_layout(void *ctx, uintptr_t connection, uintptr_t offset) {
     (void)ctx;
     if (!on_thread() || connection != ESP335_CONNECTION_VA ||
         offset != ESP335_MANAGER_OFFSET ||
-        !readable(GET_POS_VA, sizeof(prolog))) return 0;
+        !readable(GET_POS_VA, sizeof(prolog))) {
+        ++g_layout_rejects;
+        return 0;
+    }
     /* Prolog is a necessary gate, not an independent full ABI verification. */
     __try {
-        return memcmp((const void *)GET_POS_VA, prolog, sizeof(prolog)) == 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+        int ok=memcmp((const void *)GET_POS_VA, prolog, sizeof(prolog)) == 0;
+        if (!ok) ++g_layout_rejects;
+        return ok;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { ++g_layout_rejects; return 0; }
 }
 static uint32_t thread_id(void *ctx) {
     (void)ctx;
@@ -296,7 +305,7 @@ static void draw_frame(IDirect3DDevice9 *device, void *user) {
 }
 static void try_renderer(void) {
     DWORD now=GetTickCount();
-    if (!g_enabled || !on_thread() || !g_scanner.bound ||
+    if (!g_enabled || !on_thread() ||
         !g_game_window || (DWORD)(now-g_install_try_ms)<2500u) return;
     g_install_try_ms=now;
     if (!esp335_d3d9_installed()) {
@@ -312,6 +321,8 @@ static void input(MSG *msg, WPARAM remove_mode) {
     if (!msg || !g_enabled || !on_thread() || remove_mode!=PM_REMOVE ||
         !g_game_window || msg->hwnd!=g_game_window) return;
     if (msg->message==WM_KEYUP && msg->wParam==VK_INSERT) {
+        ++g_insert_events;
+        ++g_gui_toggles;
         InterlockedExchange(&g_gui_open,
             InterlockedCompareExchange(&g_gui_open,0,0) ? 0 : 1);
         msg->message=WM_NULL;
@@ -340,7 +351,7 @@ static void input(MSG *msg, WPARAM remove_mode) {
 static void write_diag(int scan_ok) {
     wchar_t path[MAX_PATH], *slash;
     HANDLE file;
-    char line[640];
+    char line[1024];
     DWORD written, now = GetTickCount();
     int length;
     if (!on_thread() || (DWORD)(now - g_log_ms) < 5000u) return;
@@ -365,7 +376,9 @@ static void write_diag(int scan_ok) {
         "\"render_attempts\":%u,\"render_failures\":%u,"
         "\"render_frames\":%u,\"render_dropped\":%u,"
         "\"camera_ok\":%u,\"camera_bad\":%u,"
-        "\"markers\":%u,\"ui_flags\":%u,\"bind_failed\":%u}\n",
+        "\"markers\":%u,\"ui_flags\":%u,\"bind_failed\":%u,"
+        "\"init_attempts\":%u,\"sha_rejects\":%u,\"layout_rejects\":%u,"
+        "\"hook_calls\":%u,\"insert_events\":%u,\"gui_open\":%u}\n",
         scan_ok ? 1u : 0u,
         scan_ok ? (unsigned)g_scanner.snapshot.count : 0u,
         (unsigned __int64)g_scanner.snapshot.world_epoch,
@@ -376,7 +389,10 @@ static void write_diag(int scan_ok) {
         g_install_attempts,g_install_failures,
         esp335_d3d9_frames(),esp335_d3d9_dropped(),
         g_camera_ok,g_camera_bad,g_markers_rendered,
-        (unsigned)InterlockedCompareExchange(&g_ui_flags,0,0),g_bind_failed);
+        (unsigned)InterlockedCompareExchange(&g_ui_flags,0,0),g_bind_failed,
+        g_init_attempts,g_sha_rejects,g_layout_rejects,
+        g_hook_calls,g_insert_events,
+        (unsigned)InterlockedCompareExchange(&g_gui_open,0,0));
     if (length > 0) WriteFile(file, line, (DWORD)length, &written, NULL);
     CloseHandle(file);
 }
@@ -384,14 +400,14 @@ static void drive(void) {
     int scan_ok,camera_ok;
     Esp335CameraAxes axes;
     DWORD now;
-    if (!g_enabled || !g_scanner.bound || !on_thread() || g_driving)
+    if (!g_enabled || !on_thread() || g_driving)
         return;
     now=GetTickCount();
     if ((DWORD)(now-g_tick_ms)<40u) return;
     g_driving=1u;
     g_tick_ms=now;
-    scan_ok=esp335_scanner_collect(&g_scanner);
-    camera_ok=read_camera_axes(&axes);
+    scan_ok=g_scanner.bound ? esp335_scanner_collect(&g_scanner) : 0;
+    camera_ok=g_scanner.bound ? read_camera_axes(&axes) : 0;
     if (scan_ok) ++g_scans_ok; else ++g_scans_failed;
     if (camera_ok) ++g_camera_ok; else ++g_camera_bad;
     if (InterlockedCompareExchange(&g_shared_ready,0,0)) {
@@ -431,42 +447,44 @@ static void control(UINT message, WPARAM command, HWND hwnd) {
     }
     if (command != 1u && command != 2u) return;
     if (!g_initialised) {
-        g_initialised = 1u;
-        g_thread = GetCurrentThreadId();
-        memset(&host, 0, sizeof(host));
-        host.verify_client_sha256 = check_client;
-        host.verify_layout = check_layout;
-        host.thread_id = thread_id;
-        host.read_u32 = read32;
-        host.position = position;
-        host.player_metadata = metadata;
-        host.world_epoch = epoch;
-        if (!esp335_scanner_bind(&g_scanner, &host)) {
-            ++g_bind_failed;
-            g_log_ms=GetTickCount()-6000u;
-            write_diag(0);
-            g_thread = 0u;
+        g_initialised=1u;
+        g_thread=GetCurrentThreadId();
+        if (!InitializeCriticalSectionAndSpinCount(&g_frame_lock,4000u))
             return;
-        }
+        InterlockedExchange(&g_shared_ready,1);
     }
-    if (g_scanner.bound && on_thread() && command == 1u) {
-        if (!InterlockedCompareExchange(&g_shared_ready,0,0)) {
-            if (!InitializeCriticalSectionAndSpinCount(&g_frame_lock,4000u)) return;
-            InterlockedExchange(&g_shared_ready,1);
-        }
-        g_enabled = 1u;
-        if (hwnd && IsWindow(hwnd)) {
-            HWND root=GetAncestor(hwnd,GA_ROOT);
-            DWORD tid=GetWindowThreadProcessId(root,NULL);
-            if (tid==g_thread) g_game_window=root;
-        }
-        try_renderer();
+    if (!on_thread()) return;
+    /* Renderer/UI must start independently of scanning ABI verification.
+     * A failed scanner used to permanently suppress the whole GUI. */
+    if (hwnd && IsWindow(hwnd)) {
+        HWND root=GetAncestor(hwnd,GA_ROOT);
+        DWORD tid=GetWindowThreadProcessId(root,NULL);
+        if (tid==g_thread) g_game_window=root;
+    }
+    g_enabled=1u;
+    try_renderer();
+    if (!g_scanner.bound &&
+        (g_bind_try_ms==0u ||
+         (DWORD)(GetTickCount()-g_bind_try_ms)>=5000u)) {
+        g_bind_try_ms=GetTickCount();
+        ++g_init_attempts;
+        memset(&host,0,sizeof(host));
+        host.verify_client_sha256=check_client;
+        host.verify_layout=check_layout;
+        host.thread_id=thread_id;
+        host.read_u32=read32;
+        host.position=position;
+        host.player_metadata=metadata;
+        host.world_epoch=epoch;
+        if (!esp335_scanner_bind(&g_scanner,&host))
+            ++g_bind_failed; /* retry; do not disable UI or message hooks */
     }
 }
 __declspec(dllexport) LRESULT CALLBACK W335_HookProc(int code, WPARAM w, LPARAM l) {
     MSG *message;
     if (code < 0 || !l) return CallNextHookEx(NULL, code, w, l);
     message = (MSG *)l;
+    ++g_hook_calls;
     if (message->message != WM_QUIT) {
         control(message->message, message->wParam, message->hwnd);
         input(message,w);

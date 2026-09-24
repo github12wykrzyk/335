@@ -16,6 +16,10 @@ class EspHostTests(unittest.TestCase):
             self.assertNotIn(forbidden, source)
         self.assertIn("esp335_scanner_collect", source)
         self.assertIn("ESP335_EXACT_EXE_SHA256", source)
+        self.assertIn("retry; do not disable UI or message hooks", source)
+        self.assertIn("render_attempts", source)
+        self.assertIn("g_enabled=1u;\n    try_renderer();", source)
+        self.assertIn("g_scanner.bound ? esp335_scanner_collect", source)
     def test_non_pe_cannot_be_a_game_dll(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake = Path(tmp)/"PlayerESP335.dll"
