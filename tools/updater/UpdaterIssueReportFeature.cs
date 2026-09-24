@@ -270,6 +270,7 @@ namespace WoW335Updater
 
                 sb.AppendLine();
                 sb.AppendLine("### WoWDiagHub recent logs");
+                AppendPickPocketAuditSummary(sb, root);
                 var files = GetRecentDiagFiles(root);
                 if (files.Length == 0)
                 {
@@ -282,7 +283,7 @@ namespace WoW335Updater
                         sb.AppendLine();
                         sb.AppendLine("#### " + Path.GetFileName(file));
                         sb.AppendLine("```json");
-                        sb.AppendLine(Sanitize(TailFile(file, 12000), root, 12000));
+                        sb.AppendLine(Sanitize(TailJsonlFile(file, 12000), root, 12000));
                         sb.AppendLine("```");
                     }
                 }
@@ -312,7 +313,7 @@ namespace WoW335Updater
             private string BuildSignatureSeed(string root, string headSha, long runId)
             {
                 var sb = new StringBuilder();
-                sb.AppendLine("W112-DIAG-SIGNATURE-V2");
+                sb.AppendLine("W335-DIAG-SIGNATURE-V3");
                 sb.AppendLine(headSha ?? string.Empty);
                 sb.AppendLine(runId.ToString());
 
@@ -335,6 +336,7 @@ namespace WoW335Updater
                         sb.AppendLine(Sanitize(TailFile(file, 12000), root, 12000));
                     }
                 }
+                AppendPickPocketAuditSummary(sb, root);
                 sb.AppendLine("AUTOLOOT_DIAG_LOG:");
                 sb.AppendLine(AutoLootDiagSupport.SanitizeLog(AutoLootDiagSupport.CollectLog(root)));
                 return sb.ToString();
@@ -397,6 +399,90 @@ namespace WoW335Updater
                     dialog.CancelButton = no;
                     return dialog.ShowDialog(form) == DialogResult.Yes;
                 }
+            }
+
+            // Counts are scoped to surviving files, not a lifetime total or server-confirmed loot.
+            // Read *all* retained JSONL records before selecting an independent bounded tail.
+            private static void AppendPickPocketAuditSummary(StringBuilder sb, string root)
+            {
+                var folder = Path.Combine(root, ".wow335_debug");
+                sb.AppendLine();
+                sb.AppendLine("### AutoPickPocket diagnostics: retained-log accounting (NOT lifetime totals)");
+                if (!Directory.Exists(folder))
+                {
+                    sb.AppendLine("No local AutoPickPocket log directory.");
+                    return;
+                }
+                var paths = Directory.GetFiles(folder, "AutoPickPocket*.jsonl")
+                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+                if (paths.Length == 0)
+                {
+                    sb.AppendLine("No AutoPickPocket JSONL files.");
+                    return;
+                }
+                var attempts = new HashSet<string>(StringComparer.Ordinal);
+                var castGuids = new HashSet<string>(StringComparer.Ordinal);
+                var confirmedGuids = new HashSet<string>(StringComparer.Ordinal);
+                var walletGuids = new HashSet<string>(StringComparer.Ordinal);
+                var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
+                long parsed = 0, invalid = 0;
+                foreach (var path in paths)
+                {
+                    try
+                    {
+                        foreach (var line in File.ReadLines(path, Encoding.UTF8))
+                        {
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+                            Dictionary<string, object> record;
+                            try { record = AsDictionary(json.DeserializeObject(line)); }
+                            catch { ++invalid; continue; }
+                            if (record == null || GetString(record, "module") != "AutoPickPocket") continue;
+                            ++parsed;
+                            var reason = GetString(record, "reason");
+                            if (string.IsNullOrWhiteSpace(reason)) reason = "<unspecified>";
+                            if (!reasons.ContainsKey(reason)) reasons[reason] = 0;
+                            ++reasons[reason];
+                            var session = GetString(record, "session_id");
+                            if (string.IsNullOrWhiteSpace(session)) session = "legacy-session-unknown";
+                            var guidLo = GetLong(record, "guid_lo");
+                            var guidHi = GetLong(record, "guid_hi");
+                            if (guidLo == 0 && guidHi == 0) continue;
+                            var guidKey = session + ":" + guidHi + ":" + guidLo;
+                            if (reason == "cast_submitted")
+                            {
+                                attempts.Add(guidKey + ":" + GetLong(record, "attempt"));
+                                castGuids.Add(guidKey);
+                            }
+                            else if (reason == "verified_result") confirmedGuids.Add(guidKey);
+                            else if (reason == "wallet_loot_signal") walletGuids.Add(guidKey);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine("Unreadable log " + Path.GetFileName(path) + ": " + ex.GetType().Name);
+                    }
+                }
+                sb.AppendLine("Scope: " + paths.Length + " retained file(s), " + parsed
+                    + " parsed module event(s), " + invalid + " malformed/truncated line(s).");
+                sb.AppendLine("Submitted attempts: " + attempts.Count + "; distinct submitted GUID/session: "
+                    + castGuids.Count + "; GUID/session with cast result: " + confirmedGuids.Count
+                    + "; GUID/session with wallet/loot heuristic: " + walletGuids.Count + ".");
+                sb.AppendLine("WARNING: verified_result verifies the cast, not inventory loot. "
+                    + "wallet_loot_signal does not independently prove GUID attribution. "
+                    + "GUID/session counts can merge multiple legacy sessions. "
+                    + "Missing or rotated-away events are NOT counted.");
+                foreach (var pair in reasons.OrderBy(p => p.Key, StringComparer.Ordinal))
+                    sb.AppendLine("reason." + pair.Key + "=" + pair.Value);
+            }
+
+            private static string TailJsonlFile(string path, int maxChars)
+            {
+                var content = TailFile(path, maxChars);
+                if (!content.StartsWith("<truncated>\n", StringComparison.Ordinal)) return content;
+                var firstFullLine = content.IndexOf('\n', "<truncated>\n".Length);
+                return firstFullLine < 0 ? "<truncated; no complete JSONL record>"
+                    : "<truncated; summary covers all retained records>\n"
+                    + content.Substring(firstFullLine + 1);
             }
 
             private static string[] GetRecentDiagFiles(string root)
