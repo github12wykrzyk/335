@@ -331,7 +331,7 @@ static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     outcome=g_policy.cast_result(g_policy.context,guid,attempt_id);
     if(g_packet_nonce==attempt_id &&
        g_packet_guid.lo==guid.lo && g_packet_guid.hi==guid.hi &&
-       outcome!=PP_RESULT_PENDING){
+       outcome!=PP_RESULT_PENDING && outcome!=PP_RESULT_UI_RANGE_HINT){
         g_packet_nonce=0u;
         g_packet_unanswered=0u;
     }
@@ -386,7 +386,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
                (kind==PP_EVENT_INELIGIBLE || kind==PP_EVENT_MONEY_SUCCESS ||
                 kind==PP_EVENT_OUT_OF_RANGE || kind==PP_EVENT_LINE_OF_SIGHT ||
                 kind==PP_EVENT_NOT_STEALTHED || kind==PP_EVENT_NOT_READY ||
-                kind==PP_EVENT_CAST_REJECTED)) &&
+                kind==PP_EVENT_CAST_REJECTED ||
+                kind==PP_EVENT_UI_RANGE_RECHECKED)) &&
               g_inflight_attempt && attempt_id==g_inflight_attempt){
         result_wait=(uint32_t)(now-g_last_cast_ms);
         g_last_result_ms=now;
@@ -430,7 +431,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_CAST: reason="cast_submitted";break;
     case PP_EVENT_SUCCESS: reason="verified_result";break;
     case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_signal";break;
-    case PP_EVENT_OUT_OF_RANGE: reason="out_of_range";break;
+    case PP_EVENT_OUT_OF_RANGE: reason="out_of_range_guid_correlated";break;
+    case PP_EVENT_UI_RANGE_RECHECKED: reason="ui_range_local_distance_confirmed_not_server_guid";break;
     case PP_EVENT_LINE_OF_SIGHT: reason="line_of_sight";break;
     case PP_EVENT_NOT_STEALTHED: reason="not_stealthed";break;
     case PP_EVENT_NOT_READY: reason="not_ready";break;
@@ -462,7 +464,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"variant\":\"packet\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"transport\":\"%s\",\"no_ack_count\":%u,\"count_since_poll\":%u}\n",
+       "{\"module\":\"AutoPickPocket\",\"variant\":\"packet\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"selection_forward\":%u,\"candidates_ready\":%u,\"transport\":\"%s\",\"no_ack_count\":%u,\"count_since_poll\":%u}\n",
        (unsigned long)g_log_session,(unsigned long)now,(unsigned)kind,reason,
        (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi,
        (unsigned long)g_adapter.last_scan_duration_ms,
@@ -471,6 +473,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
        (unsigned long)queue_age,(unsigned long)g_pulse_delta_ms,
        (unsigned long)cast_gap,(unsigned long)result_wait,
        (unsigned long)next_wait,
+       g_adapter.engine.last_selection_forward,
+       g_adapter.engine.last_selection_ready,
        g_last_submitted_native ? "native_fallback" : "packet",
        g_packet_unanswered,g_ui_count);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);

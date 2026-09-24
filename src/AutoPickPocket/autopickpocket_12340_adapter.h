@@ -49,6 +49,9 @@ typedef struct {
     uint64_t current_world;
     uint32_t cached_manager,cached_player_obj;
     uint32_t last_scan_duration_ms,last_scan_candidates;
+    float last_player_xyz[3];
+    uint32_t last_player_sample_ms;
+    unsigned player_sample_valid;
     unsigned bound;
 } Pp12340Adapter;
 int pp12340_bind(Pp12340Adapter *a, const Pp12340Host *host);

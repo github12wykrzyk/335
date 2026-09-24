@@ -248,4 +248,37 @@ static int test_local_out_of_range_has_bounded_pulse_work(void){
  CHECK(s.events[PP_EVENT_CAST]==1u);
  return 0;
 }
-int main(void){if(test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+static int test_guid_correlated_range_backoff_is_200ms(void){
+ Stub s;PpEngine e;init(&s);s.n=1u;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,10u);CHECK(s.cast_n==1u);
+ s.result=PP_RESULT_OUT_OF_RANGE;pp_tick(&e,110u);
+ CHECK(s.cast_n==1u && e.retries==1u && s.events[PP_EVENT_OUT_OF_RANGE]==1u);
+ s.result=PP_RESULT_PENDING;
+ pp_tick(&e,309u);CHECK(s.cast_n==1u);
+ pp_tick(&e,310u);CHECK(s.cast_n==2u);
+ return 0;
+}
+static int test_guarded_ui_range_hint_moves_to_other_guid(void){
+ Stub s;PpEngine e;init(&s);
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,10u);CHECK(s.cast_n==1u && s.casted[0].lo==102u);
+ s.result=PP_RESULT_UI_RANGE_HINT;pp_tick(&e,90u);
+ CHECK(s.events[PP_EVENT_UI_RANGE_RECHECKED]==1u && e.retries==1u);
+ CHECK(s.cast_n==2u && s.casted[1].lo==101u && e.successes==0u);
+ return 0;
+}
+static int test_motion_prefers_front_target_only_with_valid_direction(void){
+ Stub s;PpEngine e;init(&s);s.t[0].distance_sq=1.0f;
+ s.t[1].distance_sq=9.0f;s.t[1].forward=1u;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,10u);
+ CHECK(s.cast_n==1u && s.casted[0].lo==102u &&
+       e.last_selection_forward==1u && e.last_selection_ready==2u);
+ pp_reset(&e);s.t[1].forward=0u;s.result=PP_RESULT_PENDING;
+ pp_tick(&e,100u);
+ CHECK(s.cast_n==2u && s.casted[1].lo==101u &&
+       e.last_selection_forward==0u);
+ return 0;
+}
+int main(void){if(test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

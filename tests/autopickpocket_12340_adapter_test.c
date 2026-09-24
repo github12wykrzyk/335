@@ -19,7 +19,7 @@ typedef struct {
     unsigned eligible_calls;
     unsigned end_count;PpGuid end_guid;uint32_t end_nonce;
     uint32_t clock_value;
-    float npc_a_distance,npc_b_distance;
+    float npc_a_distance,npc_b_distance,player_x;
     PpGuid last_guid;
 } Mock;
 static int digest(void *p,const char *expected){
@@ -63,7 +63,7 @@ static int pos(void *p,uintptr_t obj,float out[3]){
     Mock *m=(Mock*)p;out[1]=0;out[2]=0;
     if(obj==PLAYER) {
         ++m->player_pos_calls;
-        out[0]=m->move_player_after_scan && m->player_pos_calls>1u ? 12.0f : 0.0f;
+        out[0]=m->move_player_after_scan && m->player_pos_calls>1u ? 12.0f : m->player_x;
     }
     else if(obj==NPC_A)out[0]=m->npc_a_distance;
     else if(obj==NPC_B)out[0]=m->npc_b_distance;
@@ -257,8 +257,35 @@ static int test_native_bridge_releases_policy_before_next_cast(void){
  CHECK(m.casts==2u && m.last_guid.lo==111u && m.last_attempt!=old);
  return 0;
 }
+static int test_motion_priority_and_world_reset(void){
+ Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+ m.npc_a_distance=0.0f;m.npc_b_distance=3.8f;m.usable=0u;
+ CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ pp12340_tick(&a,0u);CHECK(m.casts==0u && a.player_sample_valid);
+ m.clock_value+=80u;m.player_x=1.0f;m.usable=1u;
+ pp12340_tick(&a,80u);
+ CHECK(m.casts==1u && m.last_guid.lo==222u &&
+       a.engine.last_selection_forward==1u);
+ pp12340_reset(&a);CHECK(!a.player_sample_valid);
+ return 0;
+}
+static int test_unscoped_ui_hint_requires_native_same_guid_range(void){
+ Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+ CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ pp12340_tick(&a,0u);CHECK(m.casts==1u && m.last_guid.lo==222u);
+ m.result=PP_RESULT_UI_RANGE_HINT;
+ pp12340_tick(&a,80u); /* still in reach: UI alone MUST NOT end attempt */
+ CHECK(m.casts==1u && m.end_count==0u && a.engine.active_valid);
+ m.npc_b_distance=5.0f;
+ pp12340_tick(&a,160u);
+ CHECK(m.end_count==1u && m.end_guid.lo==222u);
+ CHECK(m.casts==2u && m.last_guid.lo==111u);
+ CHECK(m.events[PP_EVENT_UI_RANGE_RECHECKED]==1u &&
+       m.events[PP_EVENT_OUT_OF_RANGE]==0u);
+ return 0;
+}
 int main(void){
-    if(test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
+    if(test_motion_priority_and_world_reset()||test_unscoped_ui_hint_requires_native_same_guid_range()||test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
        test_attempt_correlation()||test_silent_commands()||
        test_moving_player_rechecked_before_cast()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");

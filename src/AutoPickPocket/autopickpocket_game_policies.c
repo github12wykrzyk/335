@@ -116,7 +116,7 @@ static void report_ui_observation(void){
 static int observer(void){
     char flag[8];
     /* A GUID-scoped combat-log outcome is different from a UI error without a GUID. */
-    return run("if not _G.W335PP_F then\n local f=CreateFrame('Frame')\n if f then\n  local function category(m)\n   if not m then return 'U' end\n   if SPELL_FAILED_TARGET_NO_POCKETS and m==SPELL_FAILED_TARGET_NO_POCKETS then return 'E' end\n   if SPELL_FAILED_OUT_OF_RANGE and m==SPELL_FAILED_OUT_OF_RANGE or ERR_OUT_OF_RANGE and m==ERR_OUT_OF_RANGE or SPELL_FAILED_TOO_CLOSE and m==SPELL_FAILED_TOO_CLOSE then return 'R' end\n   if SPELL_FAILED_LINE_OF_SIGHT and m==SPELL_FAILED_LINE_OF_SIGHT or SPELL_FAILED_VISION_OBSCURED and m==SPELL_FAILED_VISION_OBSCURED then return 'L' end\n   if SPELL_FAILED_ONLY_STEALTHED and m==SPELL_FAILED_ONLY_STEALTHED or SPELL_FAILED_NOT_STEALTHED and m==SPELL_FAILED_NOT_STEALTHED then return 'S' end\n   if SPELL_FAILED_NOT_READY and m==SPELL_FAILED_NOT_READY or SPELL_FAILED_SPELL_IN_PROGRESS and m==SPELL_FAILED_SPELL_IN_PROGRESS then return 'C' end\n   return 'U'\n  end\n  f:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')\n  f:RegisterEvent('LOOT_OPENED')\n  f:RegisterEvent('PLAYER_MONEY')\n  f:RegisterEvent('UI_ERROR_MESSAGE')\n  f:SetScript('OnEvent',function(self,ev,...)\n   local n=_G.W335PP_N\n   if not n or n=='0' then return end\n   local t=GetTime()\n   if ev=='COMBAT_LOG_EVENT_UNFILTERED' then\n    local _,kind,src,_,_,dst,_,_,id=...\n    if id~=921 or not src or not dst or not UnitGUID('player') or string.upper(src)~=string.upper(UnitGUID('player')) then return end\n    local dg=string.upper(dst)\n    local rec=_G.W335PP_BURST and _G.W335PP_BURST[dg]\n    if not rec or t-rec.t>1.5 then return end\n    if kind=='SPELL_CAST_SUCCESS' then\n     rec.s='1'\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_S=n\n     end\n    elseif kind=='SPELL_CAST_FAILED' then\n     local why=category(select(12,...))\n     rec.f=why=='U' and 'F' or why\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=rec.f\n     end\n    end\n   elseif ev=='LOOT_OPENED' then\n    if _G.W335PP_T and t-_G.W335PP_T<=1.5 then _G.W335PP_O=n end\n   elseif ev=='PLAYER_MONEY' then\n    if _G.W335PP_T and t-_G.W335PP_T<=0.4 and GetMoney and _G.W335PP_MB and _G.W335PP_MB>=0 then\n     local balance=GetMoney()\n     if balance>_G.W335PP_MB then\n      _G.W335PP_M=n\n      _G.W335PP_MD=tostring(balance-_G.W335PP_MB)\n     end\n    end\n   elseif ev=='UI_ERROR_MESSAGE' then\n    local why=category(select(1,...))\n    _G.W335PP_UI_SEQ=tostring(tonumber(_G.W335PP_UI_SEQ or '0')+1)\n    _G.W335PP_UI_KIND=why\n    local key='W335PP_UI_'..why\n    _G[key]=tostring(tonumber(_G[key] or '0')+1)\n    _G.W335PP_UI_TIME=t\n    if _G.W335PP_T and t-_G.W335PP_T<=0.8 and _G.W335PP_INFLIGHT=='1' and why~='U' then\n     if why=='E' then _G.W335PP_E=n\n     else\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=why\n     end\n    end\n   end\n  end)\n  _G.W335PP_BOOT=tostring(GetTime())\n  _G.W335PP_F=f\n  _G.W335PP_INIT='1'\n end\nend") && value("W335PP_INIT",flag,sizeof(flag)) &&
+    return run("if not _G.W335PP_F then\n local f=CreateFrame('Frame')\n if f then\n  local function category(m)\n   if not m then return 'U' end\n   if SPELL_FAILED_TARGET_NO_POCKETS and m==SPELL_FAILED_TARGET_NO_POCKETS then return 'E' end\n   if SPELL_FAILED_OUT_OF_RANGE and m==SPELL_FAILED_OUT_OF_RANGE or ERR_OUT_OF_RANGE and m==ERR_OUT_OF_RANGE or SPELL_FAILED_TOO_CLOSE and m==SPELL_FAILED_TOO_CLOSE then return 'R' end\n   if SPELL_FAILED_LINE_OF_SIGHT and m==SPELL_FAILED_LINE_OF_SIGHT or SPELL_FAILED_VISION_OBSCURED and m==SPELL_FAILED_VISION_OBSCURED then return 'L' end\n   if SPELL_FAILED_ONLY_STEALTHED and m==SPELL_FAILED_ONLY_STEALTHED or SPELL_FAILED_NOT_STEALTHED and m==SPELL_FAILED_NOT_STEALTHED then return 'S' end\n   if SPELL_FAILED_NOT_READY and m==SPELL_FAILED_NOT_READY or SPELL_FAILED_SPELL_IN_PROGRESS and m==SPELL_FAILED_SPELL_IN_PROGRESS then return 'C' end\n   return 'U'\n  end\n  f:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')\n  f:RegisterEvent('LOOT_OPENED')\n  f:RegisterEvent('PLAYER_MONEY')\n  f:RegisterEvent('UI_ERROR_MESSAGE')\n  f:SetScript('OnEvent',function(self,ev,...)\n   local n=_G.W335PP_N\n   if not n or n=='0' then return end\n   local t=GetTime()\n   if ev=='COMBAT_LOG_EVENT_UNFILTERED' then\n    local _,kind,src,_,_,dst,_,_,id=...\n    if id~=921 or not src or not dst or not UnitGUID('player') or string.upper(src)~=string.upper(UnitGUID('player')) then return end\n    local dg=string.upper(dst)\n    local rec=_G.W335PP_BURST and _G.W335PP_BURST[dg]\n    if not rec or t-rec.t>1.5 then return end\n    if kind=='SPELL_CAST_SUCCESS' then\n     rec.s='1'\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_S=n\n     end\n    elseif kind=='SPELL_CAST_FAILED' then\n     local why=category(select(12,...))\n     rec.f=why=='U' and 'F' or why\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=rec.f\n     end\n    end\n   elseif ev=='LOOT_OPENED' then\n    if _G.W335PP_T and t-_G.W335PP_T<=1.5 then _G.W335PP_O=n end\n   elseif ev=='PLAYER_MONEY' then\n    if _G.W335PP_T and t-_G.W335PP_T<=0.4 and GetMoney and _G.W335PP_MB and _G.W335PP_MB>=0 then\n     local balance=GetMoney()\n     if balance>_G.W335PP_MB then\n      _G.W335PP_M=n\n      _G.W335PP_MD=tostring(balance-_G.W335PP_MB)\n     end\n    end\n   elseif ev=='UI_ERROR_MESSAGE' then\n    local why=category(select(1,...))\n    _G.W335PP_UI_SEQ=tostring(tonumber(_G.W335PP_UI_SEQ or '0')+1)\n    _G.W335PP_UI_KIND=why\n    local key='W335PP_UI_'..why\n    _G[key]=tostring(tonumber(_G[key] or '0')+1)\n    _G.W335PP_UI_TIME=t\n    if why=='R' and _G.W335PP_T and t-_G.W335PP_T<=0.8 and _G.W335PP_INFLIGHT=='1' then\n     _G.W335PP_UI_ACTIVE_RANGE=n\n    end\n   end\n  end)\n  _G.W335PP_BOOT=tostring(GetTime())\n  _G.W335PP_F=f\n  _G.W335PP_INIT='1'\n end\nend") && value("W335PP_INIT",flag,sizeof(flag)) &&
            !strcmp(flag,"1");
 }
 static PpResult classify_failure(char code){
@@ -164,7 +164,7 @@ static int begin_attempt(void *ctx,PpGuid guid,uint32_t nonce){
     n=sprintf_s(script,sizeof(script),
       "_G.W335PP_N='%lu';_G.W335PP_G='0X%08lX%08lX';"
       "_G.W335PP_S='0';_G.W335PP_O='0';_G.W335PP_E='0';"
-      "_G.W335PP_RANGE='0';_G.W335PP_M='0';"
+      "_G.W335PP_RANGE='0';_G.W335PP_M='0';_G.W335PP_UI_ACTIVE_RANGE='0';"
       "_G.W335PP_MB=GetMoney and GetMoney() or -1;"
       "_G.W335PP_FAIL='0';_G.W335PP_FAIL_CODE='0';_G.W335PP_T=GetTime();"
       "_G.W335PP_INFLIGHT='1';_G.W335PP_BURST=_G.W335PP_BURST or {};"
@@ -178,7 +178,7 @@ static int begin_attempt(void *ctx,PpGuid guid,uint32_t nonce){
     return 1; /* arming is NOT successful theft */
 }
 static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
-    char sent[32],loot[32],empty[32],fail[32],range[32],money[32],fail_code[8],want[32];
+    char sent[32],loot[32],empty[32],fail[32],range[32],money[32],ui_range[32],fail_code[8],want[32];
     uint32_t elapsed;
     PpGuid source={0u,0u};
     int source_read;
@@ -195,7 +195,8 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
        !value("W335PP_FAIL",fail,sizeof(fail)) ||
        !value("W335PP_FAIL_CODE",fail_code,sizeof(fail_code)) ||
        !value("W335PP_RANGE",range,sizeof(range)) ||
-       !value("W335PP_M",money,sizeof(money)))
+       !value("W335PP_M",money,sizeof(money)) ||
+       !value("W335PP_UI_ACTIVE_RANGE",ui_range,sizeof(ui_range)))
         return PP_RESULT_PENDING;
     /* An explicit nonce-scoped no-pockets rejection can arrive without
      * a SPELL_CAST_SUCCESS event. Do not retry this GUID in that case. */
@@ -230,6 +231,10 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
        (!strcmp(loot,"0") || !source_read || same(source,guid))){
         clear();return PP_RESULT_SUCCESS;
     }
+    /* UI range is NOT proof of this GUID failing. Only the native bridge
+     * may corroborate with a fresh same-GUID distance measurement. */
+    if(elapsed>=80u && !strcmp(ui_range,want))
+        return PP_RESULT_UI_RANGE_HINT;
     return PP_RESULT_PENDING;
 }
 /* Do not cancel a newer cast or another GUID on delayed callbacks. */

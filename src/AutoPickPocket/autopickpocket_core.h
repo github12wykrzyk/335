@@ -14,6 +14,7 @@ extern "C" {
 #define PP_QUEUE_TTL_MS 160u
 #define PP_RESULT_TIMEOUT_MS 900u
 #define PP_RETRY_DELAY_MS 800u
+#define PP_RANGE_RETRY_DELAY_MS 200u /* correlated GUID or independently checked UI range hint */
 #define PP_LOCAL_RANGE_BACKOFF_MS 250u
 #define PP_LOCAL_FAILOVER_LIMIT 4u
 #define PP_CAST_LOCAL_RANGE (-1) /* no packet submitted: try another GUID */
@@ -25,6 +26,7 @@ typedef struct {
     PpGuid guid;
     float distance_sq;
     unsigned eligible; /* 1=in verified cast range, 2=detected nearby, not yet in cast range; 0=invalid */
+    unsigned forward; /* fresh native player-motion direction; 0 if stationary/uncertain */
 } PpTarget;
 typedef enum {
     PP_RESULT_PENDING = 0,
@@ -35,7 +37,8 @@ typedef enum {
     PP_RESULT_MONEY_SUCCESS = 5, /* wallet delta plus same-attempt loot event: indicative */
     PP_RESULT_OUT_OF_RANGE = 6, PP_RESULT_LINE_OF_SIGHT = 7,
     PP_RESULT_NOT_STEALTHED = 8, PP_RESULT_NOT_READY = 9,
-    PP_RESULT_CAST_REJECTED = 10 /* explicit failure without classified reason */
+    PP_RESULT_CAST_REJECTED = 10, /* explicit failure without classified reason */
+    PP_RESULT_UI_RANGE_HINT = 11 /* global UI hint + native same-GUID distance recheck, not server GUID proof */
 } PpResult;
 typedef enum {
     PP_EVENT_CAST = 1,
@@ -62,7 +65,8 @@ typedef enum {
     PP_EVENT_PREFETCH_ONLY = 24,
     PP_EVENT_LOCAL_RANGE_REJECT = 25,
     PP_EVENT_LUA_EPOCH = 26 /* Lua observer recreated, including /reload */,
-    PP_EVENT_UI_OBSERVATION = 27 /* unscoped UI error, never a GUID result */
+    PP_EVENT_UI_OBSERVATION = 27, /* unscoped UI error, never a GUID result */
+    PP_EVENT_UI_RANGE_RECHECKED = 28 /* UI range hint with native distance evidence, NOT a GUID-scoped server failure */
 } PpEvent;
 typedef struct {
     void *ctx;
@@ -101,6 +105,7 @@ typedef struct {
     PpTarget queue[PP_SCAN_CAP];
     size_t queue_count;
     uint32_t queue_built_ms;
+    unsigned last_selection_forward, last_selection_ready;
     unsigned history_next, active_valid, enabled, scan_started;
     unsigned probe_mode;
     uint32_t last_diagnostic_ms;

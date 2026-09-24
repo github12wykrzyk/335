@@ -131,3 +131,9 @@ distinguish local_range_precheck_rejected from server out_of_range and
 from an actual cast_submitted. In-game Sprint testing must compare missed
 mobs, packet submission-to-result latency, pulse gap, and live transport
 (packet versus native fallback) on the exact installed commit SHA.
+
+## Sprint phase 2 (isolated TEST, not accepted stable)
+
+A GUID-correlated spell-921 `OUT_OF_RANGE` now blocks only that GUID for 200 ms and the engine tries another available, freshly validated GUID on the same pulse. A global UI range message **never** directly sets the GUID's `W335PP_FAIL`/`W335PP_E` or proves the server rejected that GUID. It can produce a separate `ui_range_local_distance_confirmed_not_server_guid` event only if the native 12340 scan also shows the outstanding exact GUID outside the 4-yard cast radius (yet within the 9-yard detection radius); otherwise the cast stays pending until a real result or the unchanged 900 ms timeout. On this guarded release the exact nonce is cancelled before the next target can be armed.
+
+The scanner samples the player's XY displacement between recent pulses (20-250 ms, plausible speed; teleport/unknown/stationary ignored). Targets **ahead** in the validated movement direction are preferred over nearer targets behind; all casts still require native same-GUID <=4 yd validation. The cast log includes `selection_forward` and `candidates_ready`. Tests cover the new short GUID-specific retry, stationary fallback, moving-target selection and UI/non-GUID attribution guard. A Sprint in-game report must check fresh sessions only and identify `packet` versus `native_fallback`; the mere UI hint is not a successful theft.

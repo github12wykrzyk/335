@@ -35,6 +35,16 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn('SPELL_FAILED_OUT_OF_RANGE',POLICY)
         self.assertIn('ERR_OUT_OF_RANGE',POLICY)
         self.assertIn('!strcmp(range,want)',POLICY)
+    def test_unscoped_ui_error_never_becomes_exact_guid_failure(self):
+        ui=POLICY.split("elseif ev=='UI_ERROR_MESSAGE' then",1)[1].split("   end\\n  end)\\n",1)[0]
+        self.assertIn("_G.W335PP_UI_ACTIVE_RANGE=n",ui)
+        self.assertNotIn("_G.W335PP_FAIL=n",ui)
+        self.assertNotIn("_G.W335PP_E=n",ui)
+        adapter=(ROOT/"src/AutoPickPocket/autopickpocket_12340_adapter.c").read_text()
+        self.assertIn("a->engine.queue[i].eligible==2u",adapter)
+        self.assertIn("PP_RESULT_UI_RANGE_HINT",adapter)
+        self.assertIn("out_of_range_guid_correlated",HOST)
+        self.assertIn("ui_range_local_distance_confirmed_not_server_guid",HOST)
     def test_exact_attempt_cancellation_unifies_timers(self):
         core=(ROOT/"src/AutoPickPocket/autopickpocket_core.c").read_text()
         adapter=(ROOT/"src/AutoPickPocket/autopickpocket_12340_adapter.c").read_text()

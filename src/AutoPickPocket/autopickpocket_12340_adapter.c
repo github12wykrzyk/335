@@ -69,7 +69,8 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
     uint32_t manager=0u,obj=0u,player_obj=0u,next=0u,desc=0u;
     PpGuid player_guid, guid;
-    float me[3],pos[3];
+    float me[3],pos[3],step_x=0.0f,step_y=0.0f;
+    unsigned moving=0u;
     size_t count=0u;
     uint32_t scan_started=a->host.clock_ms ? a->host.clock_ms(a->host.ctx) : 0u;
     unsigned i;
@@ -81,6 +82,22 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
         !locate_player(a,manager,player_guid,&player_obj) ||
         a->host.position(a->host.ctx,player_obj,me)!=1 ||
         !read32(a,(uintptr_t)manager+PP_MGR_FIRST,&obj)) return 0u;
+    /* Reject stationary samples, time gaps and teleport-sized deltas.
+     * Movement is used to rank only, never to relax native cast range. */
+    if(a->player_sample_valid && a->host.clock_ms){
+        uint32_t elapsed=(uint32_t)(scan_started-a->last_player_sample_ms);
+        float step_sq;
+        step_x=me[0]-a->last_player_xyz[0];
+        step_y=me[1]-a->last_player_xyz[1];
+        step_sq=step_x*step_x+step_y*step_y;
+        if(elapsed>=20u && elapsed<=250u && step_sq>=0.04f &&
+           step_sq<=16.0f &&
+           step_sq<=(0.025f*(float)elapsed)*(0.025f*(float)elapsed))
+            moving=1u;
+    }
+    memcpy(a->last_player_xyz,me,sizeof(me));
+    a->last_player_sample_ms=scan_started;
+    a->player_sample_valid=a->host.clock_ms ? 1u : 0u;
     for(i=0u;i<PP_SCAN_LIMIT && ptr_ok(obj);++i) {
         uint32_t type=0u,health=0u;
         if (!guid_at(a,obj,&guid)) break;
@@ -105,6 +122,7 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
                     out[count].guid=guid;
                     out[count].distance_sq=d2;
                     out[count].eligible=(d2<=PP12340_REACH*PP12340_REACH) ? 1u : 2u;
+                    out[count].forward=(moving && dx*step_x+dy*step_y>0.04f) ? 1u : 0u;
                     ++count;
                 } else {
                     for(n=1u;n<count;++n)
@@ -113,6 +131,7 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
                         out[far].guid=guid;
                         out[far].distance_sq=d2;
                         out[far].eligible=(d2<=PP12340_REACH*PP12340_REACH) ? 1u : 2u;
+                        out[far].forward=(moving && dx*step_x+dy*step_y>0.04f) ? 1u : 0u;
                     }
                 }
             }
@@ -178,6 +197,23 @@ static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
 static PpResult pp_result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
     PpResult result=a->host.cast_result(a->host.ctx,guid,attempt_id);
+    if (result==PP_RESULT_UI_RANGE_HINT) {
+        /* UI_ERROR_MESSAGE has no GUID. A fresh native scan must also see
+         * this exact in-flight GUID outside 4 yd, but inside detection range.
+         * A missing GUID, stale sample or in-range target is inconclusive. */
+        size_t i;
+        for(i=0u;i<a->engine.queue_count;++i)
+            if(same(a->engine.queue[i].guid,guid) &&
+               a->engine.queue[i].eligible==2u) {
+                /* The observer is not a cast-result owner until this
+                 * independent geometry gate passes. Release its exact
+                 * nonce before attempting another NPC in this pulse. */
+                if(a->host.end_attempt)
+                    a->host.end_attempt(a->host.ctx,guid,attempt_id);
+                return PP_RESULT_UI_RANGE_HINT;
+            }
+        return PP_RESULT_PENDING;
+    }
     if (result<PP_RESULT_PENDING || result>PP_RESULT_CAST_REJECTED)
         return PP_RESULT_PENDING;
     return result;
@@ -229,6 +265,7 @@ void pp12340_enable(Pp12340Adapter *a,int enable) {
 void pp12340_reset(Pp12340Adapter *a) {
     if (a && a->bound && a->host.thread_id(a->host.ctx)==a->owner_thread) {
         a->cached_manager=0u;a->cached_player_obj=0u;
+        a->player_sample_valid=0u;
         pp_reset(&a->engine);
     }
 }
@@ -273,12 +310,14 @@ void pp12340_tick(Pp12340Adapter *a,uint32_t now_ms) {
         }
         a->current_world=0u;
         a->cached_manager=0u;a->cached_player_obj=0u;
+        a->player_sample_valid=0u;
         return;
     }
     if (world!=a->current_world) {
         pp_reset(&a->engine);
         a->current_world=world;
         a->cached_manager=0u;a->cached_player_obj=0u;
+        a->player_sample_valid=0u;
         pp_status(a,PP_EVENT_WORLD_RESET);
     }
     pp_tick(&a->engine,now_ms);

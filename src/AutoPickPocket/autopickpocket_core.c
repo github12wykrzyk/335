@@ -75,6 +75,8 @@ void pp_enable(PpEngine *engine, int enable) {
     engine->scan_started=0u;
     engine->queue_count=0u;
     engine->probe_mode=0u;
+    engine->last_selection_forward=0u;
+    engine->last_selection_ready=0u;
 }
 void pp_reset(PpEngine *engine) {
     if (!engine) return;
@@ -89,6 +91,8 @@ void pp_reset(PpEngine *engine) {
     engine->active_attempt_id=0u; /* keep next_attempt_id across world resets */
     engine->scan_started=0u;
     engine->queue_count=0u;
+    engine->last_selection_forward=0u;
+    engine->last_selection_ready=0u;
 }
 /* Reject an unverified target, rather than substituting a nearby NPC.
  * Once submitted, pp_tick only observes the result or timeout.
@@ -200,12 +204,22 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             engine->active_valid=0u;
             if (engine->probe_mode) {engine->enabled=0u;return;}
             goto scan_next;
+        case PP_RESULT_UI_RANGE_HINT:
+            /* UI is not GUID scoped; the native adapter must also verify
+             * this exact target has moved outside the live cast radius. */
+            failure(engine,engine->active,now,PP_RANGE_RETRY_DELAY_MS,
+                    PP_EVENT_UI_RANGE_RECHECKED);
+            ++engine->retries;
+            engine->active_valid=0u;
+            if (engine->probe_mode) {engine->enabled=0u;return;}
+            goto scan_next;
         case PP_RESULT_OUT_OF_RANGE:
         case PP_RESULT_LINE_OF_SIGHT:
         case PP_RESULT_NOT_STEALTHED:
         case PP_RESULT_NOT_READY:
         case PP_RESULT_CAST_REJECTED:
-            failure(engine,engine->active,now,PP_RETRY_DELAY_MS,
+            failure(engine,engine->active,now,
+                outcome==PP_RESULT_OUT_OF_RANGE ? PP_RANGE_RETRY_DELAY_MS : PP_RETRY_DELAY_MS,
                 outcome==PP_RESULT_OUT_OF_RANGE ? PP_EVENT_OUT_OF_RANGE :
                 outcome==PP_RESULT_LINE_OF_SIGHT ? PP_EVENT_LINE_OF_SIGHT :
                 outcome==PP_RESULT_NOT_STEALTHED ? PP_EVENT_NOT_STEALTHED :
@@ -250,6 +264,8 @@ scan_next:
      * Bound the work: each rejection can require a guarded object lookup. */
     for(local_rejects=0u;local_rejects<PP_LOCAL_FAILOVER_LIMIT;++local_rejects) {
         found=0;has_prefetch=0;
+        engine->last_selection_forward=0u;
+        engine->last_selection_ready=0u;
         for(i=0u;i<engine->queue_count;++i) {
             PpTarget target=engine->queue[i];
             if (!nonzero(target.guid) ||
@@ -261,7 +277,12 @@ scan_next:
             if (h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
                       !deadline_reached(now,h->blocked_until_ms)))
                 continue;
-            if (!found || target.distance_sq<best.distance_sq) {
+            ++engine->last_selection_ready;
+            /* Only prefer forward targets if the native adapter validated
+             * a recent movement vector. Stationary fallback stays nearest. */
+            if (!found || (target.forward && !best.forward) ||
+                (target.forward==best.forward &&
+                 target.distance_sq<best.distance_sq)) {
                 best=target;
                 found=1;
             }
@@ -271,6 +292,7 @@ scan_next:
                        PP_EVENT_ALL_BLOCKED,now);
             return;
         }
+        engine->last_selection_forward=best.forward;
         h=entry(engine,best.guid,1);
         ++h->attempts;
         if (++engine->next_attempt_id==0u) ++engine->next_attempt_id;
