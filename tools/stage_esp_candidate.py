@@ -62,6 +62,19 @@ def prepare_registration(runtime, registry, index, dll_sha):
             any(ch not in "0123456789abcdef" for ch in dll_sha)):
         raise ValueError("unverified DLL identity")
     current = [entry["component"] for entry in runtime["files"]]
+    if current == ["Client12340", "AutoLoot", "PlayerESP"]:
+        if ([m["component"] for m in registry["modules"]] != ["AutoLoot","PlayerESP"] or
+            [m["component"] for m in index["modules"]] != ["AutoLoot","PlayerESP"] or
+            runtime["files"][2].get("path") != "runtime/PlayerESP335.dll" or
+            runtime["files"][2].get("kind") != "dll" or
+            runtime["files"][2].get("canonical_source") != "src/PlayerESP/player_esp_win32_host.c" or
+            registry["modules"][1].get("component") != "PlayerESP"):
+            raise ValueError("existing ESP registration diverged; refusing overwrite")
+        runtime["files"][2]["sha256"] = dll_sha
+        runtime["files"][2]["version"] = "0.2.0-gui-npc-test"
+        runtime["release_id"] = "feature-player-esp-12340-gui-npc-test"
+        registry["modules"][1] = esp_contract()
+        return runtime, registry, index
     if current != ["Client12340", "AutoLoot"]:
         raise ValueError("unexpected runtime; refusing to overwrite")
     if [m["component"] for m in registry["modules"]] != ["AutoLoot"]:
@@ -116,8 +129,12 @@ def main():
     registry = load_json(ROOT / "runtime/module_registry.json")
     index = load_json(ROOT / "AI_INDEX.json")
     destination = ROOT / "runtime/PlayerESP335.dll"
-    if destination.exists():
-        raise ValueError("ESP already staged; overwrite requires explicit review")
+    active = next((entry for entry in runtime["files"] if entry.get("component") == "PlayerESP"), None)
+    if active:
+        if not destination.is_file() or sha256_file(destination) != active["sha256"]:
+            raise ValueError("existing ESP binary differs from registered runtime")
+    elif destination.exists():
+        raise ValueError("unregistered existing ESP binary; refusing overwrite")
     folder = ROOT / "dist/esp-stage"
     compiled = compile_module(
         esp_contract(), {"path": "runtime/PlayerESP335.dll"},
