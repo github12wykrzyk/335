@@ -48,8 +48,8 @@
     },
     {
       "component": "PlayerESP",
-      "source": "src/PlayerESP/player_esp_win32_host.c",
-      "docs": "src/PlayerESP/README.md"
+      "source": "src/PlayerESP112Port/esp112_host335.c",
+      "docs": "src/PlayerESP112Port/README.md"
     }
   ],
   "state": "test-candidate"

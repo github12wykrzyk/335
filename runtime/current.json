@@ -8,7 +8,7 @@
     "platform": "Windows",
     "architecture": "x86"
   },
-  "release_id": "feature-player-esp-12340-native-ui-npc-test",
+  "release_id": "feature-player-esp-12340-112-gdi-rebuild-test",
   "state": "test-candidate",
   "canonical_source_policy": "Each active runtime file must point to exact existing src/ lineage or documented external source.",
   "files": [
@@ -35,13 +35,11 @@
     {
       "component": "PlayerESP",
       "path": "runtime/PlayerESP335.dll",
-      "version": "0.3.0-native-ui-test",
-      "sha256": "2c8749649fd6bfde2f576a9e61975706b5414813902f8e2d964fbb7ac17cc20f",
+      "version": "0.4.0-112-gdi-rebuild-test",
+      "sha256": "ba33c83953bce9d9f092701d29fd34c3aed42db8f3650d351c5a9eadafb605de",
       "arch": "x86",
-      "canonical_source": "src/PlayerESP/player_esp_win32_host.c",
-      "depends_on": [
-        "AutoLoot"
-      ],
+      "canonical_source": "src/PlayerESP112Port/esp112_host335.c",
+      "depends_on": [],
       "kind": "dll"
     }
   ],
