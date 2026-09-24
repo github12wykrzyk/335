@@ -217,7 +217,7 @@ static PpResult pp_result(void *ctx,PpGuid guid,uint32_t attempt_id) {
             }
         return PP_RESULT_PENDING;
     }
-    if (result<PP_RESULT_PENDING || result>PP_RESULT_CAST_REJECTED)
+    if (result<PP_RESULT_PENDING || result>PP_RESULT_CAST_ACK)
         return PP_RESULT_PENDING;
     return result;
 }
