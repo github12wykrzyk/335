@@ -1,0 +1,146 @@
+"""Stage real PlayerESP x86 DLL into isolated feature TEST runtime.
+
+Never run on main/work. The final package must still pass build_work_candidate
+at the exact new commit SHA; this stage does not publish a game package.
+"""
+from __future__ import annotations
+import argparse
+import copy
+import json
+import os
+import shutil
+import sys
+
+from build_active import compile_module, find_vcvars
+from manifest_common import ROOT, load_json, sha256_file
+from verify_module_registry import validate
+
+BRANCH = "feature/player-esp-12340"
+SOURCE = [
+    "src/PlayerESP/player_esp_core.c",
+    "src/PlayerESP/player_esp_core.h",
+    "src/PlayerESP/player_esp_scanner.c",
+    "src/PlayerESP/player_esp_scanner.h",
+    "src/PlayerESP/player_esp_camera.c",
+    "src/PlayerESP/player_esp_camera.h",
+    "src/PlayerESP/player_esp_d3d9.c",
+    "src/PlayerESP/player_esp_d3d9.h",
+    "src/PlayerESP/player_esp_win32_host.c",
+]
+BUILD = [name for name in SOURCE if name.endswith(".c")]
+
+def esp_contract():
+    return {
+        "component": "PlayerESP",
+        "sources": SOURCE,
+        "requires": [],
+        "resources": [
+            {"id": "wow12340:object-manager", "mode": "observe"},
+            {"id": "wow12340:d3d9-endscene-vtable", "mode": "exclusive"},
+            {"id": "logical:render", "mode": "exclusive"},
+            {"id": "logical:input", "mode": "observe"},
+            {"id": "win32:WH_GETMESSAGE", "mode": "chain",
+             "arbitrator": "Loader"},
+            {"id": "win32:WH_CALLWNDPROC", "mode": "chain",
+             "arbitrator": "Loader"},
+        ],
+        "build": {
+            "toolchain": "msvc_x86",
+            "sources": BUILD,
+            "include_dirs": ["src/PlayerESP"],
+            "libraries": ["Advapi32.lib", "User32.lib", "d3d9.lib"],
+            "cflags": ["/TC", "/Brepro"],
+            "ldflags": [],
+        },
+    }
+
+def prepare_registration(runtime, registry, index, dll_sha):
+    """Only the expected unmodified feature baseline may be staged."""
+    runtime, registry, index = [copy.deepcopy(x) for x in
+                                (runtime, registry, index)]
+    if (not isinstance(dll_sha, str) or len(dll_sha) != 64 or
+            any(ch not in "0123456789abcdef" for ch in dll_sha)):
+        raise ValueError("unverified DLL identity")
+    current = [entry["component"] for entry in runtime["files"]]
+    if current != ["Client12340", "AutoLoot"]:
+        raise ValueError("unexpected runtime; refusing to overwrite")
+    if [m["component"] for m in registry["modules"]] != ["AutoLoot"]:
+        raise ValueError("unexpected registry; refusing to overwrite")
+    if [m["component"] for m in index["modules"]] != ["AutoLoot"]:
+        raise ValueError("unexpected AI_INDEX; refusing to overwrite")
+    if runtime.get("target", {}).get("build") != 12340:
+        raise ValueError("not the exact 12340 target")
+    hook_ids = {"win32:WH_GETMESSAGE", "win32:WH_CALLWNDPROC"}
+    found = set()
+    for resource in registry["modules"][0]["resources"]:
+        if resource.get("id") in hook_ids:
+            if resource.get("mode") != "exclusive":
+                raise ValueError("unexpected existing hook ownership")
+            found.add(resource["id"])
+            resource["mode"] = "chain"
+            resource["arbitrator"] = "Loader"
+    if found != hook_ids:
+        raise ValueError("original Loader hook contract missing")
+    registry["modules"].append(esp_contract())
+    runtime["files"].append({
+        "component": "PlayerESP", "path": "runtime/PlayerESP335.dll",
+        "version": "0.1.0-visual-test",
+        "sha256": dll_sha, "arch": "x86",
+        "canonical_source": "src/PlayerESP/player_esp_win32_host.c",
+        "depends_on": [], "kind": "dll",
+    })
+    runtime["release_id"] = "feature-player-esp-12340-visual-test"
+    runtime["compatibility_sets"] = [{
+        "id": "client12340-autoloot-player-esp-test",
+        "components": ["Client12340", "AutoLoot", "PlayerESP"],
+    }]
+    index["modules"].append({
+        "component": "PlayerESP",
+        "source": "src/PlayerESP/player_esp_win32_host.c",
+        "docs": "src/PlayerESP/README.md",
+    })
+    return runtime, registry, index
+
+def write_json(path, data):
+    (ROOT / path).write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stage", action="store_true", required=True)
+    parser.parse_args()
+    if os.name != "nt" or os.getenv("GITHUB_REF_NAME") != BRANCH:
+        raise ValueError("only Windows feature/player-esp-12340 may stage")
+    runtime = load_json(ROOT / "runtime/current.json")
+    registry = load_json(ROOT / "runtime/module_registry.json")
+    index = load_json(ROOT / "AI_INDEX.json")
+    destination = ROOT / "runtime/PlayerESP335.dll"
+    if destination.exists():
+        raise ValueError("ESP already staged; overwrite requires explicit review")
+    folder = ROOT / "dist/esp-stage"
+    compiled = compile_module(
+        esp_contract(), {"path": "runtime/PlayerESP335.dll"},
+        find_vcvars(), folder, verify_registered=False)
+    binary = folder / "PlayerESP/PlayerESP335.dll"
+    if (compiled.get("verification") !=
+            "PE32_X86_BUILD_AWAITING_REGISTRATION" or
+            sha256_file(binary) != compiled["binary_sha256"]):
+        raise ValueError("native x86 build not verified")
+    manifest, owners, idx = prepare_registration(
+        runtime, registry, index, compiled["binary_sha256"])
+    shutil.copyfile(binary, destination)
+    if sha256_file(destination) != compiled["binary_sha256"]:
+        raise ValueError("copied DLL is not the compiled artifact")
+    write_json("runtime/current.json", manifest)
+    write_json("runtime/module_registry.json", owners)
+    write_json("AI_INDEX.json", idx)
+    errors = validate(manifest, owners)
+    if errors:
+        raise ValueError("hook/module ownership conflict: " + "; ".join(errors))
+    print("ESP_STAGE: real Windows PE32 x86 DLL sha256=",
+          compiled["binary_sha256"])
+    print("ESP_STAGE: visual TEST runtime, gameplay remains unverified")
+
+if __name__ == "__main__":
+    sys.exit(main())
