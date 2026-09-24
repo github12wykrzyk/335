@@ -47,6 +47,11 @@
       "docs": "src/AutoLoot/NATIVE_ADAPTER.md"
     },
     {
+      "component": "SharedGUI",
+      "source": "src/SharedGUI/w335_gui_win32.c",
+      "docs": "src/SharedGUI/README.md"
+    },
+    {
       "component": "PlayerESP",
       "source": "src/PlayerESP112Port/esp112_host335.c",
       "docs": "src/PlayerESP112Port/README.md"

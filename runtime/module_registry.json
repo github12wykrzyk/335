@@ -72,6 +72,57 @@
       }
     },
     {
+      "component": "SharedGUI",
+      "sources": [
+        "src/SharedGUI/w335_gui_api.h",
+        "src/SharedGUI/w335_gui_win32.c"
+      ],
+      "requires": [],
+      "resources": [
+        {
+          "id": "logical:input",
+          "mode": "exclusive"
+        },
+        {
+          "id": "win32:gui-hotkey-insert",
+          "mode": "exclusive"
+        },
+        {
+          "id": "win32:gui-popup-window",
+          "mode": "exclusive"
+        },
+        {
+          "id": "win32:WH_GETMESSAGE",
+          "mode": "chain",
+          "arbitrator": "Loader"
+        },
+        {
+          "id": "win32:WH_CALLWNDPROC",
+          "mode": "chain",
+          "arbitrator": "Loader"
+        }
+      ],
+      "build": {
+        "toolchain": "msvc_x86",
+        "sources": [
+          "src/SharedGUI/w335_gui_win32.c"
+        ],
+        "include_dirs": [
+          "src/SharedGUI"
+        ],
+        "libraries": [
+          "User32.lib",
+          "Gdi32.lib",
+          "Kernel32.lib"
+        ],
+        "cflags": [
+          "/TC",
+          "/Brepro"
+        ],
+        "ldflags": []
+      }
+    },
+    {
       "component": "PlayerESP",
       "sources": [
         "src/PlayerESP/player_esp_core.c",
@@ -100,9 +151,12 @@
         "src/ThirdParty/MinHook/src/hde/table32.h",
         "src/ThirdParty/MinHook/src/hde/pstdint.h",
         "src/ThirdParty/MinHook/include/MinHook.h",
-        "src/PlayerESP112Port/esp112_host335.c"
+        "src/PlayerESP112Port/esp112_host335.c",
+        "src/SharedGUI/w335_gui_api.h"
       ],
-      "requires": [],
+      "requires": [
+        "SharedGUI"
+      ],
       "resources": [
         {
           "id": "wow12340:object-manager",
@@ -166,7 +220,8 @@
         ],
         "include_dirs": [
           "src/PlayerESP",
-          "src/PlayerESP112Port"
+          "src/PlayerESP112Port",
+          "src/SharedGUI"
         ],
         "libraries": [
           "Advapi32.lib",

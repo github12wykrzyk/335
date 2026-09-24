@@ -8,7 +8,7 @@
     "platform": "Windows",
     "architecture": "x86"
   },
-  "release_id": "feature-player-esp-12340-112-single-frame-test",
+  "release_id": "feature-shared-gui-12340-test",
   "state": "test-candidate",
   "canonical_source_policy": "Each active runtime file must point to exact existing src/ lineage or documented external source.",
   "files": [
@@ -33,22 +33,35 @@
       "kind": "dll"
     },
     {
+      "component": "SharedGUI",
+      "path": "runtime/WoW335GUI.dll",
+      "version": "0.1.0-shared-gui-test",
+      "sha256": "858e54caf5140a252fd3fc27a22b5dba41940fcf8cf77ccefe76b5cfc10c5de5",
+      "arch": "x86",
+      "canonical_source": "src/SharedGUI/w335_gui_win32.c",
+      "depends_on": [],
+      "kind": "dll"
+    },
+    {
       "component": "PlayerESP",
       "path": "runtime/PlayerESP335.dll",
-      "version": "0.5.0-112-single-frame-test",
-      "sha256": "7f6adb543208314fedd9d8683730a9caeceeec49083caf785c1e37e92658e7e0",
+      "version": "0.6.0-shared-gui-test",
+      "sha256": "25ac2a45f5bb8946c5d97afeca3d1c633e547e84550e2d13c16d453d3bc059a4",
       "arch": "x86",
       "canonical_source": "src/PlayerESP112Port/esp112_host335.c",
-      "depends_on": [],
+      "depends_on": [
+        "SharedGUI"
+      ],
       "kind": "dll"
     }
   ],
   "compatibility_sets": [
     {
-      "id": "client12340-autoloot-player-esp-test",
+      "id": "client12340-autoloot-sharedgui-playeresp-test",
       "components": [
         "Client12340",
         "AutoLoot",
+        "SharedGUI",
         "PlayerESP"
       ]
     }
