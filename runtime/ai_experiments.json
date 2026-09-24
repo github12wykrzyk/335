@@ -25,6 +25,31 @@
       "verified_commit": null,
       "tests": [],
       "package": null
+    },
+    {
+      "id": "autopickpocket-112-architecture-12340",
+      "goal": "Independent packet-only 12340 adaptation of active 112 AutoLootPP/LongPickPocket mechanisms with nonblocking GUID burst; incoming loot/money ACK path remains unverified",
+      "branch": "feature/autopickpocket-112-architecture-12340",
+      "modules": [
+        "AutoPickPocket"
+      ],
+      "dependencies": [
+        "Client12340",
+        "AutoLoot"
+      ],
+      "shared_resources": [
+        "wow12340:object-manager",
+        "logical:spell-cast",
+        "logical:targeting",
+        "logical:loot-ui",
+        "wow12340:0x006B0B50-client-send-packet",
+        "logical:movement-spoof"
+      ],
+      "status": "in_progress",
+      "observed_head": "d03d54884df3e23ad3922f3bc4133f237e1e6961",
+      "verified_commit": null,
+      "tests": [],
+      "package": null
     }
   ]
 }

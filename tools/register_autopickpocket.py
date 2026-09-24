@@ -36,7 +36,7 @@ def dump(path, data):
     path.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
 def main():
-    if os.name != "nt" or os.environ.get("GITHUB_REF_NAME")!="feature/autopickpocket-packets-12340":
+    if os.name != "nt" or os.environ.get("GITHUB_REF_NAME")!="feature/autopickpocket-112-architecture-12340":
         raise RuntimeError("PP registration is Windows-only and isolated to the PP feature branch")
     manifest_path=ROOT/"runtime/current.json"
     registry_path=ROOT/"runtime/module_registry.json"
@@ -69,7 +69,7 @@ def main():
         shutil.copyfile(compiled,target)
         if hashlib.sha256(target.read_bytes()).hexdigest()!=digest:
             raise RuntimeError("registered DLL changed during copy")
-        row["version"]="1.1.0-packet-test+sha."+digest[:12]
+        row["version"]="1.2.0-112-architecture-test+sha."+digest[:12]
         row["sha256"]=digest
         errors=validate(runtime,registry)
         if errors:
@@ -132,14 +132,14 @@ def main():
     runtime["files"].append({
       "component":PP,
       "path":"runtime/"+NAME,
-      "version":"1.1.0-packet-test+sha."+digest[:12],
+      "version":"1.2.0-112-architecture-test+sha."+digest[:12],
       "sha256":digest,
       "arch":"x86",
       "canonical_source":"src/AutoPickPocket/autopickpocket_win32_host.c",
       "depends_on":[],
       "kind":"dll"
     })
-    runtime["release_id"]="feature-autopickpocket-packets-12340"
+    runtime["release_id"]="feature-autopickpocket-112-architecture-12340"
     runtime["compatibility_sets"]=[{
       "id":"client12340-autoloot-autopickpocket",
       "components":["Client12340","AutoLoot",PP]

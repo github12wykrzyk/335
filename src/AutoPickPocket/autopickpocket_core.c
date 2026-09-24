@@ -205,6 +205,10 @@ static void burst_tick(PpEngine *e,uint32_t now) {
             out=e->api.result(e->api.ctx,p->guid,p->nonce);
         }
         if(out==PP_RESULT_UI_RANGE_HINT)out=PP_RESULT_PENDING;
+        if(out==PP_RESULT_CAST_ACK){
+            if(!p->ack_seen){p->ack_seen=1u;emit(e,PP_EVENT_CAST_ACK,p->guid);}
+            out=PP_RESULT_PENDING; /* Do not terminate this GUID or block the next NPC. */
+        }
         if(out!=PP_RESULT_PENDING) {
             switch(out) {
             case PP_RESULT_SUCCESS:
@@ -245,7 +249,7 @@ static void burst_tick(PpEngine *e,uint32_t now) {
          * This never delays other GUIDs and has no 1.6+2.5s revisit lock. */
         for(j=0u;j<e->queue_count;++j)
             if(same(e->queue[j].guid,p->guid)){
-                if(e->queue[j].eligible==2u){
+                if(e->queue[j].eligible==2u && !p->ack_seen){
                     if(!p->outside_reported){
                         p->outside_reported=1u;
                         emit(e,PP_EVENT_BURST_RANGE_EXIT,p->guid);

@@ -476,8 +476,9 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     switch(kind) {
     case PP_EVENT_CAST: reason="cast_submitted";break;
     case PP_EVENT_SPOOF_SEQUENCE: reason="move_cast_restore_submitted_unverified";break;
-    case PP_EVENT_SUCCESS: reason="verified_result";break;
-    case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_signal";break;
+    case PP_EVENT_SUCCESS: reason="result_claim_requires_loot_confirmation";break;
+    case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_guid_correlated_signal";break;
+    case PP_EVENT_CAST_ACK: reason="cast_ack_guid_correlated_not_theft";break;
     case PP_EVENT_OUT_OF_RANGE: reason="out_of_range_guid_correlated";break;
     case PP_EVENT_UI_RANGE_RECHECKED: reason="ui_range_local_distance_confirmed_not_server_guid";break;
     case PP_EVENT_LINE_OF_SIGHT: reason="line_of_sight";break;

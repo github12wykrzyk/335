@@ -234,10 +234,7 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
        strcmp(q_nonce,want))return PP_RESULT_PENDING;
     if(q_failure[0]!='0' && q_failure[0])
         return classify_failure(q_failure[0]);
-    /* A server spell-success event proves the GUID-specific cast, NOT
-     * inventory delivery. The 80ms grace avoids racing an explicit fail. */
-    if(q_success[0]=='1' && (!latest || elapsed>=80u))
-        return PP_RESULT_SUCCESS;
+    /* A spell acknowledgement proves neither completed loot nor money. */
     /* Unscoped wallet/loot flags may belong to another pending GUID.
      * Only an exact native LOOT_SOURCE match can confirm the current GUID. */
     if(latest &&
@@ -248,9 +245,11 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
         if(source_read && (source.lo|source.hi) && same(source,guid)){
             if(!strcmp(money,want) && !strcmp(loot,want))
                 return PP_RESULT_MONEY_SUCCESS;
-            if(!strcmp(loot,want))return PP_RESULT_SUCCESS;
+            if(!strcmp(loot,want))return PP_RESULT_CAST_ACK;
         }
     }
+    if(q_success[0]=='1' && (!latest || elapsed>=80u))
+        return PP_RESULT_CAST_ACK;
     return PP_RESULT_PENDING;
 }
 /* Do not cancel a newer cast or another GUID on delayed callbacks. */

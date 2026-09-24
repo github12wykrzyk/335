@@ -44,7 +44,8 @@ typedef enum {
     PP_RESULT_OUT_OF_RANGE = 6, PP_RESULT_LINE_OF_SIGHT = 7,
     PP_RESULT_NOT_STEALTHED = 8, PP_RESULT_NOT_READY = 9,
     PP_RESULT_CAST_REJECTED = 10, /* explicit failure without classified reason */
-    PP_RESULT_UI_RANGE_HINT = 11 /* global UI hint + native same-GUID distance recheck, not server GUID proof */
+    PP_RESULT_UI_RANGE_HINT = 11, /* global UI hint + native same-GUID distance recheck, not server GUID proof */
+    PP_RESULT_CAST_ACK = 12 /* exact-GUID cast acknowledgement, NOT loot completion */
 } PpResult;
 typedef enum {
     PP_EVENT_CAST = 1,
@@ -77,7 +78,8 @@ typedef enum {
     PP_EVENT_BURST_RANGE_EXIT = 30, /* exact pending GUID out of reach; never blocks next GUID */
     PP_EVENT_WALLET_OBS = 31, /* global, unattributed positive wallet delta */
     PP_EVENT_BURST_RANGE_RELEASE = 32, /* geometry verified: cancel old pending nonce; short GUID backoff */
-    PP_EVENT_SPOOF_SEQUENCE = 33 /* local packet submissions, not server ACK */
+    PP_EVENT_SPOOF_SEQUENCE = 33, /* local packet submissions, not server ACK */
+    PP_EVENT_CAST_ACK = 34 /* GUID-scoped cast acknowledged; no theft proven */
 } PpEvent;
 typedef struct {
     void *ctx;
@@ -107,7 +109,7 @@ typedef struct {
 typedef struct {
     PpGuid guid;
     uint32_t nonce, started_ms, last_polled_ms;
-    unsigned valid, outside_reported;
+    unsigned valid, outside_reported, ack_seen;
 } PpBurstPending;
 typedef struct {
     PpAdapter api;

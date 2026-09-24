@@ -64,3 +64,9 @@ A user-supplied game report contained consecutive packet submission events follo
 Never call ClearTarget(), TargetUnit() or UnitGUID('target') from the packet or fallback policy: a previous experimental native target-release callback violated the branch's existing no-target-mutation invariant and was removed. Native cast target side effects remain subject to actual in-game verification.
 
 Mandatory plain-Python unit test `tests/test_autopickpocket_exact_packet_gate.py` checks every runtime byte gate against the exact pinned PE32 x86 EXE and verifies the original client send-call displacement, preventing the earlier silent bind failure from passing ordinary verify CI.
+
+## Separate 112 architecture adaptation: cast acknowledgment gate
+
+The wow112 parallel manifest lists active AutoLootPP v0.14, LongPickPocket v1.0 and PickPocketSelectiveRange v10. Editable sources for the first two are explicitly marked functionally equivalent reconstructions, not original sources. This branch carries no 5875 address, opcode framing, detour or binary.
+
+Live result policy now reports GUID-scoped `SPELL_CAST_SUCCESS` as `PP_RESULT_CAST_ACK` only. Burst keeps that GUID pending without stalling other NPCs; confirmed theft requires a matching live loot-source GUID plus same-attempt loot and wallet observations. Failed correlation remains UNKNOWN. The client-owned AutoLoot window behavior is unchanged and no native spell fallback is introduced. These observations are NOT yet a verified 12340 incoming packet / LOOT_MONEY / LOOT_RELEASE interceptor. The full user-requested adaptation and in-game validation remain open.
