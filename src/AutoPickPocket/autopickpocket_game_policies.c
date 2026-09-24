@@ -127,7 +127,7 @@ static void report_ui_observation(void){
        (!observer() || !value("W335PP_BOOT",boot,sizeof(boot))))return;
     if(boot[0] && strcmp(previous_boot,boot)!=0){
         memset(previous,0,sizeof(previous));
-        strcpy_s(previous_boot,sizeof(previous_boot,boot);
+        strcpy_s(previous_boot,sizeof(previous_boot),boot);
         PP335_LogLuaObserverEpoch();
     }
     for(i=0u;i<6u;++i){
