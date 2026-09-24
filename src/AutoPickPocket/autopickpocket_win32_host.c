@@ -326,8 +326,11 @@ static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     return outcome;
 }
 static void end_attempt(void *ctx,PpGuid guid,uint32_t attempt_id) {
+    unsigned i;
     (void)ctx;
     if(!is_game_thread())return;
+    for(i=0u;i<PP_BURST_PENDING_CAP;++i)
+        if(g_flights[i].nonce==attempt_id)g_flights[i].nonce=0u;
     /* Never use missing spell acknowledgement to change transport.
      * Release only this exact nonce; the next cast stays packet-only. */
     if(g_packet_nonce==attempt_id &&

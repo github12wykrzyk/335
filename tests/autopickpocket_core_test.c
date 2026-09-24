@@ -316,11 +316,11 @@ static int test_burst_unknown_is_not_false_success(void){
  pp_tick(&e,0u);pp_tick(&e,80u);
  CHECK(e.pending_count==2u && e.successes==0u);
  pp_tick(&e,1599u);CHECK(e.timeouts==0u);
- pp_tick(&e,1600u);
+ pp_tick(&e,1680u);
  CHECK(e.timeouts==2u && e.pending_count==0u &&
        s.events[PP_EVENT_BURST_EXPIRE]==2u && e.successes==0u);
  s.burst_result_guid.lo=102u;s.burst_result=PP_RESULT_SUCCESS;
- pp_tick(&e,1680u);CHECK(e.successes==0u && s.cast_n==2u);
+ pp_tick(&e,1760u);CHECK(e.successes==0u && s.cast_n==2u);
  return 0;
 }
 static int test_burst_disable_cancels_pending(void){

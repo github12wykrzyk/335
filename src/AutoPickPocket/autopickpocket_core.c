@@ -71,8 +71,11 @@ void pp_enable(PpEngine *engine, int enable) {
     {unsigned k;
      for(k=0u;k<PP_BURST_PENDING_CAP;++k){
          PpBurstPending *p=&engine->pending[k];
-         if(p->valid && engine->api.end_attempt)
-             engine->api.end_attempt(engine->api.ctx,p->guid,p->nonce);
+         if(p->valid) {
+             block(engine,p->guid,0u,0u,1);
+             if(engine->api.end_attempt)
+                 engine->api.end_attempt(engine->api.ctx,p->guid,p->nonce);
+         }
          p->valid=0u;
      }
      engine->pending_count=0u;

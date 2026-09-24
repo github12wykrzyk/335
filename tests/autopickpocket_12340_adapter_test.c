@@ -112,11 +112,11 @@ static int test_bind_guard(void){
     m.hash_ok=1;m.abi_ok=0;CHECK(!pp12340_bind(&a,&h));
     m.abi_ok=1;m.world=0;CHECK(!pp12340_bind(&a,&h));
     m.world=1u;CHECK(pp12340_bind(&a,&h));
-    CHECK(!a.engine.enabled);return 0;
+    CHECK(!a.engine.enabled && a.engine.burst_enabled==1u);return 0;
 }
 static int test_scan_cast_history_world(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
-    CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+    CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
     pp12340_tick(&a,10);CHECK(m.casts==1 && m.last_guid.lo==222 && m.last_guid.hi==20);
     pp12340_tick(&a,20);CHECK(m.casts==1 && a.engine.successes==0);
     m.result=PP_RESULT_SUCCESS;pp12340_tick(&a,30);
@@ -141,7 +141,7 @@ static int test_scan_cast_history_world(void){
 }
 static int test_attempt_correlation(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;uint32_t old_id;
-    defaults(&m);h=host(&m);CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+    defaults(&m);h=host(&m);CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
     pp12340_tick(&a,0);old_id=m.last_attempt;CHECK(old_id!=0u);
     /* Timeout immediately scans the next unblocked NPC in the same pulse. */
     pp12340_tick(&a,1500);
@@ -169,7 +169,7 @@ static int test_silent_commands(void){
 }
 static int test_moving_player_rechecked_before_cast(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
-    CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+    CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
     m.move_player_after_scan=1u;
     pp12340_tick(&a,0);
     CHECK(m.player_pos_calls>=2u && m.casts==0u && a.engine.retries==0u);
@@ -184,7 +184,7 @@ static int test_moving_player_rechecked_before_cast(void){
 }
 static int test_fail_closed_filter(void){
     Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
-    CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+    CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
     m.usable=0;pp12340_tick(&a,0);CHECK(m.casts==0);
     m.usable=1;m.eligible_a=0;m.eligible_b=0;
     pp12340_tick(&a,100);CHECK(m.casts==0);
@@ -193,7 +193,7 @@ static int test_fail_closed_filter(void){
 }
 static int test_spatial_gate_avoids_distant_eligibility_calls(void){
  Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
- CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
  m.move_player_after_scan=1u; /* after player located: scan still near */
  pp12340_tick(&a,0u);
  CHECK(m.eligible_calls<=2u+PP_LOCAL_FAILOVER_LIMIT);
@@ -204,7 +204,7 @@ static int test_spatial_gate_avoids_distant_eligibility_calls(void){
 }
 static int test_cached_player_revalidates_and_resets(void){
  Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
- CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
  pp12340_tick(&a,0u);
  CHECK(a.cached_manager==MANAGER && a.cached_player_obj==PLAYER);
  CHECK(a.last_scan_candidates==2u && a.last_scan_duration_ms==3u);
@@ -217,7 +217,7 @@ static int test_cached_player_revalidates_and_resets(void){
 static int test_borderline_range_is_skipped_before_native_cast(void){
  Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
  m.npc_b_distance=4.5f;
- CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
  pp12340_tick(&a,0u);
  CHECK(m.casts==1u && m.last_guid.lo==111u);
  return 0;
@@ -225,7 +225,7 @@ static int test_borderline_range_is_skipped_before_native_cast(void){
 static int test_detect_ahead_does_not_cast_beyond_native_range(void){
  Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
  m.npc_a_distance=15.0f;m.npc_b_distance=7.0f;
- CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
  pp12340_tick(&a,0u);
  CHECK(m.casts==0u && a.engine.queue_count==1u);
  CHECK(a.engine.queue[0].guid.lo==222u && a.engine.queue[0].eligible==2u);
@@ -237,7 +237,7 @@ static int test_detect_ahead_does_not_cast_beyond_native_range(void){
 static int test_discover_new_npc_while_previous_result_pending(void){
  Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
  m.npc_a_distance=15.0f;
- CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
  pp12340_tick(&a,0u);
  CHECK(m.casts==1u && m.last_guid.lo==222u);
  m.npc_a_distance=3.0f;
@@ -249,7 +249,7 @@ static int test_discover_new_npc_while_previous_result_pending(void){
 }
 static int test_native_bridge_releases_policy_before_next_cast(void){
  Mock m;Pp12340Adapter a;Pp12340Host h;uint32_t old;defaults(&m);h=host(&m);
- CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
  pp12340_tick(&a,10u);old=m.last_attempt;
  CHECK(m.casts==1u && m.last_guid.lo==222u);
  pp12340_tick(&a,910u);
@@ -260,7 +260,7 @@ static int test_native_bridge_releases_policy_before_next_cast(void){
 static int test_motion_priority_and_world_reset(void){
  Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
  m.npc_a_distance=0.0f;m.npc_b_distance=3.8f;m.usable=0u;
- CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
  pp12340_tick(&a,0u);CHECK(m.casts==0u && a.player_sample_valid);
  m.clock_value+=80u;m.player_x=1.0f;m.usable=1u;
  pp12340_tick(&a,80u);
@@ -271,7 +271,7 @@ static int test_motion_priority_and_world_reset(void){
 }
 static int test_unscoped_ui_hint_requires_native_same_guid_range(void){
  Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
- CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
+ CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;pp12340_enable(&a,1);
  pp12340_tick(&a,0u);CHECK(m.casts==1u && m.last_guid.lo==222u);
  m.result=PP_RESULT_UI_RANGE_HINT;
  pp12340_tick(&a,80u); /* still in reach: UI alone MUST NOT end attempt */
