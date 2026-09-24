@@ -9,8 +9,13 @@ class EspLuaFallback(unittest.TestCase):
         assert 'CreateFrame(\\"Button\\",nil,frame)' in src
         assert 'ESP335HUD:SetVisible' in src
         assert 'ESP335HUD:Paint({' in src
-        assert 'esp335_project(cam,p->position' in src
-        assert 'ESP335_LUA_POINTS 48u' in src
+        assert 'esp335_project(cam,anchor' in src
+        assert 'qsort(candidates,found' in src
+        assert 'e.range=40' in src
+        assert 'r[7]<=self.range' in src
+        assert 'math.abs(p[1]-x)<98' in src
+        assert 'ESP335_LUA_POINTS 24u' in src
+        assert 'ESP335_NPC_LABEL_Z 1.60f' in src
     def test_only_autoloot_executes_client_lua(self):
         loot=(ROOT/"src/AutoLoot/autoloot_win32_host.c").read_text()
         esp=(ROOT/"src/PlayerESP/player_esp_win32_host.c").read_text()
