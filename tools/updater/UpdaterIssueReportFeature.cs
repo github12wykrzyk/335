@@ -425,6 +425,7 @@ namespace WoW335Updater
                 var confirmedGuids = new HashSet<string>(StringComparer.Ordinal);
                 var walletGuids = new HashSet<string>(StringComparer.Ordinal);
                 var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
+                var variants = new HashSet<string>(StringComparer.Ordinal);
                 long parsed = 0, invalid = 0;
                 foreach (var path in paths)
                 {
@@ -438,16 +439,26 @@ namespace WoW335Updater
                             catch { ++invalid; continue; }
                             if (record == null || GetString(record, "module") != "AutoPickPocket") continue;
                             ++parsed;
+                            var variant = GetString(record, "variant");
+                            if (variant != "native" && variant != "packet")
+                            {
+                                var filename = Path.GetFileName(path);
+                                variant = filename.StartsWith("AutoPickPocket.native.", StringComparison.OrdinalIgnoreCase)
+                                    ? "native" : filename.StartsWith("AutoPickPocket.packet.", StringComparison.OrdinalIgnoreCase)
+                                    ? "packet" : "legacy_unknown";
+                            }
+                            variants.Add(variant);
                             var reason = GetString(record, "reason");
                             if (string.IsNullOrWhiteSpace(reason)) reason = "<unspecified>";
-                            if (!reasons.ContainsKey(reason)) reasons[reason] = 0;
-                            ++reasons[reason];
+                            var reasonKey = variant + "." + reason;
+                            if (!reasons.ContainsKey(reasonKey)) reasons[reasonKey] = 0;
+                            ++reasons[reasonKey];
                             var session = GetString(record, "session_id");
                             if (string.IsNullOrWhiteSpace(session)) session = "legacy-session-unknown";
                             var guidLo = GetLong(record, "guid_lo");
                             var guidHi = GetLong(record, "guid_hi");
                             if (guidLo == 0 && guidHi == 0) continue;
-                            var guidKey = session + ":" + guidHi + ":" + guidLo;
+                            var guidKey = variant + ":" + session + ":" + guidHi + ":" + guidLo;
                             if (reason == "cast_submitted")
                             {
                                 attempts.Add(guidKey + ":" + GetLong(record, "attempt"));
@@ -464,12 +475,21 @@ namespace WoW335Updater
                 }
                 sb.AppendLine("Scope: " + paths.Length + " retained file(s), " + parsed
                     + " parsed module event(s), " + invalid + " malformed/truncated line(s).");
-                sb.AppendLine("Submitted attempts: " + attempts.Count + "; distinct submitted GUID/session: "
-                    + castGuids.Count + "; GUID/session with cast result: " + confirmedGuids.Count
-                    + "; GUID/session with wallet/loot heuristic: " + walletGuids.Count + ".");
+                foreach (var variant in variants.OrderBy(x => x, StringComparer.Ordinal))
+                {
+                    var prefix = variant + ":";
+                    sb.AppendLine("Variant " + variant + ": submitted attempts "
+                        + attempts.Count(x => x.StartsWith(prefix, StringComparison.Ordinal))
+                        + "; distinct submitted GUID/session "
+                        + castGuids.Count(x => x.StartsWith(prefix, StringComparison.Ordinal))
+                        + "; GUID/session with cast result "
+                        + confirmedGuids.Count(x => x.StartsWith(prefix, StringComparison.Ordinal))
+                        + "; GUID/session with wallet/loot heuristic "
+                        + walletGuids.Count(x => x.StartsWith(prefix, StringComparison.Ordinal)) + ".");
+                }
                 sb.AppendLine("WARNING: verified_result verifies the cast, not inventory loot. "
                     + "wallet_loot_signal does not independently prove GUID attribution. "
-                    + "GUID/session counts can merge multiple legacy sessions. "
+                    + "Legacy shared files are variant-unknown; GUID/session counts can merge multiple legacy sessions. "
                     + "Missing or rotated-away events are NOT counted.");
                 foreach (var pair in reasons.OrderBy(p => p.Key, StringComparer.Ordinal))
                     sb.AppendLine("reason." + pair.Key + "=" + pair.Value);
