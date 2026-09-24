@@ -45,6 +45,9 @@ jobs:
         run: |
           objdump -d -M intel --start-address=0x004f58c0 --stop-address=0x004f5a20 Wow.exe | head -n 100
           objdump -d -M intel --start-address=0x004f65e0 --stop-address=0x004f6950 Wow.exe | head -n 260
+      - name: Print native 112 W2S signature port leads (NOT callable ABI)
+        run: |
+          python -c "import json;d=json.load(open('dist/esp_client_static_audit.json'));print(json.dumps(d['reference_112_native_pattern_leads'],indent=2))"
       - name: Test reference safety and portable ESP core
         run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v && python -m unittest discover -s tests -p 'test_player_esp_win32_host.py' -v && python -m unittest discover -s tests -p 'test_esp_client_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_camera.py' -v && python -m unittest discover -s tests -p 'test_player_esp_render.py' -v && python -m unittest discover -s tests -p 'test_player_esp_lua.py' -v
       - name: Publish inert reference inventory (not game package)

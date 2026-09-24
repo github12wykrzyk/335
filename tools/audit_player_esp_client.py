@@ -105,7 +105,31 @@ def audit(exe: Path,manifest: dict):
         row["executable_immediate_xrefs"]=refs
         row["first_64_bytes"]=(raw[row["file_offset"]:row["file_offset"]+64].hex()
             if row.get("mapped") else None)
-    return {"client_sha256":digest,"client_bytes":len(raw),
+    # Compare byte-pattern leads from native 1.12.1 W2S/DDC with the exact
+    # 12340 .text only. A matching prefix is a lead, NEVER a valid call ABI.
+    source_112_signatures = {
+        "world_to_screen": bytes.fromhex("558bec83ec248b45088b5004568bf18b"),
+        "ddc_to_ndc": bytes.fromhex("558bec85c9740bd94508d835"),
+    }
+    port_leads = {}
+    for name,signature in source_112_signatures.items():
+        leads=[]
+        for prefix_len in (len(signature),min(12,len(signature)),min(9,len(signature))):
+            prefix=signature[:prefix_len]
+            addresses=[]
+            for section_name,rva,virtual_size,raw_ptr,raw_size,flags in sections:
+                if not (flags & 0x20000000):continue
+                segment=raw[raw_ptr:raw_ptr+raw_size]
+                pos=0
+                while len(addresses)<16:
+                    at=segment.find(prefix,pos)
+                    if at<0:break
+                    pos=at+1
+                    addresses.append(f"0x{base+rva+at:08x}")
+            leads.append({"prefix_bytes":prefix_len,"candidate_addresses":addresses})
+        port_leads[name]=leads
+    return {"reference_112_native_pattern_leads":port_leads,
+            "client_sha256":digest,"client_bytes":len(raw),
             "image_base":f"0x{base:08x}",
             "purpose":"static leads only; no function signatures/ABIs proven",
             "candidates":result}
