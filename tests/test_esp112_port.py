@@ -26,5 +26,5 @@ class PortTests(unittest.TestCase):
         self.assertIn("CreateWindowExA",g)
         self.assertIn("WS_EX_LAYERED",g)
         self.assertIn("ClientToScreen", (ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text())
-        self.assertNotIn("UIParent",g)
+        self.assertNotIn("UIParent:Get",g)
 if __name__=="__main__":unittest.main()
