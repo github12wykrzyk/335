@@ -282,15 +282,20 @@ static int project_native(void *context,Esp335Vec3 point,float *px,float *py) {
     uintptr_t fn=W2S_NATIVE_VA;
     float world[3],screen[3]={0.f,0.f,0.f};
     float min_x,min_y,max_x,max_y,x,y;
+    float native_rect[4];
     (void)context;
     if (!g_scanner.bound || !on_thread() || !px || !py ||
         !_finite(point.x) || !_finite(point.y) || !_finite(point.z) ||
         !read32(NULL,WORLD_FRAME_PTR,&frame) ||
-        !readable((uintptr_t)frame,0x74u) ||
+        !readable((uintptr_t)frame,0x340u) ||
         !read_float((uintptr_t)frame+W2S_RECT_LEFT,&min_x) ||
         !read_float((uintptr_t)frame+W2S_RECT_BOTTOM,&min_y) ||
         !read_float((uintptr_t)frame+W2S_RECT_RIGHT,&max_x) ||
         !read_float((uintptr_t)frame+W2S_RECT_TOP,&max_y) ||
+        !read_float((uintptr_t)frame+0x330u,&native_rect[0]) ||
+        !read_float((uintptr_t)frame+0x334u,&native_rect[1]) ||
+        !read_float((uintptr_t)frame+0x338u,&native_rect[2]) ||
+        !read_float((uintptr_t)frame+0x33cu,&native_rect[3]) ||
         max_x<=min_x || max_y<=min_y) return 0;
     world[0]=point.x;world[1]=point.y;world[2]=point.z;
     __try {
@@ -312,12 +317,16 @@ static int project_native(void *context,Esp335Vec3 point,float *px,float *py) {
         ++g_w2s_rejected;
         return 0;
     }
-    x=(screen[0]-min_x)/(max_x-min_x);
-    y=(screen[1]-min_y)/(max_y-min_y);
-    if (!_finite(x) || !_finite(y) || x<0.f || x>1.f ||
-        y<0.f || y>1.f) return 0;
+    /* The native output is already transformed into WorldFrame's RENDER
+     * rectangle (+0x330..0x33c). The smaller +0x64..0x70 CLIP extents
+     * from the in-game report are NOT another screen-space viewport.
+     * E.g. x=0.0908 / clip_right=0.4903 doubled the marker's x. */
+    if (!esp335_native_screen_to_ui(screen[0],screen[1],native_rect,&x,&y)) {
+        ++g_w2s_rejected;
+        return 0;
+    }
     *px=x;
-    *py=1.f-y; /* viewport bottom-up -> Lua top-left */
+    *py=y; /* output is UI top-down; Lua Paint flips for bottom-left */
     ++g_w2s_success;
     /* 12340 W2S computes output using +0x330..0x33c render extent,
      * while the prior 335 adapter normalized by +0x64..0x70 clip rect.
@@ -331,11 +340,8 @@ static int project_native(void *context,Esp335Vec3 point,float *px,float *py) {
             g_w2s_probe[0]=screen[0];g_w2s_probe[1]=screen[1];
             g_w2s_probe[2]=min_x;g_w2s_probe[3]=min_y;
             g_w2s_probe[4]=max_x;g_w2s_probe[5]=max_y;
-            for (i=0u;i<4u;++i)
-                if (!read_float((uintptr_t)frame+0x330u+4u*i,
-                                &g_w2s_probe[6u+i]))
-                    g_w2s_probe[6u+i]=0.f;
-            g_w2s_probe[10]=x;g_w2s_probe[11]=y;
+            for (i=0u;i<4u;++i) g_w2s_probe[6u+i]=native_rect[i];
+            g_w2s_probe[10]=x;g_w2s_probe[11]=1.f-y;
             g_w2s_probe_ready=1u;
         }
     }

@@ -22,5 +22,12 @@ class EspCameraTests(unittest.TestCase):
             result=subprocess.run([str(exe)],capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             self.assertIn("PLAYER_ESP_CAMERA: PASS",result.stdout)
+    def test_335_native_render_domain_not_clip_domain(self):
+        host=(ROOT/"src/PlayerESP/player_esp_win32_host.c").read_text()
+        self.assertIn("esp335_native_screen_to_ui(screen[0],screen[1],native_rect,&x,&y)",host)
+        self.assertNotIn("(screen[0]-min_x)/(max_x-min_x)",host)
+        self.assertNotIn("(screen[1]-min_y)/(max_y-min_y)",host)
+        self.assertIn("frame+0x330u,&native_rect[0]",host)
+
 if __name__=="__main__":
     unittest.main()

@@ -51,3 +51,26 @@ int esp335_camera_build(const Esp335CameraAxes *a, Esp335Camera *out) {
     out->local_position=a->eye;
     return 1;
 }
+
+/* Exact-client 12340 native WorldToScreen uses +0x330..0x33c to
+ * transform to output coordinates. +0x64..0x70 are CLIP extents and
+ * must never be used a second time to scale the output. */
+int esp335_native_screen_to_ui(float raw_x,float raw_y,
+                                const float render_lbrt[4],
+                                float *out_u,float *out_v) {
+    float left,bottom,right,top,x,y;
+    if (!render_lbrt || !out_u || !out_v ||
+        !isfinite(raw_x) || !isfinite(raw_y)) return 0;
+    left=render_lbrt[0];bottom=render_lbrt[1];
+    right=render_lbrt[2];top=render_lbrt[3];
+    if (!isfinite(left) || !isfinite(bottom) ||
+        !isfinite(right) || !isfinite(top) ||
+        right-left<0.00001f || top-bottom<0.00001f) return 0;
+    x=(raw_x-left)/(right-left);
+    y=(raw_y-bottom)/(top-bottom);
+    if (!isfinite(x) || !isfinite(y) || x<0.f || x>1.f ||
+        y<0.f || y>1.f) return 0;
+    *out_u=x;
+    *out_v=1.f-y;
+    return 1;
+}

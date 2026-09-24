@@ -11,4 +11,10 @@ typedef struct {
     float viewport_x, viewport_y, viewport_width, viewport_height;
 } Esp335CameraAxes;
 int esp335_camera_build(const Esp335CameraAxes *axes, Esp335Camera *out);
+/* Native 12340 W2S writes into WorldFrame render rectangle (+0x330..0x33c).
+ * Its +0x64..0x70 rectangle is a CLIP domain, not an output viewport.
+ * out_u is left->right, out_v is top->bottom, each in [0,1]. */
+int esp335_native_screen_to_ui(float raw_x,float raw_y,
+                                const float render_lbrt[4],
+                                float *out_u,float *out_v);
 #endif
