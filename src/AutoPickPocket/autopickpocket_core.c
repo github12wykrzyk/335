@@ -267,10 +267,17 @@ static void burst_tick(PpEngine *e,uint32_t now) {
             }
         if(!p->valid)continue;
         if((uint32_t)(now-p->started_ms)>=PP_BURST_OBSERVE_MS) {
-            /* UNKNOWN, not a failed cast or a successfully looted NPC.
-             * The short GUID backoff prevents a new multi-second lock. */
-            block(e,p->guid,now,PP_BURST_UNKNOWN_BACKOFF_MS,0);
-            ++e->timeouts;emit(e,PP_EVENT_BURST_EXPIRE,p->guid);
+            /* An ACK can mean the NPC was already picked: retrying after
+             * an uncorrelated wallet event spams the same GUID. Quarantine
+             * it for this world session without claiming any money/theft.
+             * Truly unanswered sends retain their short per-GUID backoff. */
+            if(p->ack_seen){
+                block(e,p->guid,now,0u,1);
+                ++e->timeouts;emit(e,PP_EVENT_ACK_LOOT_UNKNOWN,p->guid);
+            }else{
+                block(e,p->guid,now,PP_BURST_UNKNOWN_BACKOFF_MS,0);
+                ++e->timeouts;emit(e,PP_EVENT_BURST_EXPIRE,p->guid);
+            }
             if(e->api.end_attempt)
                 e->api.end_attempt(e->api.ctx,p->guid,p->nonce);
             p->valid=0u;--e->pending_count;

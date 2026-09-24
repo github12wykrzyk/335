@@ -366,4 +366,22 @@ static int test_burst_range_exit_ignores_unattributed_hint_in_range(void){
  CHECK(e.successes==0u);
  return 0;
 }
-int main(void){if(test_burst_range_exit_ignores_unattributed_hint_in_range()||test_burst_range_exit_releases_only_correlated_nonce()||test_burst_disable_cancels_pending()||test_burst_unknown_is_not_false_success()||test_burst_local_range_skips_unsubmitted_guid()||test_burst_sends_next_guid_before_first_result()||test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+static int test_burst_ack_without_loot_quarantines_only_own_guid(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));
+ e.burst_enabled=1u;pp_enable(&e,1);
+ pp_tick(&e,0u);CHECK(s.cast_n==1u && s.casted[0].lo==102u);
+ s.burst_result_guid.lo=102u;s.burst_result=PP_RESULT_CAST_ACK;
+ pp_tick(&e,80u);
+ CHECK(s.cast_n==2u && s.casted[1].lo==101u && e.pending_count==2u);
+ CHECK(e.successes==0u && s.events[PP_EVENT_CAST_ACK]==1u);
+ pp_tick(&e,980u);
+ CHECK(e.pending_count==0u && e.successes==0u);
+ CHECK(s.events[PP_EVENT_ACK_LOOT_UNKNOWN]==1u);
+ CHECK(s.events[PP_EVENT_BURST_EXPIRE]==1u); /* the other GUID had no ACK */
+ s.burst_result_guid.lo=0u;s.result=PP_RESULT_PENDING;
+ pp_tick(&e,1180u);
+ CHECK(s.cast_n==3u && s.casted[2].lo==101u); /* no repeat for ACK GUID */
+ CHECK(e.successes==0u);
+ return 0;
+}
+int main(void){if(test_burst_ack_without_loot_quarantines_only_own_guid()||test_burst_range_exit_ignores_unattributed_hint_in_range()||test_burst_range_exit_releases_only_correlated_nonce()||test_burst_disable_cancels_pending()||test_burst_unknown_is_not_false_success()||test_burst_local_range_skips_unsubmitted_guid()||test_burst_sends_next_guid_before_first_result()||test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

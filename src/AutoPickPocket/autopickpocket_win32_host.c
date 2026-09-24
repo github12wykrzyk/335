@@ -424,7 +424,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
             }
     } else if(kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
               kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
-              kind==PP_EVENT_BURST_EXPIRE ||
+              kind==PP_EVENT_BURST_EXPIRE || kind==PP_EVENT_ACK_LOOT_UNKNOWN ||
               kind==PP_EVENT_BURST_RANGE_RELEASE || kind==PP_EVENT_INELIGIBLE ||
               kind==PP_EVENT_MONEY_SUCCESS || kind==PP_EVENT_OUT_OF_RANGE ||
               kind==PP_EVENT_LINE_OF_SIGHT || kind==PP_EVENT_NOT_STEALTHED ||
@@ -479,6 +479,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_SUCCESS: reason="result_claim_requires_loot_confirmation";break;
     case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_guid_correlated_signal";break;
     case PP_EVENT_CAST_ACK: reason="cast_ack_guid_correlated_not_theft";break;
+    case PP_EVENT_ACK_LOOT_UNKNOWN: reason="cast_ack_loot_unconfirmed_guid_quarantined";break;
     case PP_EVENT_OUT_OF_RANGE: reason="out_of_range_guid_correlated";break;
     case PP_EVENT_UI_RANGE_RECHECKED: reason="ui_range_local_distance_confirmed_not_server_guid";break;
     case PP_EVENT_LINE_OF_SIGHT: reason="line_of_sight";break;

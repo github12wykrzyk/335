@@ -14,6 +14,9 @@ class ResultSeparation(unittest.TestCase):
         self.assertIn("if(out==PP_RESULT_CAST_ACK)",p)
         self.assertIn("out=PP_RESULT_PENDING;",p)
         self.assertIn("if(!p->ack_seen)",p)
+        self.assertIn("if(p->ack_seen)",p)
+        self.assertIn("PP_EVENT_ACK_LOOT_UNKNOWN",p)
+        self.assertIn("block(e,p->guid,now,0u,1);",p)
     def test_no_native_fallback(self):
         p=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.c").read_text()
         self.assertIn("((send_fn)PP335_SEND_VA)(&packet)",p)
