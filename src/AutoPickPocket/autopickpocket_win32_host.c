@@ -352,6 +352,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_NOT_READY: reason="not_ready";break;
     case PP_EVENT_CAST_REJECTED: reason="cast_rejected_unknown";break;
     case PP_EVENT_PREFETCH_ONLY: reason="candidates_outside_cast_range";break;
+    case PP_EVENT_LOCAL_RANGE_REJECT: reason="local_range_precheck_rejected";break;
 
     case PP_EVENT_EMPTY: reason="no_pockets";break;
     case PP_EVENT_RETRY: reason="temporary_failure";break;
