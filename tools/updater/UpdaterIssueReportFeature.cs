@@ -462,6 +462,7 @@ namespace WoW335Updater
                 sb.AppendLine();
                 sb.AppendLine("### WoWDiagHub recent logs");
                 AppendPickPocketAuditSummary(sb, root);
+                AppendPickPocketAttemptSummary(sb, root);
                 var files = GetRecentDiagFiles(root);
                 if (files.Length == 0)
                 {
@@ -591,6 +592,98 @@ namespace WoW335Updater
                     dialog.AcceptButton = yes;
                     dialog.CancelButton = no;
                     return dialog.ShowDialog(form) == DialogResult.Yes;
+                }
+            }
+
+
+            private sealed class AttemptAudit
+            {
+                public string Variant, Session, Guid, Transport;
+                public long Nonce, SubmittedMs, LastOrdinal;
+                public bool Submitted;
+                public readonly List<string> Outcomes = new List<string>();
+            }
+
+            // Human-readable attempt-level audit complements the lossless
+            // ZIP. Never equate a cast ACK or global UI error with GUID loot.
+            private void AppendPickPocketAttemptSummary(StringBuilder sb, string root)
+            {
+                var folder = Path.Combine(root, ".wow335_debug");
+                if (!Directory.Exists(folder)) return;
+                var paths = Directory.GetFiles(folder, "AutoPickPocket*.jsonl")
+                    .OrderBy(File.GetLastWriteTimeUtc).ToArray();
+                var attempts = new Dictionary<string, AttemptAudit>(StringComparer.Ordinal);
+                long ordinal = 0;
+                foreach (var path in paths)
+                {
+                    try
+                    {
+                        foreach (var line in File.ReadLines(path, Encoding.UTF8))
+                        {
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+                            Dictionary<string, object> rec;
+                            try { rec = AsDictionary(json.DeserializeObject(line)); }
+                            catch { continue; }
+                            if (rec == null || GetString(rec, "module") != "AutoPickPocket") continue;
+                            var nonce = GetLong(rec, "attempt");
+                            var lo = GetLong(rec, "guid_lo");
+                            var hi = GetLong(rec, "guid_hi");
+                            if (nonce <= 0 || (lo == 0 && hi == 0)) continue;
+                            var variant = GetString(rec, "variant");
+                            if (variant != "native" && variant != "packet") variant = "legacy_unknown";
+                            var session = GetString(rec, "session_id");
+                            if (string.IsNullOrWhiteSpace(session)) session = "legacy-session-unknown";
+                            var guid = hi + ":" + lo;
+                            var key = variant + "/" + session + "/" + nonce + "/" + guid;
+                            AttemptAudit attempt;
+                            if (!attempts.TryGetValue(key, out attempt))
+                            {
+                                attempt = new AttemptAudit {
+                                    Variant = variant, Session = session,
+                                    Nonce = nonce, Guid = guid,
+                                    Transport = "unknown", SubmittedMs = 0
+                                };
+                                attempts.Add(key, attempt);
+                            }
+                            attempt.LastOrdinal = ++ordinal;
+                            var reason = GetString(rec, "reason");
+                            if (reason == "cast_submitted")
+                            {
+                                attempt.Submitted = true;
+                                attempt.SubmittedMs = GetLong(rec, "ms");
+                                var transport = GetString(rec, "transport");
+                                if (!string.IsNullOrWhiteSpace(transport))
+                                    attempt.Transport = transport;
+                            }
+                            else if (attempt.Outcomes.Count < 8 && reason.Length > 0)
+                            {
+                                var delay = GetLong(rec, "result_wait_ms");
+                                attempt.Outcomes.Add(reason
+                                    + (delay > 0 ? "@" + delay + "ms" : ""));
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine("Attempt audit skipped unreadable " + Path.GetFileName(path)
+                            + ": " + ex.GetType().Name);
+                    }
+                }
+                sb.AppendLine();
+                sb.AppendLine("### AutoPickPocket attempt lifecycle (recent retained records)");
+                sb.AppendLine("All retained attempts: " + attempts.Count
+                    + "; preview: latest up to 60; complete surviving raw records in ZIP comments.");
+                sb.AppendLine("wallet_loot_signal = indicative (not independently server-confirmed); "
+                    + "verified_result = cast result only. Global UI errors have NO GUID and are not assigned here.");
+                foreach (var a in attempts.Values.OrderBy(x => x.LastOrdinal)
+                    .Skip(Math.Max(0, attempts.Count - 60)))
+                {
+                    sb.AppendLine("attempt " + a.Variant + "/" + a.Session
+                        + " #" + a.Nonce + " guid=" + a.Guid
+                        + " submit_ms=" + (a.Submitted ? a.SubmittedMs.ToString() : "not_in_retained_logs")
+                        + " transport=" + a.Transport
+                        + " outcomes=" + (a.Outcomes.Count > 0
+                            ? string.Join(",", a.Outcomes.ToArray()) : "no_outcome_retained"));
                 }
             }
 
