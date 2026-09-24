@@ -173,3 +173,40 @@ The `no_ack_count` log field is always zero in this packet-only TEST:
 previous native-switch bookkeeping was removed, not evidence that the
 server acknowledged all casts. Only authoritative spell/loot observations
 can establish a result; a 200ms timeout is an unknown outcome.
+
+## Packet-only nonblocking GUID burst (isolated TEST)
+
+The old single-active-attempt scheduler blocked all new GUIDs while
+waiting for the last spell result or its 200ms timeout. Normal play now
+uses a nonblocking queue: one packet per loader pulse, at least 80ms
+between distinct GUID submissions, up to 32 bounded outstanding GUID/nonce
+result observations. A different eligible GUID can be sent without waiting
+for the preceding loot, cast animation or result. The scanner remains live,
+and the adapter rechecks exact GUID, native NPC type, health, position and
+spell usability immediately before every packet. The native 5-argument
+cast path remains removed. One explicit /appp probe uses the older isolated
+single-attempt path; the registered ordinary game module defaults to burst.
+
+Combat-log success/failure is looked up using the original GUID and nonce
+in the Lua observer table for up to 1600ms after submission. Result
+observation cannot stop new GUID sends. An already pending GUID never gets
+a duplicate packet. If the exact GUID leaves local reach, a single
+pending_guid_left_range_nonblocking diagnostic records that fact, but
+does not infer server failure or terminate the independently tracked result.
+A confirmed server GUID-scoped out_of_range has a 200ms local backoff;
+a purely local pre-submit range miss sends NO packet and tries another
+candidate in the same pulse. An unconfirmed result after 1600ms stays
+UNKNOWN and is excluded from immediate resend for 2500ms; it is never
+counted as successfully looted or definitively failed. Full pending slots
+and server spell readiness are still natural send gates.
+
+A global UI range message or unattributed wallet/loot notification cannot
+be assigned to a particular pending GUID. Independent
+wallet_delta_unattributed diagnostics record money-increase event counts
+and total copper increase but make no claim as to which NPC was robbed.
+Only a GUID-scoped server spell result or an exact native loot-source match
+verifies a specific NPC. 0 wallet_loot_signal is therefore possible despite
+real successful robberies in burst mode. Compare actual in-game currency,
+server-correlated results, new pending/unknown counters, the lack of native
+fallback, and the observed inter-packet cadence for one exact candidate SHA.
+Do not infer in-game success from Windows x86 build or CI tests alone.

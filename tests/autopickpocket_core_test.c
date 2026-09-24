@@ -8,6 +8,8 @@ typedef struct {
     PpGuid casted[16]; unsigned cast_n, permitted, scans, events[32], cast_ok;
     PpGuid local_range_guid;
     unsigned local_range_count;
+    PpGuid burst_result_guid;
+    PpResult burst_result;
     uint32_t last_attempt, expected_result_attempt;
     uint32_t end_attempt_id; PpGuid end_guid; unsigned end_count;
 } Stub;
@@ -20,7 +22,7 @@ static int cast(void *p,PpGuid g,uint32_t attempt){Stub *s=(Stub *)p;s->last_att
 static void end_attempt(void *p,PpGuid g,uint32_t attempt){
  Stub *s=(Stub*)p;s->end_guid=g;s->end_attempt_id=attempt;++s->end_count;
 }
-static PpResult result(void *p,PpGuid g,uint32_t attempt){Stub *s=(Stub *)p;(void)g;return s->expected_result_attempt && s->expected_result_attempt!=attempt ? PP_RESULT_PENDING : s->result;}
+static PpResult result(void *p,PpGuid g,uint32_t attempt){Stub *s=(Stub *)p;if(s->burst_result_guid.lo && g.lo==s->burst_result_guid.lo && g.hi==s->burst_result_guid.hi)return s->burst_result;return s->expected_result_attempt && s->expected_result_attempt!=attempt ? PP_RESULT_PENDING : s->result;}
 static void event(void *p,PpEvent e,PpGuid g,uint32_t attempt){(void)g;(void)attempt; ++((Stub *)p)->events[e];}
 static PpAdapter adapter(Stub *s){PpAdapter a;memset(&a,0,sizeof(a));a.ctx=s;a.scan=scan;a.can_cast=can_cast;a.cast_on_guid=cast;a.result=result;a.end_attempt=end_attempt;a.event=event;return a;}
 static void init(Stub *s){memset(s,0,sizeof(*s));s->permitted=1;s->cast_ok=1;s->t[0].guid.lo=101;s->t[0].eligible=1;s->t[0].distance_sq=4;s->t[1].guid.lo=102;s->t[1].eligible=1;s->t[1].distance_sq=1;s->n=2;}
@@ -283,4 +285,51 @@ static int test_motion_prefers_front_target_only_with_valid_direction(void){
        e.last_selection_forward==0u);
  return 0;
 }
-int main(void){if(test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+static int test_burst_sends_next_guid_before_first_result(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));
+ e.burst_enabled=1u;pp_enable(&e,1);
+ pp_tick(&e,0u);CHECK(s.cast_n==1u && s.casted[0].lo==102u);
+ CHECK(e.pending_count==1u && e.successes==0u);
+ pp_tick(&e,79u);CHECK(s.cast_n==1u);
+ pp_tick(&e,80u);CHECK(s.cast_n==2u && s.casted[1].lo==101u);
+ CHECK(e.pending_count==2u && e.successes==0u);
+ s.burst_result_guid.lo=102u;s.burst_result=PP_RESULT_SUCCESS;
+ pp_tick(&e,160u);
+ CHECK(e.successes==1u && e.pending_count==1u);
+ s.burst_result_guid.lo=101u;s.burst_result=PP_RESULT_EMPTY;
+ pp_tick(&e,240u);
+ CHECK(e.empty==1u && e.pending_count==0u && s.cast_n==2u);
+ return 0;
+}
+static int test_burst_local_range_skips_unsubmitted_guid(void){
+ Stub s;PpEngine e;init(&s);s.local_range_guid.lo=102u;
+ CHECK(pp_init(&e,adapter(&s)));e.burst_enabled=1u;pp_enable(&e,1);
+ pp_tick(&e,0u);
+ CHECK(s.local_range_count==1u && s.cast_n==1u &&
+       s.casted[0].lo==101u && e.pending_count==1u);
+ CHECK(s.events[PP_EVENT_LOCAL_RANGE_REJECT]==1u && e.retries==0u);
+ return 0;
+}
+static int test_burst_unknown_is_not_false_success(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));
+ e.burst_enabled=1u;pp_enable(&e,1);
+ pp_tick(&e,0u);pp_tick(&e,80u);
+ CHECK(e.pending_count==2u && e.successes==0u);
+ pp_tick(&e,1599u);CHECK(e.timeouts==0u);
+ pp_tick(&e,1600u);
+ CHECK(e.timeouts==2u && e.pending_count==0u &&
+       s.events[PP_EVENT_BURST_EXPIRE]==2u && e.successes==0u);
+ s.burst_result_guid.lo=102u;s.burst_result=PP_RESULT_SUCCESS;
+ pp_tick(&e,1680u);CHECK(e.successes==0u && s.cast_n==2u);
+ return 0;
+}
+static int test_burst_disable_cancels_pending(void){
+ Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));
+ e.burst_enabled=1u;pp_enable(&e,1);
+ pp_tick(&e,0u);pp_tick(&e,80u);CHECK(e.pending_count==2u);
+ pp_enable(&e,0);CHECK(e.pending_count==0u && s.end_count==2u);
+ pp_enable(&e,1);pp_tick(&e,200u);CHECK(s.cast_n==2u);
+ pp_reset(&e);pp_tick(&e,280u);CHECK(s.cast_n==3u);
+ return 0;
+}
+int main(void){if(test_burst_disable_cancels_pending()||test_burst_unknown_is_not_false_success()||test_burst_local_range_skips_unsubmitted_guid()||test_burst_sends_next_guid_before_first_result()||test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

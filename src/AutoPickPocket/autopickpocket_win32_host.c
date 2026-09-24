@@ -32,9 +32,12 @@ static DWORD g_last_bind_ms;
 static unsigned g_desired_enable;
 static unsigned g_pulse_running;
 static uint32_t g_last_pulse_ms,g_pulse_delta_ms;
-static uint32_t g_last_cast_ms,g_last_result_ms,g_inflight_attempt;
+static uint32_t g_last_cast_ms,g_last_result_ms;
+typedef struct {uint32_t nonce,started_ms;} PpHostFlight;
+static PpHostFlight g_flights[PP_BURST_PENDING_CAP];
 static uint32_t g_log_session;
 static unsigned g_ui_category,g_ui_count;
+static uint32_t g_wallet_delta_copper;
 static uint8_t g_packet_cast_count;
 /* No alternate transport: every accepted cast must use SendPacket. */
 static uint32_t g_packet_nonce;
@@ -340,7 +343,7 @@ static uint64_t world_token(void *ctx) {
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     wchar_t path[MAX_PATH],dir[MAX_PATH],older[MAX_PATH],newer[MAX_PATH],*slash;
-    char line[512];
+    char line[768];
     const char *reason="attempt";
     DWORD ignored;
     HANDLE file;
@@ -354,21 +357,31 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     if(!g_log_session)g_log_session=now ^ (uint32_t)GetCurrentProcessId() ^
         (uint32_t)(uintptr_t)g_self;
     if(kind==PP_EVENT_CAST){
+        unsigned k;
         if(g_last_cast_ms)cast_gap=(uint32_t)(now-g_last_cast_ms);
         if(g_last_result_ms)next_wait=(uint32_t)(now-g_last_result_ms);
         g_last_cast_ms=now;
-        g_inflight_attempt=attempt_id;
-    } else if((kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
-               kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
-               (kind==PP_EVENT_INELIGIBLE || kind==PP_EVENT_MONEY_SUCCESS ||
-                kind==PP_EVENT_OUT_OF_RANGE || kind==PP_EVENT_LINE_OF_SIGHT ||
-                kind==PP_EVENT_NOT_STEALTHED || kind==PP_EVENT_NOT_READY ||
-                kind==PP_EVENT_CAST_REJECTED ||
-                kind==PP_EVENT_UI_RANGE_RECHECKED)) &&
-              g_inflight_attempt && attempt_id==g_inflight_attempt){
-        result_wait=(uint32_t)(now-g_last_cast_ms);
-        g_last_result_ms=now;
-        g_inflight_attempt=0u;
+        for(k=0u;k<PP_BURST_PENDING_CAP;++k)
+            if(!g_flights[k].nonce || g_flights[k].nonce==attempt_id){
+                g_flights[k].nonce=attempt_id;
+                g_flights[k].started_ms=now;
+                break;
+            }
+    } else if(kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
+              kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
+              kind==PP_EVENT_BURST_EXPIRE || kind==PP_EVENT_INELIGIBLE ||
+              kind==PP_EVENT_MONEY_SUCCESS || kind==PP_EVENT_OUT_OF_RANGE ||
+              kind==PP_EVENT_LINE_OF_SIGHT || kind==PP_EVENT_NOT_STEALTHED ||
+              kind==PP_EVENT_NOT_READY || kind==PP_EVENT_CAST_REJECTED ||
+              kind==PP_EVENT_UI_RANGE_RECHECKED){
+        unsigned k;
+        for(k=0u;k<PP_BURST_PENDING_CAP;++k)
+            if(g_flights[k].nonce && g_flights[k].nonce==attempt_id){
+                result_wait=(uint32_t)(now-g_flights[k].started_ms);
+                g_last_result_ms=now;
+                g_flights[k].nonce=0u;
+                break;
+            }
     }
     if(g_adapter.engine.scan_started)
         queue_age=(uint32_t)(now-g_adapter.engine.queue_built_ms);
@@ -419,6 +432,9 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_EMPTY: reason="no_pockets";break;
     case PP_EVENT_RETRY: reason="temporary_failure";break;
     case PP_EVENT_TIMEOUT: reason="result_timeout";break;
+    case PP_EVENT_BURST_EXPIRE: reason="burst_result_unknown_after_1600ms";break;
+    case PP_EVENT_BURST_RANGE_EXIT: reason="pending_guid_left_range_nonblocking";break;
+    case PP_EVENT_WALLET_OBS: reason="wallet_delta_unattributed";break;
     case PP_EVENT_INELIGIBLE: reason="permanent_failure";break;
     case PP_EVENT_GAVE_UP: reason="retry_budget_exhausted";break;
     case PP_EVENT_NOT_CASTABLE: reason="not_castable";break;
@@ -440,7 +456,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"variant\":\"packet\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"selection_forward\":%u,\"candidates_ready\":%u,\"transport\":\"%s\",\"no_ack_count\":%u,\"count_since_poll\":%u}\n",
+       "{\"module\":\"AutoPickPocket\",\"variant\":\"packet\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"selection_forward\":%u,\"candidates_ready\":%u,\"transport\":\"%s\",\"no_ack_count\":%u,\"count_since_poll\":%u,\"pending_results\":%u,\"wallet_delta_copper\":%lu}\n",
        (unsigned long)g_log_session,(unsigned long)now,(unsigned)kind,reason,
        (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi,
        (unsigned long)g_adapter.last_scan_duration_ms,
@@ -451,9 +467,11 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
        (unsigned long)next_wait,
        g_adapter.engine.last_selection_forward,
        g_adapter.engine.last_selection_ready,
-       "packet",0u,g_ui_count);
+       "packet",0u,g_ui_count,
+       g_adapter.engine.pending_count,(unsigned long)g_wallet_delta_copper);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);
     CloseHandle(file);
+    g_wallet_delta_copper=0u;
 }
 /* Called only from the verified game thread after the ordinary Lua frame
  * has been re-created. Uses the same session_id and rotated JSONL writer. */
@@ -463,6 +481,14 @@ void PP335_LogLuaObserverEpoch(void) {
 }
 /* The UI message has no target GUID. Preserve category/count on the
  * SAME rotated writer and native session as the cast lifecycle. */
+void PP335_LogWalletObservation(unsigned count,uint32_t copper) {
+    PpGuid none={0u,0u};
+    if(!is_game_thread() || !count)return;
+    g_ui_count=count;
+    g_wallet_delta_copper=copper;
+    event(NULL,PP_EVENT_WALLET_OBS,none,0u);
+    g_ui_count=0u;
+}
 void PP335_LogUiObservation(unsigned category, unsigned count) {
     PpGuid none={0u,0u};
     if(!is_game_thread() || !count)return;

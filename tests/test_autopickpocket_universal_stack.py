@@ -35,7 +35,9 @@ class UniversalPPStack(unittest.TestCase):
         policy=(ROOT/"src/AutoPickPocket/autopickpocket_game_policies.c").read_text()
         self.assertIn("g_packet_nonce==attempt_id",host)
         self.assertIn("((send_fn)PP335_SEND_VA)(&packet)",host)
-        self.assertIn('       "packet",0u,g_ui_count);',host)
+        self.assertIn('       "packet",0u,g_ui_count,',host)
+        self.assertIn("pending_results",host)
+        self.assertIn("wallet_delta_unattributed",host)
         for forbidden in ("native_fn", "using_native", "g_native_failover",
                           "g_packet_unanswered", "packet_no_ack_native_fallback",
                           "native_fallback", "PP_EVENT_PACKET_FALLBACK"):

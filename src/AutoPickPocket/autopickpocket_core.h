@@ -12,7 +12,12 @@ extern "C" {
 #define PP_HISTORY_CAP 256u
 #define PP_SCAN_INTERVAL_MS 60u
 #define PP_QUEUE_TTL_MS 160u
-#define PP_RESULT_TIMEOUT_MS 200u /* experimental, late success may be missed */
+#define PP_RESULT_TIMEOUT_MS 200u /* retained for the single-target probe only */
+#define PP_BURST_PENDING_CAP 32u
+#define PP_BURST_MIN_SEND_MS 80u /* one packet per pulse and bounded rate */
+#define PP_BURST_OBSERVE_MS 1600u /* asynchronous result window, never a send barrier */
+#define PP_BURST_RESULT_POLL_MS 80u
+#define PP_BURST_UNKNOWN_BACKOFF_MS 2500u
 #define PP_RETRY_DELAY_MS 800u
 #define PP_RANGE_RETRY_DELAY_MS 200u /* correlated GUID or independently checked UI range hint */
 #define PP_LOCAL_RANGE_BACKOFF_MS 250u
@@ -66,7 +71,10 @@ typedef enum {
     PP_EVENT_LOCAL_RANGE_REJECT = 25,
     PP_EVENT_LUA_EPOCH = 26 /* Lua observer recreated, including /reload */,
     PP_EVENT_UI_OBSERVATION = 27, /* unscoped UI error, never a GUID result */
-    PP_EVENT_UI_RANGE_RECHECKED = 28 /* UI range hint with native distance evidence, NOT a GUID-scoped server failure */
+    PP_EVENT_UI_RANGE_RECHECKED = 28, /* old single-target UI hint */
+    PP_EVENT_BURST_EXPIRE = 29, /* result unknown, not failed theft */
+    PP_EVENT_BURST_RANGE_EXIT = 30, /* exact pending GUID out of reach; never blocks next GUID */
+    PP_EVENT_WALLET_OBS = 31 /* global, unattributed positive wallet delta */
 } PpEvent;
 typedef struct {
     void *ctx;
@@ -94,8 +102,16 @@ typedef struct {
     unsigned attempts; /* includes refused submissions and timed-out casts */
 } PpHistory;
 typedef struct {
+    PpGuid guid;
+    uint32_t nonce, started_ms, last_polled_ms;
+    unsigned valid, outside_reported;
+} PpBurstPending;
+typedef struct {
     PpAdapter api;
     PpHistory history[PP_HISTORY_CAP];
+    PpBurstPending pending[PP_BURST_PENDING_CAP];
+    unsigned pending_count, burst_enabled, burst_sent;
+    uint32_t last_burst_send_ms;
     PpGuid active;
     /* Monotonic nonce isolates delayed responses from old casts or worlds. */
     uint32_t active_attempt_id, next_attempt_id;

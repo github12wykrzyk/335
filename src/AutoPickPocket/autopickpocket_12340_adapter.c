@@ -255,6 +255,7 @@ int pp12340_bind(Pp12340Adapter *a,const Pp12340Host *host) {
     api.end_attempt=pp_end_attempt;
     api.event=pp_event;
     if (!pp_init(&a->engine,api)) return 0;
+    a->engine.burst_enabled=1u; /* packet-only macro-like nonblocking send */
     a->bound=1u;
     return 1;
 }

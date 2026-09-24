@@ -68,6 +68,15 @@ void pp_enable(PpEngine *engine, int enable) {
     if (!engine) return;
     if (engine->active_valid && engine->api.end_attempt)
         engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
+    {unsigned k;
+     for(k=0u;k<PP_BURST_PENDING_CAP;++k){
+         PpBurstPending *p=&engine->pending[k];
+         if(p->valid && engine->api.end_attempt)
+             engine->api.end_attempt(engine->api.ctx,p->guid,p->nonce);
+         p->valid=0u;
+     }
+     engine->pending_count=0u;
+    }
     engine->enabled=enable ? 1u : 0u;
     /* Disable forgets pending cast, but not confirmed terminal history. */
     engine->active_valid=0u;
@@ -82,6 +91,16 @@ void pp_reset(PpEngine *engine) {
     if (!engine) return;
     if (engine->active_valid && engine->api.end_attempt)
         engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
+    {unsigned k;
+     for(k=0u;k<PP_BURST_PENDING_CAP;++k){
+         PpBurstPending *p=&engine->pending[k];
+         if(p->valid && engine->api.end_attempt)
+             engine->api.end_attempt(engine->api.ctx,p->guid,p->nonce);
+         p->valid=0u;
+     }
+     engine->pending_count=0u;
+     engine->burst_sent=0u;
+    }
     memset(engine->history,0,sizeof(engine->history));
     engine->history_next=0u;
     engine->diagnostic_started=0u;
@@ -162,6 +181,149 @@ static void refresh_snapshot(PpEngine *e,uint32_t now) {
     count=e->api.scan(e->api.ctx,e->queue,PP_SCAN_CAP);
     e->queue_count=count>PP_SCAN_CAP ? PP_SCAN_CAP : count;
 }
+/* Burst mode mirrors repeated mouseover macro submission: never wait for
+ * loot, animation or a result before choosing a different GUID. Bounded
+ * per-GUID result observations continue independently, on the game thread.
+ * Legacy single-target probe intentionally keeps its isolated state machine. */
+static void burst_tick(PpEngine *e,uint32_t now) {
+    unsigned i,local_rejects;
+    size_t j;
+    PpTarget best={0};
+    PpHistory *h;
+    int found,has_prefetch,submit;
+    for(i=0u;i<PP_BURST_PENDING_CAP;++i){
+        PpBurstPending *p=&e->pending[i];
+        PpResult out=PP_RESULT_PENDING;
+        if(!p->valid)continue;
+        e->active_attempt_id=p->nonce; /* exact GUID/nonce in all event records */
+        if(!p->last_polled_ms ||
+           (uint32_t)(now-p->last_polled_ms)>=PP_BURST_RESULT_POLL_MS){
+            p->last_polled_ms=now ? now : 1u;
+            out=e->api.result(e->api.ctx,p->guid,p->nonce);
+        }
+        if(out==PP_RESULT_UI_RANGE_HINT)out=PP_RESULT_PENDING;
+        if(out!=PP_RESULT_PENDING) {
+            switch(out) {
+            case PP_RESULT_SUCCESS:
+            case PP_RESULT_MONEY_SUCCESS:
+                block(e,p->guid,now,0u,1);++e->successes;
+                emit(e,out==PP_RESULT_MONEY_SUCCESS ?
+                     PP_EVENT_MONEY_SUCCESS : PP_EVENT_SUCCESS,p->guid);break;
+            case PP_RESULT_EMPTY:
+                block(e,p->guid,now,0u,1);++e->empty;
+                emit(e,PP_EVENT_EMPTY,p->guid);break;
+            case PP_RESULT_PERMANENT:
+                block(e,p->guid,now,0u,1);
+                emit(e,PP_EVENT_INELIGIBLE,p->guid);break;
+            case PP_RESULT_OUT_OF_RANGE:
+                h=entry(e,p->guid,1);
+                if(h->attempts)--h->attempts; /* range is not a loot retry */
+                block(e,p->guid,now,PP_RANGE_RETRY_DELAY_MS,0);
+                ++e->retries;emit(e,PP_EVENT_OUT_OF_RANGE,p->guid);break;
+            default:
+                /* Server-scoped nonrange reject. Unscoped UI errors never
+                 * arrive here as GUID-specific outcomes. */
+                failure(e,p->guid,now,PP_RETRY_DELAY_MS,
+                    out==PP_RESULT_LINE_OF_SIGHT ? PP_EVENT_LINE_OF_SIGHT :
+                    out==PP_RESULT_NOT_STEALTHED ? PP_EVENT_NOT_STEALTHED :
+                    out==PP_RESULT_NOT_READY ? PP_EVENT_NOT_READY :
+                    PP_EVENT_CAST_REJECTED);
+                ++e->retries;break;
+            }
+            if(e->api.end_attempt)
+                e->api.end_attempt(e->api.ctx,p->guid,p->nonce);
+            p->valid=0u;--e->pending_count;
+            continue;
+        }
+        if(!p->outside_reported) {
+            for(j=0u;j<e->queue_count;++j)
+                if(same(e->queue[j].guid,p->guid) &&
+                   e->queue[j].eligible==2u){
+                    p->outside_reported=1u;
+                    emit(e,PP_EVENT_BURST_RANGE_EXIT,p->guid);
+                    break;
+                }
+        }
+        if((uint32_t)(now-p->started_ms)>=PP_BURST_OBSERVE_MS) {
+            /* UNKNOWN, not a failed cast or a successfully looted NPC.
+             * Keep it away from immediate resend; do not block other GUIDs. */
+            block(e,p->guid,now,PP_BURST_UNKNOWN_BACKOFF_MS,0);
+            ++e->timeouts;emit(e,PP_EVENT_BURST_EXPIRE,p->guid);
+            if(e->api.end_attempt)
+                e->api.end_attempt(e->api.ctx,p->guid,p->nonce);
+            p->valid=0u;--e->pending_count;
+        }
+    }
+    if(!e->queue_count || e->pending_count>=PP_BURST_PENDING_CAP)return;
+    if(e->burst_sent &&
+       (uint32_t)(now-e->last_burst_send_ms)<PP_BURST_MIN_SEND_MS)return;
+    if(e->api.can_cast(e->api.ctx)!=1){
+        idle_event(e,PP_EVENT_NOT_CASTABLE,now);return;
+    }
+    /* No range-error feedback loop: every local range refusal skips directly
+     * to another fresh GUID, without submitting or consuming attempts. */
+    for(local_rejects=0u;local_rejects<PP_LOCAL_FAILOVER_LIMIT;++local_rejects){
+        found=0;has_prefetch=0;e->last_selection_ready=0u;
+        e->last_selection_forward=0u;
+        for(j=0u;j<e->queue_count;++j){
+            PpTarget t=e->queue[j];
+            unsigned k,inflight=0u;
+            if(!nonzero(t.guid) ||
+               !(t.distance_sq>=0.0f && t.distance_sq<FLT_MAX))continue;
+            if(t.eligible==2u){has_prefetch=1;continue;}
+            if(t.eligible!=1u)continue;
+            for(k=0u;k<PP_BURST_PENDING_CAP;++k)
+                if(e->pending[k].valid &&
+                   same(e->pending[k].guid,t.guid)){inflight=1u;break;}
+            if(inflight)continue;
+            h=entry(e,t.guid,0);
+            if(h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
+                     !deadline_reached(now,h->blocked_until_ms)))continue;
+            ++e->last_selection_ready;
+            if(!found || (t.forward && !best.forward) ||
+               (t.forward==best.forward && t.distance_sq<best.distance_sq)){
+                best=t;found=1;
+            }
+        }
+        if(!found){
+            idle_event(e,has_prefetch ? PP_EVENT_PREFETCH_ONLY :
+                       PP_EVENT_ALL_BLOCKED,now);
+            return;
+        }
+        e->last_selection_forward=best.forward;
+        h=entry(e,best.guid,1);
+        ++h->attempts;
+        if(++e->next_attempt_id==0u)++e->next_attempt_id;
+        e->active_attempt_id=e->next_attempt_id;
+        submit=e->api.cast_on_guid(e->api.ctx,best.guid,e->active_attempt_id);
+        if(submit==1){
+            for(i=0u;i<PP_BURST_PENDING_CAP;++i)
+                if(!e->pending[i].valid){
+                    PpBurstPending *p=&e->pending[i];
+                    memset(p,0,sizeof(*p));
+                    p->guid=best.guid;p->nonce=e->active_attempt_id;
+                    p->started_ms=now;p->valid=1u;
+                    ++e->pending_count;break;
+                }
+            e->last_burst_send_ms=now;e->burst_sent=1u;++e->casts;
+            emit(e,PP_EVENT_CAST,best.guid);
+            return; /* max one submitted packet per game-thread pulse */
+        }
+        if(e->api.end_attempt)
+            e->api.end_attempt(e->api.ctx,best.guid,e->active_attempt_id);
+        if(submit==PP_CAST_LOCAL_RANGE){
+            --h->attempts;
+            h->blocked_until_ms=now+PP_LOCAL_RANGE_BACKOFF_MS;
+            emit(e,PP_EVENT_LOCAL_RANGE_REJECT,best.guid);
+            continue;
+        }
+        /* No packet submitted. Do not consume server retry budget. */
+        --h->attempts;
+        h->blocked_until_ms=now+PP_RETRY_DELAY_MS;
+        ++e->retries;emit(e,PP_EVENT_RETRY,best.guid);
+        return;
+    }
+}
 void pp_tick(PpEngine *engine, uint32_t now) {
     PpTarget best = {0}; /* MSVC /W4: initialized even on the no-candidate path. */
     size_t i;
@@ -172,6 +334,10 @@ void pp_tick(PpEngine *engine, uint32_t now) {
     unsigned local_rejects;
     if (!engine || !engine->enabled) return;
     refresh_snapshot(engine,now); /* also while waiting for result */
+    if(engine->burst_enabled && !engine->probe_mode){
+        burst_tick(engine,now);
+        return;
+    }
     if (engine->active_valid) {
         outcome=engine->api.result(engine->api.ctx,engine->active,engine->active_attempt_id);
         switch(outcome) {

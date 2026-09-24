@@ -18,23 +18,23 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn("f:SetScript('OnEvent'",POLICY)
         self.assertIn("f:RegisterEvent('LOOT_OPENED')",POLICY)
         self.assertIn('_G.W335PP_O=n',POLICY)
-    def test_nonce_guid_correlated_server_result_and_bounded_fallback(self):
-        for value in ('SPELL_CAST_SUCCESS','COMBAT_LOG_EVENT_UNFILTERED',
-                      'nonce!=current_attempt','!same(guid,current_target)',
-                      'read_u32(LOOT_SOURCE,&source.lo)','same(source,guid)',
-                      'PP_RESULT_PENDING','PP_RESULT_EMPTY',
-                      'PP_RESULT_OUT_OF_RANGE','PP_RESULT_CAST_REJECTED','elapsed>=80u'):
+    def test_nonce_guid_correlated_server_result_without_wallet_guess(self):
+        for value in ("SPELL_CAST_SUCCESS","COMBAT_LOG_EVENT_UNFILTERED",
+                      "r.n","r.s","r.f","strcmp(q_nonce,want)",
+                      "read_u32(LOOT_SOURCE,&source.lo)","same(source,guid)",
+                      "PP_RESULT_PENDING","PP_RESULT_EMPTY",
+                      "PP_RESULT_OUT_OF_RANGE","PP_RESULT_CAST_REJECTED",
+                      "elapsed>=80u","W335PP_WALLET_COUNT",
+                      "PP335_LogWalletObservation"):
             self.assertIn(value,POLICY)
-        self.assertLess(POLICY.index('!strcmp(empty,want)'),
-                        POLICY.index('return PP_RESULT_SUCCESS;'))
-        self.assertLess(POLICY.index('!strcmp(fail,want)'),
-                        POLICY.index('return PP_RESULT_SUCCESS;'))
-        self.assertIn('dg==_G.W335PP_G',POLICY)
-        self.assertIn('t-_G.W335PP_T<=0.4',POLICY)
-        self.assertIn('W335PP_RANGE',POLICY)
-        self.assertIn('SPELL_FAILED_OUT_OF_RANGE',POLICY)
-        self.assertIn('ERR_OUT_OF_RANGE',POLICY)
-        self.assertIn('!strcmp(range,want)',POLICY)
+        self.assertIn("q_failure[0]",POLICY)
+        self.assertIn("dg==_G.W335PP_G",POLICY)
+        self.assertIn("W335PP_BURST",POLICY)
+        self.assertIn("t-_G.W335PP_T<=0.4",POLICY)
+        self.assertIn("SPELL_FAILED_OUT_OF_RANGE",POLICY)
+        self.assertIn("ERR_OUT_OF_RANGE",POLICY)
+        self.assertNotIn("(!source_read || !(source.lo|source.hi)",POLICY)
+        self.assertNotIn("GetTickCount()-started_ms)<PP_RESULT_TIMEOUT_MS",POLICY)
     def test_unscoped_ui_error_never_becomes_exact_guid_failure(self):
         ui=POLICY.split("elseif ev=='UI_ERROR_MESSAGE' then",1)[1].split("   end\\n  end)\\n",1)[0]
         self.assertIn("_G.W335PP_UI_ACTIVE_RANGE=n",ui)
@@ -51,8 +51,10 @@ class SpellAndResultTests(unittest.TestCase):
         host_header=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.h").read_text()
         core_header=(ROOT/"src/AutoPickPocket/autopickpocket_core.h").read_text()
         self.assertIn("PP_RESULT_TIMEOUT_MS 200u",core_header)
-        self.assertIn("GetTickCount()-started_ms)<PP_RESULT_TIMEOUT_MS",POLICY)
-        self.assertIn("if(elapsed>PP_RESULT_TIMEOUT_MS)",POLICY)
+        self.assertIn("PP_BURST_OBSERVE_MS 1600u",core_header)
+        self.assertIn("p->nonce",core)
+        self.assertIn("burst_tick(engine,now)",core)
+        self.assertIn("if(latest)elapsed=",POLICY)
         self.assertNotIn("GetTickCount()-started_ms)<1500u",POLICY)
         self.assertIn("nonce==current_attempt",POLICY)
         self.assertIn("same(guid,current_target))clear();",POLICY)
