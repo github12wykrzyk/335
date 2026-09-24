@@ -72,6 +72,7 @@ try {
     # New yellow ESP must follow red and displace green regardless of branch name.
     $esp='feature/player-esp-12340'
     $branches.Add($esp)
+    $null=$arrange.Invoke($form,$parameters) # initialize newly discovered badge before assigning status
     $null=$set.Invoke($form,[object[]]@('work','SUCCESS','1234567890','passed'))
     $null=$set.Invoke($form,[object[]]@('main','SUCCESS','1234567890','passed'))
     $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-12340','SUCCESS','1234567890','passed'))
@@ -91,6 +92,7 @@ try {
     # Brand-new red branches also displace older green statuses.
     $newFail='feature/new-critical-12340'
     $branches.Add($newFail)
+    $null=$arrange.Invoke($form,$parameters)
     $null=$set.Invoke($form,[object[]]@($newFail,'FAIL','1234567890','failed'))
     $null=$arrange.Invoke($form,$parameters)
     if ($badges.Controls[1].Controls[0].Text -notlike 'new-critical-12340*' -or
@@ -98,9 +100,10 @@ try {
         throw "New red and yellow branches did not displace green statuses."
     }
     # More urgent branches than slots: menu retains overflow in the SAME order.
+    foreach ($n in 1..5) { $branches.Add("feature/critical-$n") }
+    $null=$arrange.Invoke($form,$parameters)
     foreach ($n in 1..5) {
         $name="feature/critical-$n"
-        $branches.Add($name)
         $null=$set.Invoke($form,[object[]]@($name,'FAIL','1234567890','failed'))
     }
     $null=$arrange.Invoke($form,$parameters)
