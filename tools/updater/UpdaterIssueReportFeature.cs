@@ -174,8 +174,10 @@ namespace WoW335Updater
                     else if (!onlyAutoLoot) bodyCore += "\nPP_ARCHIVE_STATUS: NO_RETAINED_LOGS (no full-session evidence).\n";
                     var signatureSeed = onlyAutoLoot
                         ? "AUTOLOOT335-DIAG-V1\n" + headSha + "\n" + autoLootLog
-                        : "PP-FULL-ARCHIVE-V1\n" + BuildSignatureSeed(root, headSha, runId)
+                        : "PP-FULL-ARCHIVE-V2\n" + headSha + "\n" + runId
                           + "\n" + (archive == null ? "NO_LOGS" : archive.Sha256);
+                    // Stable across retries: updater log, timestamp and tail previews
+                    // must NOT change the issue key for the same captured ZIP.
                     var signature = Sha256Text(signatureSeed).Substring(0, 12);
                     var marker = "[diag:" + signature + "]";
                     var title = onlyAutoLoot
@@ -724,20 +726,29 @@ namespace WoW335Updater
 
             private async Task<long> FindExistingIssueAsync(HttpClient client, string marker)
             {
-                using (var response = await client.GetAsync(ApiRoot + "/issues?state=open&per_page=100"))
+                // Page through existing open AND closed reports. Do not serialize
+                // 100 full issue bodies in one request (JavaScriptSerializer limit).
+                for (int page = 1; page <= 50; ++page)
                 {
-                    var text = await response.Content.ReadAsStringAsync();
-                    if (!response.IsSuccessStatusCode)
+                    using (var response = await client.GetAsync(ApiRoot
+                        + "/issues?state=all&per_page=10&page=" + page))
                     {
-                        HandleAuthenticationFailure(response.StatusCode);
-                        throw new InvalidOperationException("GitHub Issues HTTP " + (int)response.StatusCode + ": " + TrimForError(text));
-                    }
-                    foreach (var item in AsArray(json.DeserializeObject(text)))
-                    {
-                        var row = item as Dictionary<string, object>;
-                        if (row == null) continue;
-                        if (GetString(row, "title").IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
-                            return GetLong(row, "number");
+                        var text = await response.Content.ReadAsStringAsync();
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            HandleAuthenticationFailure(response.StatusCode);
+                            throw new InvalidOperationException("GitHub Issues HTTP "
+                                + (int)response.StatusCode + ": " + TrimForError(text));
+                        }
+                        var rows = AsArray(json.DeserializeObject(text));
+                        foreach (var item in rows)
+                        {
+                            var row = item as Dictionary<string, object>;
+                            if (row == null) continue;
+                            if (GetString(row, "title").IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
+                                return GetLong(row, "number");
+                        }
+                        if (rows.Length < 10) break;
                     }
                 }
                 return 0;
