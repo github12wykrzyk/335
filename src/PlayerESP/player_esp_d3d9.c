@@ -210,6 +210,9 @@ void esp335_d3d9_uninstall(void) {
         g_slot=NULL;g_original=NULL;g_callback=NULL;g_user=NULL;
     }
 }
+int esp335_d3d9_installed(void) {
+    return g_slot && InterlockedCompareExchange(&g_enabled,0,0) != 0;
+}
 unsigned esp335_d3d9_frames(void) {
     return (unsigned)InterlockedCompareExchange(&g_frames,0,0);
 }

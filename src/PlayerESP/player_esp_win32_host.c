@@ -245,7 +245,7 @@ static void try_renderer(void) {
     if (!g_enabled || !on_thread() || !g_scanner.bound ||
         !g_game_window || (DWORD)(now-g_install_try_ms)<2500u) return;
     g_install_try_ms=now;
-    if (!esp335_d3d9_frames()) {
+    if (!esp335_d3d9_installed()) {
         esp335_d3d9_install(g_game_window,draw_frame,NULL);
     }
 }

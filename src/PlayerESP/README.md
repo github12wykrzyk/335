@@ -42,3 +42,9 @@ na dokładnym `Wow.exe` i połączenie z loaderem pozostają do wykonania.
 ## Etap 3: rzeczywisty host x86 (nadal nie wizualne ESP)
 
 `player_esp_win32_host.c` eksportuje W335_* i korzysta z loadera. Przy inicjalizacji sprawdza SHA klienta i prolog pozycji, odczytuje zdrowie/max zdrowie i enumeruje graczy na watku gry. Nieznane frakcja/klasa/BG sa zerowane, nie zgadywane. Log zbiorczy (bez GUID i nazw): `.wow335_debug/PlayerESP.jsonl` co 5 s. Brak drugiego loadera, patchera i hooka D3D. Workflow kompiluje realna PE32 x86 DLL i sprawdza eksporty; publikuje wylacznie raport builda, NIE DLL, bo nadal brak renderera/targetowania, rejestracji aktywnego runtime i testu w grze. SHA/prolog nie sa dowodem pelnego ABI. Nie instalowac tej DLL samodzielnie.
+
+## Etap 4: camera + D3D9 marker prototype
+
+Host odczytuje live worldFrame/activeCamera, sprawdza wektory i zakresy FoV/near/far oraz oblicza macierz projekcji w `player_esp_camera.c`. Renderer `player_esp_d3d9.c` zakłada **wyłączną własność** slotu 42 vtable EndScene D3D9 i buduje markery: punkt gracza, pasek HP, dystans cyframi. Wsparcie wymaga aktywnego backendu D3D9 i współdzielonego vtable HAL; w razie błędu kamery, niezainicjalizowanego renderera czy zmiany epoch nie rysuje nic. Nie ma kliknięcia / targetowania ani nazw / klasy (metadane nieweryfikowane).
+
+Z uwagi na konflikt z dowolnym innym właścicielem EndScene (np. niezależnym ConsoleXP / overlay), nie wolno równocześnie uruchamiać innych niezależnych hooków D3D9. Raport zawiera liczniki render_frames/camera_ok/camera_bad/markers, ale tylko rzeczywisty test w kliencie potwierdzi poprawną pozycję nakładki. DLL nie jest w aktywnym runtime i nie jest paczką gry.

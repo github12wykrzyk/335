@@ -9,6 +9,7 @@
 typedef void (*Esp335RenderCallback)(IDirect3DDevice9 *, void *);
 int esp335_d3d9_install(HWND hwnd, Esp335RenderCallback callback, void *user);
 void esp335_d3d9_uninstall(void);
+int esp335_d3d9_installed(void);
 unsigned esp335_d3d9_frames(void);
 unsigned esp335_d3d9_dropped(void);
 size_t esp335_d3d9_draw_labels(IDirect3DDevice9 *device,
