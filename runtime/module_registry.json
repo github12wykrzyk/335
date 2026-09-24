@@ -127,6 +127,10 @@
         {
           "id": "wow12340:0x0080DA40-guid-spell-cast",
           "mode": "exclusive"
+        },
+        {
+          "id": "logical:movement-spoof",
+          "mode": "exclusive"
         }
       ],
       "build": {

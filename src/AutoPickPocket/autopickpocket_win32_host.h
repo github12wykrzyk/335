@@ -22,6 +22,8 @@ typedef struct {
      * This callback may not grant eligibility to an unknown/other type. */
     uint32_t (*creature_type)(void *,uintptr_t obj,PpGuid target);
     int (*spell_usable)(void *,uint32_t spell_id);
+    /* Query real player facing only when ordinary ground movement is valid. */
+    int (*movement_facing)(void *,float *facing);
     /* Arms authoritative correlation before each native cast. Return 0 if
      * the observer cannot associate a result with this GUID and nonce. */
     int (*begin_attempt)(void *,PpGuid target,uint32_t attempt_id);

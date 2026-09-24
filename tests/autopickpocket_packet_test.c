@@ -20,6 +20,18 @@ int main(void){
     if(pp335_build_cast_packet(NULL,sizeof(b),0,1u,0u)!=0u)return 4;
     if(pp335_build_cast_packet(b,0u,0,1u,0u)!=0u)return 5;
     if(pp335_build_cast_packet(b,sizeof(b),0,0xffffffffu,0xffffffffu)!=23u)return 6;
+    {
+        uint8_t heartbeat[PP335_MOVE_PACKET_CAP];
+        const float pos[3]={1.0f,2.0f,3.0f};
+        const uint8_t header[]={0xee,0,0,0,1,1,0,0,0,0,0,0,0x44,0x33,0x22,0x11};
+        if(pp335_build_heartbeat(heartbeat,sizeof(heartbeat),1u,0u,0x11223344u,pos,0.0f)!=36u ||
+           memcmp(heartbeat,header,sizeof(header)))return 7;
+        if(pp335_build_heartbeat(heartbeat,35u,1u,0u,0u,pos,0.0f)!=0u)return 8;
+        if(pp335_build_heartbeat(heartbeat,sizeof(heartbeat),0u,0u,0u,pos,0.0f)!=0u)return 9;
+        if(pp335_build_heartbeat(heartbeat,sizeof(heartbeat),1u,0u,0u,pos,7.0f)!=0u)return 10;
+        if(pp335_build_heartbeat(heartbeat,sizeof(heartbeat),0xffffffffu,
+                  0xffffffffu,0u,pos,0.0f)!=PP335_MOVE_PACKET_CAP)return 11;
+    }
     puts("PP335 packet codec: PASS");
     return 0;
 }

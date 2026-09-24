@@ -195,6 +195,16 @@ static int begin_attempt(void *ctx,PpGuid guid,uint32_t nonce){
         (void)run("local b=_G.W335PP_BURST;if b then local t=GetTime();for k,v in pairs(b) do if t-v.t>2 then b[k]=nil end end end");
     return 1; /* arming is NOT successful theft */
 }
+static int movement_facing(void *ctx,float *facing){
+    char out[48],*end=NULL;double angle;
+    (void)ctx;
+    if(!is_owner() || !facing ||
+       !run("local p=UnitExists and UnitExists('player');local ok=p and not(UnitIsDeadOrGhost and UnitIsDeadOrGhost('player')) and not(UnitInVehicle and UnitInVehicle('player')) and not(UnitOnTaxi and UnitOnTaxi('player')) and not(IsFalling and IsFalling()) and not(IsSwimming and IsSwimming()) and not(IsFlying and IsFlying());local a=GetPlayerFacing and GetPlayerFacing();_G.W335PP_FACING=ok and type(a)=='number' and tostring(a) or ''") ||
+       !value("W335PP_FACING",out,sizeof(out)) || !out[0])return 0;
+    angle=strtod(out,&end);
+    if(!end || *end || !(angle>=0.0 && angle<=6.283186))return 0;
+    *facing=(float)angle;return 1;
+}
 static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
     char query[380],q_nonce[32],q_success[8],q_failure[8],want[32];
     char loot[32],money[32];
@@ -253,6 +263,7 @@ PP335_EXPORT const Pp335Policy *__stdcall PP335_VerifiedPolicyV1(void){
     if(!owner)owner=GetCurrentThreadId();
     memset(&policy,0,sizeof(policy));
     policy.spell_usable=spell_usable;
+    policy.movement_facing=movement_facing;
     policy.begin_attempt=begin_attempt;
     policy.cast_result=cast_result;
     policy.end_attempt=end_attempt;

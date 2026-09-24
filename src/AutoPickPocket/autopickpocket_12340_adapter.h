@@ -14,7 +14,8 @@ extern "C" {
 #define PP12340_SPELL_ID 921u
 #define PP12340_UNIT_TYPE 3u
 #define PP12340_REACH 4.0f
-#define PP12340_DETECT_REACH 9.0f /* read-ahead only: not spell range */
+#define PP12340_SPOOF_TOTAL_REACH 10.0f /* from REAL player position */
+#define PP12340_DETECT_REACH 10.0f /* total discovery cap */
 /* Signed and guarded native callbacks run exclusively in the WoW game thread.
  * This interface does not install hooks or access the AutoLoot UI.
  * No callback may infer cast success from mere submission.
@@ -35,6 +36,9 @@ typedef struct {
     int (*spell_usable)(void *, uint32_t spell_id);
     /* Submit native 5-argument cdecl spell request to EXACT GUID. */
     int (*cast_guid)(void *, uintptr_t native_cast_va, uint32_t spell_id, PpGuid guid, uint32_t attempt_id);
+    /* 1 only after three synchronous sends: movement, GUID cast and restore. */
+    int (*cast_guid_spoof)(void *,uintptr_t,uint32_t,PpGuid,uint32_t,
+                           PpGuid player,const float real_xyz[3],const float npc_xyz[3]);
     /* Result must be correlated to THIS GUID and cast; unknown => pending. */
     PpResult (*cast_result)(void *, PpGuid guid, uint32_t attempt_id);
     void (*end_attempt)(void *, PpGuid guid, uint32_t attempt_id);

@@ -121,7 +121,7 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
                 if (count<cap) {
                     out[count].guid=guid;
                     out[count].distance_sq=d2;
-                    out[count].eligible=(d2<=PP12340_REACH*PP12340_REACH) ? 1u : 2u;
+                    out[count].eligible=(d2<=PP12340_REACH*PP12340_REACH || (a->host.cast_guid_spoof && d2<=PP12340_SPOOF_TOTAL_REACH*PP12340_SPOOF_TOTAL_REACH)) ? 1u : 2u;
                     out[count].forward=(moving && dx*step_x+dy*step_y>0.04f) ? 1u : 0u;
                     ++count;
                 } else {
@@ -130,7 +130,7 @@ static size_t pp_scan(void *ctx,PpTarget *out,size_t cap) {
                     if(d2<out[far].distance_sq) {
                         out[far].guid=guid;
                         out[far].distance_sq=d2;
-                        out[far].eligible=(d2<=PP12340_REACH*PP12340_REACH) ? 1u : 2u;
+                        out[far].eligible=(d2<=PP12340_REACH*PP12340_REACH || (a->host.cast_guid_spoof && d2<=PP12340_SPOOF_TOTAL_REACH*PP12340_SPOOF_TOTAL_REACH)) ? 1u : 2u;
                         out[far].forward=(moving && dx*step_x+dy*step_y>0.04f) ? 1u : 0u;
                     }
                 }
@@ -185,12 +185,15 @@ static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
      * as well as targets that have left the validated cast radius. */
     dx=target[0]-me[0];dy=target[1]-me[1];dz=target[2]-me[2];
     d2=dx*dx+dy*dy+dz*dz;
-    if(d2>=0.0f && d2<FLT_MAX &&
-       d2>PP12340_REACH*PP12340_REACH){
-        return PP_CAST_LOCAL_RANGE; /* core logs and tries another GUID */
+    if(!(d2>=0.0f && d2<FLT_MAX))return 0;
+    if(d2>PP12340_SPOOF_TOTAL_REACH*PP12340_SPOOF_TOTAL_REACH)
+        return PP_CAST_LOCAL_RANGE; /* real-position hard cap */
+    if(pp_can_cast(a)!=1)return 0;
+    if(d2>PP12340_REACH*PP12340_REACH){
+        if(!a->host.cast_guid_spoof)return PP_CAST_LOCAL_RANGE;
+        return a->host.cast_guid_spoof(a->host.ctx,PP12340_CAST_GUID_VA,
+            PP12340_SPELL_ID,guid,attempt_id,player_guid,me,target)==1;
     }
-    if (!(d2>=0.0f && d2<=PP12340_REACH*PP12340_REACH && d2<FLT_MAX) ||
-        pp_can_cast(a)!=1) return 0;
     return a->host.cast_guid(a->host.ctx,PP12340_CAST_GUID_VA,
                               PP12340_SPELL_ID,guid,attempt_id)==1;
 }
@@ -199,7 +202,7 @@ static PpResult pp_result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     PpResult result=a->host.cast_result(a->host.ctx,guid,attempt_id);
     if (result==PP_RESULT_UI_RANGE_HINT) {
         /* UI_ERROR_MESSAGE has no GUID. A fresh native scan must also see
-         * this exact in-flight GUID outside 4 yd, but inside detection range.
+         * this exact in-flight GUID outside this candidate's cast radius.
          * A missing GUID, stale sample or in-range target is inconclusive. */
         size_t i;
         for(i=0u;i<a->engine.queue_count;++i)

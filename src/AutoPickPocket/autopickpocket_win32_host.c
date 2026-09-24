@@ -42,6 +42,7 @@ static uint8_t g_packet_cast_count;
 /* No alternate transport: every accepted cast must use SendPacket. */
 static uint32_t g_packet_nonce;
 static PpGuid g_packet_guid;
+static unsigned g_spoof_restore_failed;
 static int valid_memory(const void *p,SIZE_T length) {
     MEMORY_BASIC_INFORMATION m;
     uintptr_t at=(uintptr_t)p;
@@ -313,6 +314,57 @@ static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target,uint32_
     return submitted;
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id);
+/* Three ordered sends on the existing verified game-thread transport.
+ * No client-memory movement; transient SERVER movement is not risk-free. */
+static int send_heartbeat(PpGuid player,const float xyz[3],float facing,uint32_t when){
+    typedef void (__cdecl *send_fn)(Pp335OutboundDataStore *);
+    Pp335OutboundDataStore data;
+    uint8_t raw[PP335_MOVE_PACKET_CAP];size_t count;
+    if(!is_game_thread() || !packet_sender_abi() || !packet_session_ready())
+        return 0;
+    count=pp335_build_heartbeat(raw,sizeof(raw),player.lo,player.hi,when,xyz,facing);
+    if(!count)return 0;
+    memset(&data,0,sizeof(data));data.vtable=PP335_CDATASTORE_VTABLE;
+    data.buffer=raw;data.alloc=(uint32_t)sizeof(raw);data.size=(uint32_t)count;
+    __try{((send_fn)PP335_SEND_VA)(&data);return 1;}
+    __except(EXCEPTION_EXECUTE_HANDLER){return 0;}
+}
+static int cast_guid_spoof(void *ctx,uintptr_t va,uint32_t spell,PpGuid guid,
+    uint32_t nonce,PpGuid player,const float me[3],const float npc[3]){
+    float dx,dy,dz,xy2,d2,xy,desired,ratio,near[3],facing;
+    uint32_t started;int cast_sent,restored;
+    if(!is_game_thread() || g_spoof_restore_failed || !me || !npc ||
+       !g_policy.movement_facing || va!=PP12340_CAST_GUID_VA ||
+       spell!=PP12340_SPELL_ID || !nonce || !(player.lo|player.hi) ||
+       !(guid.lo|guid.hi) ||
+       !g_policy.movement_facing(g_policy.context,&facing) ||
+       !_finite(facing) || facing<0.0f || facing>6.283186f)return 0;
+    dx=npc[0]-me[0];dy=npc[1]-me[1];dz=npc[2]-me[2];
+    xy2=dx*dx+dy*dy;d2=xy2+dz*dz;
+    /* 10 yd TOTAL measured from unchanged REAL XYZ; Z is never spoofed. */
+    if(!(d2>PP12340_REACH*PP12340_REACH &&
+         d2<=PP12340_SPOOF_TOTAL_REACH*PP12340_SPOOF_TOTAL_REACH) ||
+       !_finite(d2) || !_finite(xy2) || !_finite(dz) ||
+       fabsf(dz)>0.75f)return 0;
+    xy=sqrtf(xy2);desired=sqrtf(3.5f*3.5f-dz*dz);
+    if(!(xy>desired) || !_finite(xy) || !_finite(desired))return 0;
+    ratio=(xy-desired)/xy;
+    near[0]=me[0]+dx*ratio;near[1]=me[1]+dy*ratio;near[2]=me[2];
+    if(!_finite(near[0]) || !_finite(near[1]))return 0;
+    started=(uint32_t)GetTickCount();
+    if(!send_heartbeat(player,near,facing,started))return 0;
+    /* Always attempt restoration, even if the spell send faults. */
+    cast_sent=cast_guid(ctx,va,spell,guid,nonce);
+    restored=send_heartbeat(player,me,facing,started+1u);
+    if(!restored)g_spoof_restore_failed=1u; /* disable all future spoof */
+    if(!cast_sent || !restored){
+        if(cast_sent && g_policy.end_attempt)
+            g_policy.end_attempt(g_policy.context,guid,nonce);
+        return 0;
+    }
+    event(NULL,PP_EVENT_SPOOF_SEQUENCE,guid,nonce);
+    return 1;
+}
 static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     PpResult outcome;
     (void)ctx;
@@ -423,6 +475,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     SetFilePointer(file,0,NULL,FILE_END);
     switch(kind) {
     case PP_EVENT_CAST: reason="cast_submitted";break;
+    case PP_EVENT_SPOOF_SEQUENCE: reason="move_cast_restore_submitted_unverified";break;
     case PP_EVENT_SUCCESS: reason="verified_result";break;
     case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_signal";break;
     case PP_EVENT_OUT_OF_RANGE: reason="out_of_range_guid_correlated";break;
@@ -529,6 +582,7 @@ PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     h.eligible_npc=eligible;
     h.spell_usable=usable;
     h.cast_guid=cast_guid;
+    h.cast_guid_spoof=cast_guid_spoof;
     h.cast_result=result;
     h.end_attempt=end_attempt;
     h.world_token=world_token;

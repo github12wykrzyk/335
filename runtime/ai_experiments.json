@@ -5,7 +5,7 @@
   "experiments": [
     {
       "id": "autopickpocket-packets-12340",
-      "goal": "Isolated direct ClientServices::SendPacket AutoPickPocket for exact 12340, with 3.3.5 CMSG_CAST_SPELL codec, correlated spell-result policy and universal loader; requires first in-game verification",
+      "goal": "Isolated 12340 packet-only PP with bounded total 10yd movement heartbeat/cast/restore experiment; no server or in-game verification yet",
       "branch": "feature/autopickpocket-packets-12340",
       "modules": [
         "AutoPickPocket"
@@ -17,7 +17,8 @@
         "wow12340:object-manager",
         "logical:spell-cast",
         "logical:targeting",
-        "logical:packet-send"
+        "logical:packet-send",
+        "logical:movement-spoof"
       ],
       "status": "in_progress",
       "observed_head": "1460427bfb8bec170e1f675c5a05f3b1a47e730c",

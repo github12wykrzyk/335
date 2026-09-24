@@ -13,7 +13,7 @@ typedef struct {
     uint32_t thread,hash_ok,abi_ok,usable,eligible_a,eligible_b;
     uint64_t world;
     PpResult result;
-    unsigned casts,cast_spell,callbacks,events[40];
+    unsigned casts,cast_spell,spoof_casts,callbacks,events[40];
     uint32_t last_attempt,expected_result_attempt;
     unsigned player_pos_calls,move_player_after_scan;
     unsigned eligible_calls;
@@ -86,6 +86,13 @@ static int cast(void *p,uintptr_t addr,uint32_t spell,PpGuid target,uint32_t att
     if(addr!=PP12340_CAST_GUID_VA || spell!=921u)return 0;
     ++m->casts;m->cast_spell=spell;m->last_guid=target;m->last_attempt=attempt;
     return 1;
+}
+static int spoof_cast(void *p,uintptr_t addr,uint32_t spell,PpGuid target,
+      uint32_t attempt,PpGuid player,const float me[3],const float npc[3]){
+    Mock *m=(Mock*)p;
+    if(player.lo!=0xAABBCCDDu || player.hi!=0x01020304u || !me || !npc)return 0;
+    ++m->spoof_casts;
+    return cast(p,addr,spell,target,attempt);
 }
 static void end_attempt(void *p,PpGuid guid,uint32_t nonce){
     Mock *m=(Mock*)p;++m->end_count;m->end_guid=guid;m->end_nonce=nonce;
@@ -299,8 +306,28 @@ static int test_default_burst_releases_range_exit_without_multisecond_penalty(vo
  CHECK(m.casts==2u && m.last_guid.lo==222u);
  return 0;
 }
+static int test_total_ten_yard_spoof_and_live_range(void){
+    Mock m;Pp12340Adapter a;Pp12340Host h;
+    defaults(&m);m.npc_a_distance=10.0f;m.npc_b_distance=10.01f;
+    h=host(&m);h.cast_guid_spoof=spoof_cast;
+    CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;
+    pp12340_enable(&a,1);pp12340_tick(&a,0u);
+    CHECK(m.casts==1u && m.spoof_casts==1u && m.last_guid.lo==111u);
+    CHECK(a.last_scan_candidates==1u);
+    defaults(&m);m.npc_a_distance=1.0f;m.npc_b_distance=11.0f;
+    m.move_player_after_scan=1u;h=host(&m);h.cast_guid_spoof=spoof_cast;
+    CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;
+    pp12340_enable(&a,1);pp12340_tick(&a,0u);
+    CHECK(m.casts==0u && m.spoof_casts==0u);
+    defaults(&m);m.npc_a_distance=9.0f;m.npc_b_distance=11.0f;
+    h=host(&m);CHECK(pp12340_bind(&a,&h));a.engine.burst_enabled=0u;
+    pp12340_enable(&a,1);pp12340_tick(&a,0u);
+    CHECK(m.casts==0u && a.engine.queue_count==1u &&
+          a.engine.queue[0].eligible==2u);
+    return 0;
+}
 int main(void){
-    if(test_default_burst_releases_range_exit_without_multisecond_penalty()||test_motion_priority_and_world_reset()||test_unscoped_ui_hint_requires_native_same_guid_range()||test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
+    if(test_total_ten_yard_spoof_and_live_range()||test_default_burst_releases_range_exit_without_multisecond_penalty()||test_motion_priority_and_world_reset()||test_unscoped_ui_hint_requires_native_same_guid_range()||test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
        test_attempt_correlation()||test_silent_commands()||
        test_moving_player_rechecked_before_cast()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");

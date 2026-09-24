@@ -241,3 +241,19 @@ restore the preceding SHA; no server cast success or real pocket loot
 is inferred from this source-only change. In-game testing must compare
 the interval from unconfirmed/out-of-range attempts to same-GUID reentry,
 as well as real wallet gain, fresh candidate availability and cast gaps.
+
+## Packet-only 10 yd TOTAL reach, experimental
+
+Within 4 yd the existing packet cast path is unchanged. For GUIDs beyond 4 yd
+and at most 10 yd from the real player's freshly checked 3D position, the
+feature may synchronously send 3.3.5 MSG_MOVE_HEARTBEAT with a temporary XY
+near NPC (3.5 yd away), CMSG_CAST_SPELL 921 to the GUID, and MSG_MOVE_HEARTBEAT
+with the original coordinates. Never spoof Z, never add an *extra* 10 yd.
+Vehicle/taxi/falling/flying/swimming/dead and vertical differences >0.75 yd
+are excluded by the movement policy. No native cast fallback or changes to
+AutoLoot, target, loader or updater. Failure to send restoration disables all
+subsequent spoof attempts for this process. A local packet-send return is
+NOT proof of server acceptance, successful loot, or that the server restored
+position. Anticheat, terrain, LOS and server-side speed/range validation can
+reject/correct/disconnect or visibly move the player. Only an exact-SHA Windows
+PE32 x86 FINAL_PACKAGE PASS and actual in-game test can establish behavior.

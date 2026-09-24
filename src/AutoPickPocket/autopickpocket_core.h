@@ -76,7 +76,8 @@ typedef enum {
     PP_EVENT_BURST_EXPIRE = 29, /* result unknown, not failed theft */
     PP_EVENT_BURST_RANGE_EXIT = 30, /* exact pending GUID out of reach; never blocks next GUID */
     PP_EVENT_WALLET_OBS = 31, /* global, unattributed positive wallet delta */
-    PP_EVENT_BURST_RANGE_RELEASE = 32 /* geometry verified: cancel old pending nonce; short GUID backoff */
+    PP_EVENT_BURST_RANGE_RELEASE = 32, /* geometry verified: cancel old pending nonce; short GUID backoff */
+    PP_EVENT_SPOOF_SEQUENCE = 33 /* local packet submissions, not server ACK */
 } PpEvent;
 typedef struct {
     void *ctx;
