@@ -171,6 +171,8 @@ namespace WoW335Updater
                         ? BuildAutoLootReport(autoLootLog, out headSha, out runId)
                         : BuildReportBody(root, out headSha, out runId);
                     if (archive != null) bodyCore += "\n" + archive.Manifest;
+                    if (bodyCore.Length > 55000)
+                        throw new InvalidOperationException("Tekst raportu przekracza 55 tys. znakow; nie utworzono niekompletnego Issue.");
                     else if (!onlyAutoLoot) bodyCore += "\nPP_ARCHIVE_STATUS: NO_RETAINED_LOGS (no full-session evidence).\n";
                     var signatureSeed = onlyAutoLoot
                         ? "AUTOLOOT335-DIAG-V1\n" + headSha + "\n" + autoLootLog
@@ -472,7 +474,9 @@ namespace WoW335Updater
                         sb.AppendLine();
                         sb.AppendLine("#### " + Path.GetFileName(file));
                         sb.AppendLine("```json");
-                        sb.AppendLine(Sanitize(TailJsonlFile(file, 12000), root, 12000));
+                        // Complete AutoPickPocket evidence is the SHA-checked ZIP in comments.
+                        // Keep Issue body well below GitHub text-size limits.
+                        sb.AppendLine(Sanitize(TailJsonlFile(file, 1500), root, 1500));
                         sb.AppendLine("```");
                     }
                 }
@@ -484,7 +488,7 @@ namespace WoW335Updater
                     sb.AppendLine();
                     sb.AppendLine("### AutoLoot 12340 addon diagnostic (SavedVariables; curated event lines)");
                     sb.AppendLine("```text");
-                    sb.AppendLine(autoLootEvents);
+                    sb.AppendLine(Sanitize(TailText(autoLootEvents, 4000), root, 4000));
                     sb.AppendLine("```");
                 }
 
@@ -493,7 +497,7 @@ namespace WoW335Updater
                     sb.AppendLine();
                     sb.AppendLine("### Updater session log (tail)");
                     sb.AppendLine("```text");
-                    sb.AppendLine(Sanitize(TailText(log.Text, 10000), root, 10000));
+                    sb.AppendLine(Sanitize(TailText(log.Text, 4000), root, 4000));
                     sb.AppendLine("```");
                 }
                 return sb.ToString();
@@ -690,7 +694,11 @@ namespace WoW335Updater
                         + "; GUID/session with wallet/loot heuristic "
                         + walletGuids.Count(x => x.StartsWith(prefix, StringComparison.Ordinal)) + ".");
                 }
-                foreach (var session in sessionReasons.OrderBy(x => x.Key, StringComparer.Ordinal))
+                var orderedSessions = sessionReasons.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
+                if (orderedSessions.Length > 20)
+                    sb.AppendLine("Issue preview: first " + (orderedSessions.Length - 20)
+                        + " per-session breakdowns omitted; complete retained logs in ZIP and per-variant totals above.");
+                foreach (var session in orderedSessions.Skip(Math.Max(0, orderedSessions.Length - 20)))
                 {
                     var v = session.Value;
                     int casts = v.ContainsKey("cast_submitted") ? v["cast_submitted"] : 0;
