@@ -207,9 +207,9 @@ static int test_timeout_releases_matching_attempt_before_next_guid(void){
  CHECK(s.end_guid.lo==102u && s.end_attempt_id==first);
  CHECK(s.cast_n==2u && s.casted[1].lo==101u && s.last_attempt!=first);
  s.result=PP_RESULT_SUCCESS;s.expected_result_attempt=first;
- pp_tick(&e,911u);CHECK(e.successes==0u && e.active_valid);
+ pp_tick(&e,211u);CHECK(e.successes==0u && e.active_valid);
  s.expected_result_attempt=s.last_attempt;
- pp_tick(&e,912u);CHECK(e.successes==1u);
+ pp_tick(&e,212u);CHECK(e.successes==1u);
  return 0;
 }
 static int test_reset_and_refusal_release_only_own_nonce(void){
