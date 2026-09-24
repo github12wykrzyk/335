@@ -18,6 +18,7 @@ static uint64_t world_id;
 static PpGuid current_target;
 static uint32_t current_attempt,started_ms;
 static int active;
+static uint32_t uncertain_until_ms; /* old unresolved nonce: guard unscoped loot for 1500ms */
 static Pp335Policy policy;
 static int is_owner(void){return owner && GetCurrentThreadId()==owner;}
 static int readable(uintptr_t at,size_t n){
@@ -145,7 +146,7 @@ static uint64_t world_token(void *ctx){
     (void)ctx;
     if(!run("local id=UnitGUID and UnitGUID('player');local area=GetCurrentMapAreaID and GetCurrentMapAreaID() or 0;local inst=0;if GetInstanceInfo then local _,_,_,_,_,_,_,i=GetInstanceInfo();inst=i or 0 end;_G.W335PP_WORLD=id and (id..':'..tostring(area)..':'..tostring(inst)) or ''") || !value("W335PP_WORLD",word,sizeof(word)))return 0u;
     next=hash_world(word);
-    if(next!=world_id){world_id=next;clear();(void)run("_G.W335PP_BURST={};_G.W335PP_N='0'");}
+    if(next!=world_id){world_id=next;clear();uncertain_until_ms=0u;(void)run("_G.W335PP_BURST={};_G.W335PP_N='0'");}
     return next;
 }
 static int spell_usable(void *ctx,uint32_t spell_id){
@@ -217,7 +218,8 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
     /* PLAYER_MONEY alone is not GUID-scoped. Require same-attempt LOOT_OPENED
      * within 400ms; reject an available nonmatching source GUID. */
     if(!strcmp(money,want) && !strcmp(loot,want) &&
-       (!source_read || !(source.lo|source.hi) || same(source,guid))){
+       ((source_read && (source.lo|source.hi)) ? same(source,guid) :
+        (!uncertain_until_ms || (int32_t)(GetTickCount()-uncertain_until_ms)>=0))){
         clear();return PP_RESULT_MONEY_SUCCESS;
     }
     if(!strcmp(loot,want) && source_read && same(source,guid)){
@@ -241,7 +243,12 @@ static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
 static void end_attempt(void *ctx,PpGuid guid,uint32_t nonce){
     (void)ctx;
     if(is_owner() && active && nonce==current_attempt &&
-       same(guid,current_target))clear();
+       same(guid,current_target)) {
+        /* A late old loot/money event must not verify a new GUID. A native
+         * matching loot source or GUID-scoped spell ACK remains usable. */
+        uncertain_until_ms=GetTickCount()+1500u;
+        clear();
+    }
 }
 PP335_EXPORT const Pp335Policy *__stdcall PP335_VerifiedPolicyV1(void){
     if(!owner)owner=GetCurrentThreadId();

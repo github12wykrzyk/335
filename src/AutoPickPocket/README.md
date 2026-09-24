@@ -132,6 +132,22 @@ from an actual cast_submitted. In-game Sprint testing must compare missed
 mobs, packet submission-to-result latency, pulse gap, and live transport
 (packet versus native fallback) on the exact installed commit SHA.
 
+## Sprint phase 3: bounded unknown-result handoff (isolated TEST)
+
+The old 900ms blocking wait is replaced. At >=420ms, if a fresh
+(<=60ms) native scan sees the exact pending GUID beyond cast reach and
+another eligible, unblocked GUID in cast range, the engine cancels only
+the old nonce and can submit to the next NPC on the same pulse. Otherwise
+it releases any still-unconfirmed attempt at 560ms, blocking the old GUID
+as *unknown* for 3s; neither release is reported as successful theft.
+For 1.5s after an unresolved nonce, generic wallet+loot signals lacking
+an exact native loot-source GUID cannot confirm a subsequent attempt.
+Exact-GUID spell results remain usable. Distinct log reasons:
+unconfirmed_early_release_old_guid_outside_range and
+unconfirmed_result_560ms. Packet/server cooldown and actual game cadence
+still require a new report from this exact TEST candidate. If missed loot or
+native fallback increases, revert to the preceding in-game-tested SHA.
+
 ## Sprint phase 2 (isolated TEST, not accepted stable)
 
 A GUID-correlated spell-921 `OUT_OF_RANGE` now blocks only that GUID for 200 ms and the engine tries another available, freshly validated GUID on the same pulse. A global UI range message **never** directly sets the GUID's `W335PP_FAIL`/`W335PP_E` or proves the server rejected that GUID. It can produce a separate `ui_range_local_distance_confirmed_not_server_guid` event only if the native 12340 scan also shows the outstanding exact GUID outside the 4-yard cast radius (yet within the 9-yard detection radius); otherwise the cast stays pending until a real result or the unchanged 900 ms timeout. On this guarded release the exact nonce is cancelled before the next target can be armed.

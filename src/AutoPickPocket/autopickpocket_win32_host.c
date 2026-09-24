@@ -383,6 +383,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
         g_inflight_attempt=attempt_id;
     } else if((kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
                kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
+               kind==PP_EVENT_FAST_RELEASE ||
                (kind==PP_EVENT_INELIGIBLE || kind==PP_EVENT_MONEY_SUCCESS ||
                 kind==PP_EVENT_OUT_OF_RANGE || kind==PP_EVENT_LINE_OF_SIGHT ||
                 kind==PP_EVENT_NOT_STEALTHED || kind==PP_EVENT_NOT_READY ||
@@ -442,7 +443,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_PACKET_FALLBACK: reason="packet_no_ack_native_fallback";break;
     case PP_EVENT_EMPTY: reason="no_pockets";break;
     case PP_EVENT_RETRY: reason="temporary_failure";break;
-    case PP_EVENT_TIMEOUT: reason="result_timeout";break;
+    case PP_EVENT_TIMEOUT: reason="unconfirmed_result_560ms";break;
+    case PP_EVENT_FAST_RELEASE: reason="unconfirmed_early_release_old_guid_outside_range";break;
     case PP_EVENT_INELIGIBLE: reason="permanent_failure";break;
     case PP_EVENT_GAVE_UP: reason="retry_budget_exhausted";break;
     case PP_EVENT_NOT_CASTABLE: reason="not_castable";break;

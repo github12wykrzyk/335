@@ -12,7 +12,8 @@ extern "C" {
 #define PP_HISTORY_CAP 256u
 #define PP_SCAN_INTERVAL_MS 60u
 #define PP_QUEUE_TTL_MS 160u
-#define PP_RESULT_TIMEOUT_MS 900u
+#define PP_RESULT_EARLY_RELEASE_MS 420u /* only when exact GUID leaves reach and another target is ready */
+#define PP_RESULT_TIMEOUT_MS 560u /* unknown is never reported as success */
 #define PP_RETRY_DELAY_MS 800u
 #define PP_RANGE_RETRY_DELAY_MS 200u /* correlated GUID or independently checked UI range hint */
 #define PP_LOCAL_RANGE_BACKOFF_MS 250u
@@ -66,7 +67,8 @@ typedef enum {
     PP_EVENT_LOCAL_RANGE_REJECT = 25,
     PP_EVENT_LUA_EPOCH = 26 /* Lua observer recreated, including /reload */,
     PP_EVENT_UI_OBSERVATION = 27, /* unscoped UI error, never a GUID result */
-    PP_EVENT_UI_RANGE_RECHECKED = 28 /* UI range hint with native distance evidence, NOT a GUID-scoped server failure */
+    PP_EVENT_UI_RANGE_RECHECKED = 28, /* UI range hint with native distance evidence, NOT a GUID-scoped server failure */
+    PP_EVENT_FAST_RELEASE = 29 /* unanswered old GUID left reach, next GUID available */
 } PpEvent;
 typedef struct {
     void *ctx;
