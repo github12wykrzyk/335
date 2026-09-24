@@ -8,9 +8,13 @@
 #include <wchar.h>
 #include <float.h>
 #include "player_esp_scanner.h"
+#include "player_esp_camera.h"
+#include "player_esp_d3d9.h"
 #pragma comment(lib, "Advapi32.lib")
 #define MESSAGE_NAME "WoW335_PlayerESP_12340_GameThread_v1"
 #define GET_POS_VA ((uintptr_t)0x006E6F10u)
+#define WORLD_FRAME_PTR ((uintptr_t)0x00B7436Cu)
+#define ACTIVE_CAMERA_OFFSET ((uintptr_t)0x7E20u)
 #define MIN_PTR ((uintptr_t)0x10000u)
 #define MAX_PTR ((uintptr_t)0x7FFE0000u)
 static Esp335Scanner g_scanner;
@@ -19,6 +23,9 @@ static UINT g_message;
 static unsigned g_initialised, g_enabled, g_driving, g_live;
 static uint32_t g_last_manager, g_scans_ok, g_scans_failed;
 static uint64_t g_last_player_guid, g_epoch;
+static HWND g_game_window;
+static DWORD g_install_try_ms;
+static unsigned g_camera_ok, g_camera_bad, g_markers_rendered;
 
 static int on_thread(void) { return g_thread && GetCurrentThreadId() == g_thread; }
 static int readable(uintptr_t ptr, size_t bytes) {
@@ -153,10 +160,100 @@ static uint64_t epoch(void *ctx) {
     g_last_player_guid = guid;
     return g_epoch;
 }
+
+/* All foreign camera reads use the same guarded, game-thread-only read32.
+ * Camera layout originates from ConsoleXP's 3.3.5 reference and remains an
+ * in-game validation candidate. Invalid basis/viewport => draw NOTHING.
+ */
+static int read_float(uintptr_t address, float *value) {
+    uint32_t bits;
+    if (!value || !read32(NULL,address,&bits)) return 0;
+    memcpy(value,&bits,sizeof(bits));
+    return _finite(*value) != 0;
+}
+static int read_vec3(uintptr_t address, Esp335Vec3 *value) {
+    return value &&
+           read_float(address,&value->x) &&
+           read_float(address+4u,&value->y) &&
+           read_float(address+8u,&value->z);
+}
+static int read_camera(IDirect3DDevice9 *device, Esp335Camera *camera) {
+    uint32_t worldframe, active;
+    D3DVIEWPORT9 viewport;
+    Esp335CameraAxes a;
+    float source_aspect;
+    float viewport_aspect;
+    if (!on_thread() || !device || !camera ||
+        !read32(NULL,WORLD_FRAME_PTR,&worldframe) ||
+        worldframe < MIN_PTR || worldframe >= MAX_PTR ||
+        !read32(NULL,(uintptr_t)worldframe+ACTIVE_CAMERA_OFFSET,&active) ||
+        active < MIN_PTR || active >= MAX_PTR ||
+        FAILED(IDirect3DDevice9_GetViewport(device,&viewport)) ||
+        viewport.Width < 64u || viewport.Height < 64u)
+        return 0;
+    memset(&a,0,sizeof(a));
+    if (!read_vec3((uintptr_t)active+0x08u,&a.eye) ||
+        !read_vec3((uintptr_t)active+0x14u,&a.forward) ||
+        !read_vec3((uintptr_t)active+0x20u,&a.up) ||
+        !read_vec3((uintptr_t)active+0x2Cu,&a.right) ||
+        !read_float((uintptr_t)active+0x38u,&a.near_clip) ||
+        !read_float((uintptr_t)active+0x3Cu,&a.far_clip) ||
+        !read_float((uintptr_t)active+0x40u,&a.fov_y) ||
+        !read_float((uintptr_t)active+0x44u,&source_aspect))
+        return 0;
+    viewport_aspect=(float)viewport.Width/(float)viewport.Height;
+    /* The stored field must at least agree with a sensible aspect
+     * before applying the actual live viewport's aspect ratio. */
+    if (source_aspect < 0.5f || source_aspect > 6.f ||
+        fabsf(source_aspect-viewport_aspect) > viewport_aspect*0.35f)
+        return 0;
+    a.aspect=viewport_aspect;
+    a.viewport_x=(float)viewport.X;
+    a.viewport_y=(float)viewport.Y;
+    a.viewport_width=(float)viewport.Width;
+    a.viewport_height=(float)viewport.Height;
+    return esp335_camera_build(&a,camera);
+}
+static void draw_frame(IDirect3DDevice9 *device, void *user) {
+    Esp335Camera camera;
+    Esp335Filter filter;
+    Esp335Label labels[ESP335_MAX_PLAYERS];
+    size_t count;
+    (void)user;
+    if (!on_thread() || !g_enabled || !g_scanner.bound ||
+        !g_scanner.snapshot.world_epoch || g_scanner.snapshot.frame_open ||
+        g_scanner.snapshot.world_epoch != epoch(NULL) ||
+        (DWORD)(GetTickCount()-g_tick_ms)>250u)
+        return;
+    if (!read_camera(device,&camera)) {
+        ++g_camera_bad;
+        return;
+    }
+    ++g_camera_ok;
+    memset(&filter,0,sizeof(filter));
+    /* Player metadata classification is still UNKNOWN; without show_all
+     * we would silently render zero labels despite a valid player scanner. */
+    filter.show_all=1u;
+    filter.max_distance=120.f;
+    count=esp335_labels(&g_scanner.snapshot,&camera,&filter,0,
+                        labels,ESP335_MAX_PLAYERS);
+    if (count) g_markers_rendered+=(unsigned)esp335_d3d9_draw_labels(device,
+                                                                    labels,count);
+}
+static void try_renderer(void) {
+    DWORD now=GetTickCount();
+    if (!g_enabled || !on_thread() || !g_scanner.bound ||
+        !g_game_window || (DWORD)(now-g_install_try_ms)<2500u) return;
+    g_install_try_ms=now;
+    if (!esp335_d3d9_frames()) {
+        esp335_d3d9_install(g_game_window,draw_frame,NULL);
+    }
+}
+
 static void write_diag(int scan_ok) {
     wchar_t path[MAX_PATH], *slash;
     HANDLE file;
-    char line[256];
+    char line[400];
     DWORD written, now = GetTickCount();
     int length;
     if (!on_thread() || (DWORD)(now - g_log_ms) < 5000u) return;
@@ -174,11 +271,12 @@ static void write_diag(int scan_ok) {
     if (file == INVALID_HANDLE_VALUE) return;
     length = _snprintf_s(line, sizeof(line), _TRUNCATE,
         "{\"component\":\"PlayerESP\",\"scan_ok\":%u,\"players\":%u,"
-        "\"epoch\":%I64u,\"scans_ok\":%u,\"scans_failed\":%u}\n",
+        "\"epoch\":%I64u,\"scans_ok\":%u,\"scans_failed\":%u,"\n        "\"render_frames\":%u,\"camera_ok\":%u,\"camera_bad\":%u,"\n        "\"markers\":%u}\n",
         scan_ok ? 1u : 0u,
         scan_ok ? (unsigned)g_scanner.snapshot.count : 0u,
         (unsigned __int64)g_scanner.snapshot.world_epoch,
-        g_scans_ok, g_scans_failed);
+        g_scans_ok, g_scans_failed,
+        esp335_d3d9_frames(),g_camera_ok,g_camera_bad,g_markers_rendered);
     if (length > 0) WriteFile(file, line, (DWORD)length, &written, NULL);
     CloseHandle(file);
 }
@@ -192,18 +290,20 @@ static void drive(void) {
     g_tick_ms = now;
     ok = esp335_scanner_collect(&g_scanner);
     if (ok) ++g_scans_ok; else ++g_scans_failed;
+    try_renderer();
     write_diag(ok);
     g_driving = 0u;
 }
 __declspec(dllexport) UINT WINAPI W335_MessageId(void) {
     return RegisterWindowMessageA(MESSAGE_NAME);
 }
-static void control(UINT message, WPARAM command) {
+static void control(UINT message, WPARAM command, HWND hwnd) {
     Esp335ScannerHost host;
     if (!g_message) g_message = RegisterWindowMessageA(MESSAGE_NAME);
     if (message != g_message) return;
     if (command == 0u) {
         g_enabled = 0u;
+        esp335_d3d9_uninstall();
         esp335_reset(&g_scanner.snapshot);
         return;
     }
@@ -224,14 +324,18 @@ static void control(UINT message, WPARAM command) {
             return;
         }
     }
-    if (g_scanner.bound && on_thread() && command == 1u) g_enabled = 1u;
+    if (g_scanner.bound && on_thread() && command == 1u) {
+        g_enabled = 1u;
+        if (hwnd && IsWindow(hwnd)) g_game_window=hwnd;
+        try_renderer();
+    }
 }
 __declspec(dllexport) LRESULT CALLBACK W335_HookProc(int code, WPARAM w, LPARAM l) {
     MSG *message;
     if (code < 0 || !l) return CallNextHookEx(NULL, code, w, l);
     message = (MSG *)l;
     if (message->message != WM_QUIT) {
-        control(message->message, message->wParam);
+        control(message->message, message->wParam, message->hwnd);
         drive();
     }
     return CallNextHookEx(NULL, code, w, l);
