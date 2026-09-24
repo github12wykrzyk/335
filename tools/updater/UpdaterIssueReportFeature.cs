@@ -403,7 +403,7 @@ namespace WoW335Updater
 
             // Counts are scoped to surviving files, not a lifetime total or server-confirmed loot.
             // Read *all* retained JSONL records before selecting an independent bounded tail.
-            private static void AppendPickPocketAuditSummary(StringBuilder sb, string root)
+            private void AppendPickPocketAuditSummary(StringBuilder sb, string root)
             {
                 var folder = Path.Combine(root, ".wow335_debug");
                 sb.AppendLine();
