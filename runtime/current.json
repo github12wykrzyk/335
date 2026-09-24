@@ -36,7 +36,7 @@
       "component": "PlayerESP",
       "path": "runtime/PlayerESP335.dll",
       "version": "0.2.0-gui-npc-test",
-      "sha256": "0ad42d50e87c97909f5db24a9fcc16a3f835f6041b2258974e596ccc06588f06",
+      "sha256": "732b0609e4558845f49e925043bfe12fc2be9d20d45b8dd759cc8a73f1e32038",
       "arch": "x86",
       "canonical_source": "src/PlayerESP/player_esp_win32_host.c",
       "depends_on": [],
