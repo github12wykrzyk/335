@@ -1,0 +1,51 @@
+name: Audit ConsoleXP reference and ESP core
+on:
+  workflow_dispatch:
+  push:
+    branches: [work, 'feature/**']
+    paths:
+      - 'reference/ConsoleXP/**'
+      - 'tools/audit_consolexp_reference.py'
+      - 'tests/test_consolexp_reference_audit.py'
+      - 'src/PlayerESP/**'
+      - 'tests/player_esp_core_harness.c'
+      - 'tests/test_player_esp_core.py'
+      - 'docs/CONSOLEXP_REFERENCE_ESP.md'
+      - '.github/workflows/consolexp_reference_esp.yml'
+  pull_request:
+    branches: [work]
+permissions:
+  contents: read
+jobs:
+  reference-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate uploaded archive identity and CRC without executing binaries
+        run: python tools/audit_consolexp_reference.py --report dist/consolexp_reference_audit.json
+      - name: Test reference safety and portable ESP core
+        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v
+      - name: Publish inert reference inventory (not game package)
+        uses: actions/upload-artifact@v4
+        with:
+          name: consolexp-reference-audit-${{ github.sha }}
+          path: dist/consolexp_reference_audit.json
+          if-no-files-found: error
+  esp-core-win32:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run ESP portable logic with MSVC x86 (not a game DLL)
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINSTALL=%%i
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=x64
+          if errorlevel 1 exit /b 1
+          cl /nologo /W4 /WX /TC /Fe:tests\player_esp_core_harness.exe src\PlayerESP\player_esp_core.c tests\player_esp_core_harness.c
+          if errorlevel 1 exit /b 1
+          tests\player_esp_core_harness.exe
+          if errorlevel 1 exit /b 1

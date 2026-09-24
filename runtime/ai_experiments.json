@@ -23,6 +23,28 @@
       "verified_commit": null,
       "tests": [],
       "package": null
+    },
+    {
+      "id": "player-esp-12340",
+      "goal": "Isolated PlayerESP core, ConsoleXP reference audit, then exact-client native scanner/render/target and verified PE32 x86 candidate",
+      "branch": "feature/player-esp-12340",
+      "modules": [
+        "PlayerESP"
+      ],
+      "dependencies": [
+        "Client12340"
+      ],
+      "shared_resources": [
+        "wow12340:object-manager",
+        "logical:render",
+        "logical:targeting",
+        "logical:input"
+      ],
+      "status": "in_progress",
+      "observed_head": "9e2909519835cdf32f72a9c55b8ad32a049c7d31",
+      "verified_commit": null,
+      "tests": [],
+      "package": null
     }
   ]
 }
