@@ -18,6 +18,7 @@ typedef struct { float x, y, z; } Esp335Vec3;
 typedef struct {
     uint64_t guid;
     Esp335Vec3 position;
+    uintptr_t object_address; /* scanner-owned transient game VA; revalidated */
     unsigned kind;          /* 3 NPC, 4 Player; 0 legacy Player */
     unsigned faction;       /* 0 unknown, 1 Horde, 2 Alliance */
     unsigned relation;      /* 0 unknown, 1 friendly, 2 hostile */

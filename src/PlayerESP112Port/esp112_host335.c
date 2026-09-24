@@ -439,6 +439,11 @@ static void diagnostic(void) {
         esp112_frame_scene_failures(),esp112_frame_submitted(),
         g_frame_draw_failures,g_frame_disabled);
     if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
+    n=_snprintf_s(line,sizeof(line),_TRUNCATE,
+        "{\"component\":\"PlayerESP\",\"probe\":\"live_npc_position\","
+        "\"ok\":%u,\"rejected\":%u}\n",
+        g_scanner.live_position_ok,g_scanner.live_position_rejected);
+    if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
     if (g_probe_ready) {
         n=_snprintf_s(line,sizeof(line),_TRUNCATE,
             "{\"component\":\"PlayerESP\",\"backend\":\"112-gdi\","
@@ -568,13 +573,22 @@ static void drive(IDirect3DDevice9 *device) {
         goto clear;
     for (i=0u;i<g_scanner.snapshot.count && n<ESP335_MAX_PLAYERS;++i) {
         const Esp335Player *p=&g_scanner.snapshot.players[i];
-        Esp335Vec3 head=p->position;
+        Esp335Vec3 base=p->position,head;
         Esp112Candidate candidate;
         float dx,dy,dz,distance;
         if (!p->guid || !p->max_health) continue;
-        dx=head.x-eye.x;dy=head.y-eye.y;dz=head.z-eye.z;
+        /* Full enumeration remains 50ms; interpolate NPC position by
+         * reading CURRENT game-object XYZ during each verified render frame.
+         * An 8-yard margin bounds live reads; invalid GUID/epoch is skipped. */
+        dx=base.x-eye.x;dy=base.y-eye.y;dz=base.z-eye.z;
+        distance=sqrtf(dx*dx+dy*dy+dz*dz);
+        if (!_finite(distance) || distance>MAX_DISTANCE+8.f) continue;
+        if (!esp335_scanner_live_position(&g_scanner,p,&base))
+            continue; /* Never draw a despawned/reused NPC at cached XYZ. */
+        dx=base.x-eye.x;dy=base.y-eye.y;dz=base.z-eye.z;
         distance=sqrtf(dx*dx+dy*dy+dz*dz);
         if (!_finite(distance) || distance>MAX_DISTANCE) continue;
+        head=base;
         memset(&candidate,0,sizeof(candidate));
         /* A 112-style head anchor is a provisional visual baseline, NOT
          * precise model-height data for every 12340 creature template. */
@@ -585,7 +599,7 @@ static void drive(IDirect3DDevice9 *device) {
         ++g_proj_ok;
         candidate.hp=p->health;candidate.max_hp=p->max_health;
         candidate.guid=p->guid;candidate.kind=p->kind;
-        candidate.world_base=p->position;
+        candidate.world_base=base;
         candidate.faction=p->faction;candidate.distance=distance;
         candidates[n++]=candidate;
         if (!g_probe_ready && (DWORD)(now-g_last_probe)>=PROBE_INTERVAL) {

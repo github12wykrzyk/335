@@ -79,6 +79,7 @@ int esp335_scanner_collect(Esp335Scanner *s) {
                  * runtime, never guess faction from a cached appearance. */
                 if (s->host.player_metadata(s->host.context, obj, &p) == 1) {
                     p.guid = guid; p.position = pos; p.kind = type;
+                    p.object_address=(uintptr_t)obj;
                     if (!esp335_push(&next, &p) &&
                         next.count < ESP335_MAX_PLAYERS) goto invalid;
                     if (type == ESP335_OBJ_PLAYER) ++s->accepted_players;
@@ -100,4 +101,28 @@ invalid:
     ++s->scan_failures;
     esp335_reset(&s->snapshot); /* Never show a stale target after read failure. */
     return 0;
+}
+
+int esp335_scanner_live_position(Esp335Scanner *s,
+                                 const Esp335Player *p,Esp335Vec3 *out) {
+    uint64_t actual_guid;
+    uint32_t actual_type;
+    Esp335Vec3 fresh;
+    if (!s || !s->bound || !p || !out) return 0;
+    if (!s->snapshot.world_epoch || !p->guid ||
+        !valid_pointer(p->object_address) ||
+        p->object_address>UINT32_MAX-ESP335_OBJ_GUID-8u ||
+        s->host.thread_id(s->host.context)!=s->game_thread ||
+        s->host.world_epoch(s->host.context)!=s->snapshot.world_epoch ||
+        !read_guid(s,p->object_address+ESP335_OBJ_GUID,&actual_guid) ||
+        actual_guid!=p->guid ||
+        !read32(s,p->object_address+ESP335_OBJ_TYPE,&actual_type) ||
+        actual_type!=p->kind ||
+        s->host.position(s->host.context,p->object_address,&fresh)!=1) {
+        ++s->live_position_rejected;
+        return 0;
+    }
+    *out=fresh;
+    ++s->live_position_ok;
+    return 1;
 }

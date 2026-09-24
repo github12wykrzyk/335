@@ -35,10 +35,14 @@ typedef struct {
     unsigned bound;
     unsigned seen_players, seen_npcs, accepted_players, accepted_npcs;
     unsigned position_failures, metadata_failures, scan_failures;
+    unsigned live_position_ok, live_position_rejected;
 } Esp335Scanner;
 
 int esp335_scanner_bind(Esp335Scanner *, const Esp335ScannerHost *);
 int esp335_scanner_collect(Esp335Scanner *); /* 1: complete, 0: invalidated */
+/* Current in-frame position after validating GUID, type, thread and epoch;
+ * on failure output remains unchanged and caller must omit stale label. */
+int esp335_scanner_live_position(Esp335Scanner *,const Esp335Player *,Esp335Vec3 *);
 void esp335_scanner_unbind(Esp335Scanner *);
 
 #endif

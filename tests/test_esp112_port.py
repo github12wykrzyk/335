@@ -59,6 +59,15 @@ class PortTests(unittest.TestCase):
         self.assertIn("projection_hz",source)
         self.assertIn("max_tick_gap_ms",source)
         self.assertIn("g_debug_pairs && (unsigned)slot<ESP112_DIAG_PAIRS",source)
+    def test_moving_npc_uses_verified_position_each_render_frame(self):
+        host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
+        scanner=(ROOT/"src/PlayerESP/player_esp_scanner.c").read_text()
+        self.assertIn("esp335_scanner_live_position(&g_scanner,p,&base)",host)
+        self.assertIn("candidate.world_base=base;",host)
+        self.assertIn("actual_guid!=p->guid",scanner)
+        self.assertIn("actual_type!=p->kind",scanner)
+        self.assertIn("s->host.world_epoch(s->host.context)!=s->snapshot.world_epoch",scanner)
+        self.assertIn("live_npc_position",host)
     def test_projection_tick_separate_from_scan_and_stable_slots(self):
         src=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
         ui=(ROOT/"src/PlayerESP112Port/esp112_overlay.c").read_text()
@@ -107,7 +116,7 @@ class PortTests(unittest.TestCase):
     def test_debug_pairs_bind_same_guid_and_ground_anchor(self):
         host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
         overlay=(ROOT/"src/PlayerESP112Port/esp112_overlay.c").read_text()
-        self.assertIn("candidate.world_base=p->position;",host)
+        self.assertIn("candidate.world_base=base;",host)
         self.assertIn("native_project(world_frame,c->world_base,&view,&foot)",host)
         self.assertIn("esp112_overlay_show_foot(&g_overlay,(unsigned)slot",host)
         self.assertIn('\\\"probe\\\":\\\"paired_head_and_feet\\\"',host)
