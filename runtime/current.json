@@ -8,7 +8,7 @@
     "platform": "Windows",
     "architecture": "x86"
   },
-  "release_id": "feature-player-esp-12340-gui-npc-test",
+  "release_id": "feature-player-esp-12340-native-ui-npc-test",
   "state": "test-candidate",
   "canonical_source_policy": "Each active runtime file must point to exact existing src/ lineage or documented external source.",
   "files": [
@@ -25,8 +25,8 @@
     {
       "component": "AutoLoot",
       "path": "runtime/AutoLoot335.dll",
-      "version": "1.0.1-test+sha.ff37c95efbfa",
-      "sha256": "ff37c95efbfa4dd061d1ad9e409a96a59f3d66cc2164ed63fba4a3fd5dfc052c",
+      "version": "1.0.2-esp-ui-gate-test",
+      "sha256": "5af62a8f59aaf057f1e094fdde56f34691006587edca9a30ea6dfbbff0747939",
       "arch": "x86",
       "canonical_source": "src/AutoLoot/autoloot_win32_host.c",
       "depends_on": [],
@@ -35,11 +35,13 @@
     {
       "component": "PlayerESP",
       "path": "runtime/PlayerESP335.dll",
-      "version": "0.2.0-gui-npc-test",
-      "sha256": "732b0609e4558845f49e925043bfe12fc2be9d20d45b8dd759cc8a73f1e32038",
+      "version": "0.3.0-native-ui-test",
+      "sha256": "07324c314147b13bb0ea0f16f3ddd0efd07b3071ce89c3d3edb99c10a0779673",
       "arch": "x86",
       "canonical_source": "src/PlayerESP/player_esp_win32_host.c",
-      "depends_on": [],
+      "depends_on": [
+        "AutoLoot"
+      ],
       "kind": "dll"
     }
   ],

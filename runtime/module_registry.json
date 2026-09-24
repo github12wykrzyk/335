@@ -82,10 +82,22 @@
         "src/PlayerESP/player_esp_camera.h",
         "src/PlayerESP/player_esp_d3d9.c",
         "src/PlayerESP/player_esp_d3d9.h",
-        "src/PlayerESP/player_esp_win32_host.c"
+        "src/PlayerESP/player_esp_win32_host.c",
+        "src/PlayerESP/player_esp_lua.c",
+        "src/PlayerESP/player_esp_lua.h"
       ],
-      "requires": [],
+      "requires": [
+        "AutoLoot"
+      ],
       "resources": [
+        {
+          "id": "wow12340:0x00819210-framescript-execute",
+          "mode": "observe"
+        },
+        {
+          "id": "logical:game-ui",
+          "mode": "exclusive"
+        },
         {
           "id": "wow12340:object-manager",
           "mode": "observe"
@@ -120,7 +132,8 @@
           "src/PlayerESP/player_esp_scanner.c",
           "src/PlayerESP/player_esp_camera.c",
           "src/PlayerESP/player_esp_d3d9.c",
-          "src/PlayerESP/player_esp_win32_host.c"
+          "src/PlayerESP/player_esp_win32_host.c",
+          "src/PlayerESP/player_esp_lua.c"
         ],
         "include_dirs": [
           "src/PlayerESP"
