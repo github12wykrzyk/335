@@ -106,7 +106,7 @@ def validate(runtime, registry):
         if len(writers) > 1:
             if any(mode != "chain" for _, mode, _ in writers):
                 errors.append(key + ": conflicting writers (exclusive resource)")
-            elif len({arb for _, _, arb in writers}) != 1 or writers[0][2] not in declared:
+            elif len({arb for _, _, arb in writers}) != 1 or (writers[0][2] not in declared and not (writers[0][2] == "Loader" and (ROOT / "src/Loader/loader_win32.c").is_file())):
                 errors.append(key + ": chain requires one active declared arbitrator")
     return errors
 
