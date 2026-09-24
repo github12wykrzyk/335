@@ -51,6 +51,10 @@ static DWORD g_lua_init_tick, g_lua_update_tick;
 static unsigned g_lua_init_attempts,g_lua_init_ok,g_lua_updates,g_lua_update_errors,g_lua_gate_missing;
 static unsigned g_lua_ready;
 static int g_lua_last_visibility=-1;
+/* Runtime-only W2S coordinate evidence; no GUIDs or player coordinates logged. */
+static DWORD g_w2s_probe_tick;
+static float g_w2s_probe[12];
+static unsigned g_w2s_probe_ready, g_w2s_success, g_w2s_rejected;
 
 
 static int on_thread(void) { return g_thread && GetCurrentThreadId() == g_thread; }
@@ -304,13 +308,37 @@ static int project_native(void *context,Esp335Vec3 point,float *px,float *py) {
         }
     } __except(EXCEPTION_EXECUTE_HANDLER) {return 0;}
     if (!(success&0xffu) || !_finite(screen[0]) ||
-        !_finite(screen[1]) || !_finite(screen[2])) return 0;
+        !_finite(screen[1]) || !_finite(screen[2])) {
+        ++g_w2s_rejected;
+        return 0;
+    }
     x=(screen[0]-min_x)/(max_x-min_x);
     y=(screen[1]-min_y)/(max_y-min_y);
     if (!_finite(x) || !_finite(y) || x<0.f || x>1.f ||
         y<0.f || y>1.f) return 0;
     *px=x;
     *py=1.f-y; /* viewport bottom-up -> Lua top-left */
+    ++g_w2s_success;
+    /* 12340 W2S computes output using +0x330..0x33c render extent,
+     * while the prior 335 adapter normalized by +0x64..0x70 clip rect.
+     * Record both coordinate spaces for one representative visible point,
+     * without changing the native projection or inventing an affine map. */
+    {
+        DWORD now=GetTickCount();
+        if (!g_w2s_probe_tick || (DWORD)(now-g_w2s_probe_tick)>=5000u) {
+            unsigned i;
+            g_w2s_probe_tick=now;
+            g_w2s_probe[0]=screen[0];g_w2s_probe[1]=screen[1];
+            g_w2s_probe[2]=min_x;g_w2s_probe[3]=min_y;
+            g_w2s_probe[4]=max_x;g_w2s_probe[5]=max_y;
+            for (i=0u;i<4u;++i)
+                if (!read_float((uintptr_t)frame+0x330u+4u*i,
+                                &g_w2s_probe[6u+i]))
+                    g_w2s_probe[6u+i]=0.f;
+            g_w2s_probe[10]=x;g_w2s_probe[11]=y;
+            g_w2s_probe_ready=1u;
+        }
+    }
     return 1;
 }
 /* The 2026-09-24 game report showed hook installed=1 but EndScene frames=0.
@@ -455,6 +483,24 @@ static void write_diag(int scan_ok) {
         g_lua_gate_missing,g_lua_init_attempts,g_lua_init_ok,
         g_lua_updates,g_lua_update_errors,g_lua_ready);
     if (length > 0) WriteFile(file, line, (DWORD)length, &written, NULL);
+    if (g_w2s_probe_ready) {
+        char probe[700];
+        RECT rc={0};
+        int size;
+        if (g_game_window) GetClientRect(g_game_window,&rc);
+        size=_snprintf_s(probe,sizeof(probe),_TRUNCATE,
+            "{\"component\":\"PlayerESP\",\"probe\":\"native_w2s\","
+            "\"raw_xy\":[%.4f,%.4f],\"clip_lbrt\":[%.4f,%.4f,%.4f,%.4f],"
+            "\"render_lbrt\":[%.4f,%.4f,%.4f,%.4f],"
+            "\"normalized_bottom_xy\":[%.4f,%.4f],"
+            "\"client_wh\":[%ld,%ld],\"success_count\":%u,\"reject_count\":%u}\n",
+            g_w2s_probe[0],g_w2s_probe[1],g_w2s_probe[2],g_w2s_probe[3],
+            g_w2s_probe[4],g_w2s_probe[5],g_w2s_probe[6],g_w2s_probe[7],
+            g_w2s_probe[8],g_w2s_probe[9],g_w2s_probe[10],g_w2s_probe[11],
+            rc.right-rc.left,rc.bottom-rc.top,g_w2s_success,g_w2s_rejected);
+        if (size>0) WriteFile(file,probe,(DWORD)size,&written,NULL);
+        g_w2s_probe_ready=0u;
+    }
     CloseHandle(file);
 }
 static void drive(void) {

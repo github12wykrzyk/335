@@ -16,6 +16,9 @@ class EspLuaFallback(unittest.TestCase):
         assert 'r[7]<=self.range' in src
         assert 'math.abs(p[1]-x)<98' in src
         assert 'ESP335_LUA_POINTS 24u' in src
+        assert 'world:GetWidth(),world:GetHeight()' in src
+        assert 'm:SetPoint(\\"CENTER\\",world,\\"BOTTOMLEFT\\",x,y)' in src
+        assert 'UIParent:GetWidth(),UIParent:GetHeight()' not in src
         assert 'ESP335_NPC_LABEL_Z 1.60f' in src
     def test_only_autoloot_executes_client_lua(self):
         loot=(ROOT/"src/AutoLoot/autoloot_win32_host.c").read_text()
