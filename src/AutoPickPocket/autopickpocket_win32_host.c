@@ -331,7 +331,7 @@ static int send_heartbeat(PpGuid player,const float xyz[3],float facing,uint32_t
 }
 static int cast_guid_spoof(void *ctx,uintptr_t va,uint32_t spell,PpGuid guid,
     uint32_t nonce,PpGuid player,const float me[3],const float npc[3]){
-    float dx,dy,dz,xy2,d2,xy,desired,ratio,near[3],facing;
+    float dx,dy,dz,xy2,d2,xy,desired,ratio,spoof_xy[3],facing;
     uint32_t started;int cast_sent,restored;
     if(!is_game_thread() || g_spoof_restore_failed || !me || !npc ||
        !g_policy.movement_facing || va!=PP12340_CAST_GUID_VA ||
@@ -349,10 +349,10 @@ static int cast_guid_spoof(void *ctx,uintptr_t va,uint32_t spell,PpGuid guid,
     xy=sqrtf(xy2);desired=sqrtf(3.5f*3.5f-dz*dz);
     if(!(xy>desired) || !_finite(xy) || !_finite(desired))return 0;
     ratio=(xy-desired)/xy;
-    near[0]=me[0]+dx*ratio;near[1]=me[1]+dy*ratio;near[2]=me[2];
-    if(!_finite(near[0]) || !_finite(near[1]))return 0;
+    spoof_xy[0]=me[0]+dx*ratio;spoof_xy[1]=me[1]+dy*ratio;spoof_xy[2]=me[2];
+    if(!_finite(spoof_xy[0]) || !_finite(spoof_xy[1]))return 0;
     started=(uint32_t)GetTickCount();
-    if(!send_heartbeat(player,near,facing,started))return 0;
+    if(!send_heartbeat(player,spoof_xy,facing,started))return 0;
     /* Always attempt restoration, even if the spell send faults. */
     cast_sent=cast_guid(ctx,va,spell,guid,nonce);
     restored=send_heartbeat(player,me,facing,started+1u);
