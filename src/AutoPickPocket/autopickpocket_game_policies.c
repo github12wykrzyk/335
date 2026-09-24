@@ -132,18 +132,18 @@ static void report_ui_observation(void){
     if(!GetModuleFileNameW(NULL,dir,MAX_PATH))return;
     slash=wcsrchr(dir,L'\\');
     if(!slash)return;
-    *slash=L'\\0';
-    if(swprintf_s(path,MAX_PATH,L"%ls\\\\.wow335_debug",dir)<0)return;
+    *slash=L'\0';
+    if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug",dir)<0)return;
     if(!CreateDirectoryW(path,NULL) && GetLastError()!=ERROR_ALREADY_EXISTS)
         return;
-    if(swprintf_s(path,MAX_PATH,L"%ls\\\\.wow335_debug\\\\AutoPickPocket.jsonl",dir)<0)
+    if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug\\AutoPickPocket.jsonl",dir)<0)
         return;
     n=sprintf_s(line,sizeof(line),
-        "{\\\"module\\\":\\\"AutoPickPocket\\\",\\\"ms\\\":%lu,"
-        "\\\"event\\\":25,\\\"reason\\\":\\\"%s\\\","
-        "\\\"attempt\\\":0,\\\"guid_lo\\\":0,\\\"guid_hi\\\":0,"
-        "\\\"guid_attribution\\\":\\\"none\\\","
-        "\\\"count_since_poll\\\":%lu,\\\"last_code_only\\\":true}\\n",
+        "{\"module\":\"AutoPickPocket\",\"ms\":%lu,"
+        "\"event\":25,\"reason\":\"%s\","
+        "\"attempt\":0,\"guid_lo\":0,\"guid_hi\":0,"
+        "\"guid_attribution\":\"none\","
+        "\"count_since_poll\":%lu,\"last_code_only\":true}\n",
         (unsigned long)GetTickCount(),reason,delta);
     if(n<=0 || n>=(int)sizeof(line))return;
     file=CreateFileW(path,FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE|
