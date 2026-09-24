@@ -153,8 +153,8 @@ static uint64_t hash_world(const char *s){
     return h;
 }
 static uint64_t world_token(void *ctx){
-    report_ui_observation();
     char word[128];uint64_t next;
+    report_ui_observation();
     (void)ctx;
     if(!run("local id=UnitGUID and UnitGUID('player');local area=GetCurrentMapAreaID and GetCurrentMapAreaID() or 0;local inst=0;if GetInstanceInfo then local _,_,_,_,_,_,_,i=GetInstanceInfo();inst=i or 0 end;_G.W335PP_WORLD=id and (id..':'..tostring(area)..':'..tostring(inst)) or ''") || !value("W335PP_WORLD",word,sizeof(word)))return 0u;
     next=hash_world(word);
@@ -191,12 +191,12 @@ static int begin_attempt(void *ctx,PpGuid guid,uint32_t nonce){
     return 1; /* arming is NOT successful theft */
 }
 static PpResult cast_result(void *ctx,PpGuid guid,uint32_t nonce){
-    report_ui_observation();
     char sent[32],loot[32],empty[32],fail[32],range[32],money[32],fail_code[8],want[32];
     uint32_t elapsed;
     PpGuid source={0u,0u};
     int source_read;
     (void)ctx;
+    report_ui_observation();
     if(!is_owner() || !active || nonce!=current_attempt ||
        !same(guid,current_target))return PP_RESULT_PENDING;
     elapsed=(uint32_t)(GetTickCount()-started_ms);
