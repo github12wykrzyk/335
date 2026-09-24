@@ -72,10 +72,16 @@ jobs:
           git add -f runtime/AutoLoot335.dll runtime/PlayerESP335.dll
           git diff --cached --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git commit -m "build(esp): register exact PE32 x86 visual TEST runtime"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git push origin HEAD:refs/heads/feature/player-esp-12340
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --cached --quiet
+          $staged = $LASTEXITCODE
+          if ($staged -eq 1) {
+            git commit -m "build(esp): register exact PE32 x86 visual TEST runtime"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git push origin HEAD:refs/heads/feature/player-esp-12340
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            } elseif ($staged -eq 0) {
+            Write-Host "ESP_STAGE: exact output already registered; no commit"
+          } else { exit $staged }
           Write-Host "ESP_REGISTERED_HEAD: $((git rev-parse HEAD).Trim())"
       - name: Request canonical candidate workflow for the new exact SHA
         shell: pwsh
