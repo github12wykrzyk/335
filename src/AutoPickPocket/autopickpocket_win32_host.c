@@ -450,6 +450,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_ENABLED: reason="enabled";break;
     case PP_EVENT_DISABLED: reason="disabled";break;
     case PP_EVENT_RESET: reason="manual_reset";break;
+    case PP_EVENT_LUA_EPOCH: reason="lua_observer_reinitialized";break;
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
@@ -466,6 +467,12 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
        g_packet_unanswered);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);
     CloseHandle(file);
+}
+/* Called only from the verified game thread after the ordinary Lua frame
+ * has been re-created. Uses the same session_id and rotated JSONL writer. */
+void PP335_LogLuaObserverEpoch(void) {
+    PpGuid none={0u,0u};
+    event(NULL,PP_EVENT_LUA_EPOCH,none,0u);
 }
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy) {
     Pp12340Host h;
