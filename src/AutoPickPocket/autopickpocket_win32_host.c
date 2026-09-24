@@ -16,7 +16,7 @@
 #pragma comment(lib,"User32.lib")
 #define PP_MIN_PTR 0x10000u
 #define PP_MAX_PTR 0x7FFE0000u
-#define PP_LOG_CAP 262144u
+#define PP_LOG_CAP 1048576u /* rotate complete JSONL records; no in-place erase */
 #define PP_WINMSG_NAME "WoW335_AutoPickPocket_12340_GameThread_v1"
 #define PP_CREATURE_TYPE_VA ((uintptr_t)0x0071F300u)
 #define PP_CREATURE_UNDEAD 6u
@@ -322,6 +322,13 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_CAST: reason="cast_submitted";break;
     case PP_EVENT_SUCCESS: reason="verified_result";break;
     case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_signal";break;
+    case PP_EVENT_OUT_OF_RANGE: reason="out_of_range";break;
+    case PP_EVENT_LINE_OF_SIGHT: reason="line_of_sight";break;
+    case PP_EVENT_NOT_STEALTHED: reason="not_stealthed";break;
+    case PP_EVENT_NOT_READY: reason="not_ready";break;
+    case PP_EVENT_CAST_REJECTED: reason="cast_rejected_unknown";break;
+    case PP_EVENT_PREFETCH_ONLY: reason="candidates_outside_cast_range";break;
+
     case PP_EVENT_EMPTY: reason="no_pockets";break;
     case PP_EVENT_RETRY: reason="temporary_failure";break;
     case PP_EVENT_TIMEOUT: reason="result_timeout";break;

@@ -32,7 +32,10 @@ typedef enum {
     PP_RESULT_EMPTY = 2,   /* positively confirmed no pockets / already pickpocketed */
     PP_RESULT_RETRYABLE = 3, /* temporary range, LOS, stealth, or cast failure */
     PP_RESULT_PERMANENT = 4, /* positively confirmed ineligible for this session */
-    PP_RESULT_MONEY_SUCCESS = 5 /* wallet increase + nonce-scoped loot event; indicative, not GUID proof */
+    PP_RESULT_MONEY_SUCCESS = 5, /* wallet increase + nonce-scoped loot event; indicative, not GUID proof */
+    PP_RESULT_OUT_OF_RANGE = 6, PP_RESULT_LINE_OF_SIGHT = 7,
+    PP_RESULT_NOT_STEALTHED = 8, PP_RESULT_NOT_READY = 9,
+    PP_RESULT_CAST_REJECTED = 10 /* explicit failure without classified reason */
 } PpResult;
 typedef enum {
     PP_EVENT_CAST = 1,
@@ -51,7 +54,11 @@ typedef enum {
     PP_EVENT_DISABLED = 14,
     PP_EVENT_RESET = 15,
     PP_EVENT_PROBE_REJECTED = 16,
-    PP_EVENT_MONEY_SUCCESS = 17
+    PP_EVENT_MONEY_SUCCESS = 17,
+    PP_EVENT_OUT_OF_RANGE = 18, PP_EVENT_LINE_OF_SIGHT = 19,
+    PP_EVENT_NOT_STEALTHED = 20, PP_EVENT_NOT_READY = 21,
+    PP_EVENT_CAST_REJECTED = 22,
+    PP_EVENT_PREFETCH_ONLY = 23
 } PpEvent;
 typedef struct {
     void *ctx;

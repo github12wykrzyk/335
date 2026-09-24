@@ -194,7 +194,7 @@ static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
 static PpResult pp_result(void *ctx,PpGuid guid,uint32_t attempt_id) {
     Pp12340Adapter *a=(Pp12340Adapter *)ctx;
     PpResult result=a->host.cast_result(a->host.ctx,guid,attempt_id);
-    if (result<PP_RESULT_PENDING || result>PP_RESULT_MONEY_SUCCESS)
+    if (result<PP_RESULT_PENDING || result>PP_RESULT_CAST_REJECTED)
         return PP_RESULT_PENDING;
     return result;
 }
