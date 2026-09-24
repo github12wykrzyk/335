@@ -395,9 +395,9 @@ static void write_diag(int scan_ok) {
 }
 static void drive(void) {
     int scan_ok,camera_ok;
-    Esp335CameraAxes axes;
-    Esp335Camera camera;
-    RECT viewport;
+    Esp335CameraAxes axes={0};
+    Esp335Camera camera={0};
+    RECT viewport={0};
     unsigned visibility;
     int valid_viewport;
     DWORD now;

@@ -110,7 +110,7 @@ def prepare_registration(runtime, registry, index, dll_sha, loot_sha=None):
         "version": "0.1.0-visual-test",
         "sha256": dll_sha, "arch": "x86",
         "canonical_source": "src/PlayerESP/player_esp_win32_host.c",
-        "depends_on": [], "kind": "dll",
+        "depends_on": ["AutoLoot"], "kind": "dll",
     })
     runtime["release_id"] = "feature-player-esp-12340-visual-test"
     runtime["compatibility_sets"] = [{

@@ -9,7 +9,6 @@ static const char g_ui_init[] =
     "if not UIParent then return end\n"
     "if ESP335HUD then return end\n"
     "local e={}\n"
-    "ESP335HUD=e\n"
     "e.opt={true,true,false,false,false,false,true,false,true}\n"
     "e.open=true\n"
     "local frame=CreateFrame(\"Frame\",nil,UIParent)\n"
