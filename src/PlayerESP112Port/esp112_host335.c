@@ -26,6 +26,7 @@
 #include "esp112_motion.h"
 #include "esp112_frame_hook.h"
 #include "esp112_frame_draw.h"
+#include "../SharedGUI/w335_gui_api.h"
 #define ESP112_PROJECTION_INTERVAL_MS 16u
 #define ESP112_OBJECT_SCAN_INTERVAL_MS 50u
 #pragma comment(lib,"Advapi32.lib")
@@ -39,6 +40,10 @@
 #define DDC_TO_NDC_VA ((uintptr_t)0x0047BFF0u)
 #define CAMERA_OFFSET ((uintptr_t)0x7E20u)
 #define MAX_DISTANCE 40.f
+static unsigned g_show_players=1u,g_show_npcs=1u;
+static unsigned g_show_horde=1u,g_show_alliance=1u,g_show_unknown=1u;
+static float g_max_range=MAX_DISTANCE;
+static unsigned g_gui_registered;
 #define MIN_MEM ((uintptr_t)0x10000u)
 #define MAX_MEM ((uintptr_t)0x7FFE0000u)
 #define PROBE_INTERVAL 5000u
@@ -92,6 +97,10 @@ static Esp112Viewport g_probe_view;
 static Esp112PairProbe g_pairs[ESP112_DIAG_PAIRS];
 static unsigned g_pair_count;
 
+static int game_window_foreground(void) {
+    HWND foreground=GetForegroundWindow(),root=GetAncestor(foreground,GA_ROOT);
+    return root==g_game_hwnd || (root && GetWindow(root,GW_OWNER)==g_game_hwnd);
+}
 static int game_thread(void) {
     return g_game_tid && GetCurrentThreadId()==g_game_tid;
 }
@@ -518,7 +527,7 @@ static void drive(IDirect3DDevice9 *device) {
     g_driving=1u;
     foreground=GetForegroundWindow();
     if (!g_visible || !g_game_hwnd || IsIconic(g_game_hwnd) ||
-        GetAncestor(foreground,GA_ROOT)!=g_game_hwnd) {
+        !game_window_foreground()) {
         stop_refresh_timer();
         esp112_overlay_hide_unused(&g_overlay,0u);
         goto done;
@@ -577,17 +586,25 @@ static void drive(IDirect3DDevice9 *device) {
         Esp112Candidate candidate;
         float dx,dy,dz,distance;
         if (!p->guid || !p->max_health) continue;
+        if (p->kind==ESP335_KIND_NPC) {
+            if (!g_show_npcs) continue;
+        } else {
+            if (!g_show_players ||
+                (p->faction==ESP335_HORDE && !g_show_horde) ||
+                (p->faction==ESP335_ALLIANCE && !g_show_alliance) ||
+                (!p->faction && !g_show_unknown)) continue;
+        }
         /* Full enumeration remains 50ms; interpolate NPC position by
          * reading CURRENT game-object XYZ during each verified render frame.
          * An 8-yard margin bounds live reads; invalid GUID/epoch is skipped. */
         dx=base.x-eye.x;dy=base.y-eye.y;dz=base.z-eye.z;
         distance=sqrtf(dx*dx+dy*dy+dz*dz);
-        if (!_finite(distance) || distance>MAX_DISTANCE+8.f) continue;
+        if (!_finite(distance) || distance>g_max_range+8.f) continue;
         if (!esp335_scanner_live_position(&g_scanner,p,&base))
             continue; /* Never draw a despawned/reused NPC at cached XYZ. */
         dx=base.x-eye.x;dy=base.y-eye.y;dz=base.z-eye.z;
         distance=sqrtf(dx*dx+dy*dy+dz*dz);
-        if (!_finite(distance) || distance>MAX_DISTANCE) continue;
+        if (!_finite(distance) || distance>g_max_range) continue;
         head=base;
         memset(&candidate,0,sizeof(candidate));
         /* A 112-style head anchor is a provisional visual baseline, NOT
@@ -715,6 +732,61 @@ done:
     diagnostic();
     g_driving=0u;
 }
+/* UI schema is owned by ESP, never by the shared GUI. No fabricated
+ * hostility, BG allegiance or names: current scanner does not expose them. */
+static const W335GUI_Field g_esp_fields[]={
+    {"visible","ESP labels",W335GUI_TOGGLE,0,1,1},
+    {"players","Players",W335GUI_TOGGLE,0,1,1},
+    {"npc","NPC",W335GUI_TOGGLE,0,1,1},
+    {"horde","Horde",W335GUI_TOGGLE,0,1,1},
+    {"alliance","Alliance",W335GUI_TOGGLE,0,1,1},
+    {"unknown","Unknown players",W335GUI_TOGGLE,0,1,1},
+    {"range","Max range (yd)",W335GUI_RANGE,5,100,40},
+    {"debug","Debug foot markers",W335GUI_TOGGLE,0,1,0}
+};
+static void WINAPI gui_changed(const char *key,int value) {
+    if(!game_thread() || !key)return;
+    if(!strcmp(key,"visible")) {
+        g_visible=value!=0;
+        if(!g_visible) {
+            stop_refresh_timer();
+            esp112_overlay_hide_unused(&g_overlay,0u);
+        } else ensure_refresh_timer();
+    } else if(!strcmp(key,"players"))g_show_players=value!=0;
+    else if(!strcmp(key,"npc"))g_show_npcs=value!=0;
+    else if(!strcmp(key,"horde"))g_show_horde=value!=0;
+    else if(!strcmp(key,"alliance"))g_show_alliance=value!=0;
+    else if(!strcmp(key,"unknown"))g_show_unknown=value!=0;
+    else if(!strcmp(key,"range") && value>=5 && value<=100)
+        g_max_range=(float)value;
+    else if(!strcmp(key,"debug"))g_debug_pairs=value!=0;
+}
+static void gui_unregister(void) {
+    HMODULE gui=GetModuleHandleA("WoW335GUI.dll");
+    W335GUI_UnregisterFn unregister_fn;
+    if(!game_thread() || !g_gui_registered || !gui)return;
+    unregister_fn=(W335GUI_UnregisterFn)GetProcAddress(gui,"W335GUI_Unregister");
+    if(!unregister_fn)unregister_fn=(W335GUI_UnregisterFn)
+        GetProcAddress(gui,"_W335GUI_Unregister@4");
+    if(unregister_fn)unregister_fn("PlayerESP");
+    g_gui_registered=0u;
+}
+static void gui_register(void) {
+    HMODULE gui=GetModuleHandleA("WoW335GUI.dll");
+    W335GUI_RegisterFn register_fn;
+    W335GUI_Module m;
+    if(!game_thread() || !g_enabled || g_gui_registered || !gui)return;
+    register_fn=(W335GUI_RegisterFn)GetProcAddress(gui,"W335GUI_Register");
+    if(!register_fn)register_fn=(W335GUI_RegisterFn)
+        GetProcAddress(gui,"_W335GUI_Register@4");
+    if(!register_fn)return;
+    memset(&m,0,sizeof(m));
+    m.size=sizeof(m);m.abi_version=W335GUI_ABI_VERSION;
+    m.id="PlayerESP";m.filename="PlayerESP335.dll";m.title="Player ESP";
+    m.field_count=sizeof(g_esp_fields)/sizeof(g_esp_fields[0]);
+    m.fields=g_esp_fields;m.on_change=gui_changed;
+    g_gui_registered=register_fn(&m)!=0;
+}
 __declspec(dllexport) UINT WINAPI W335_MessageId(void) {
     return RegisterWindowMessageA(ESP112_MSG);
 }
@@ -722,6 +794,7 @@ static void control(UINT message,WPARAM command,HWND hwnd) {
     if (!g_message) g_message=RegisterWindowMessageA(ESP112_MSG);
     if (message!=g_message) return;
     if (command==0u) {
+        gui_unregister();
         stop_refresh_timer();
         g_enabled=0u;
         g_frame_mode=0u;
@@ -747,6 +820,7 @@ static void control(UINT message,WPARAM command,HWND hwnd) {
             g_game_hwnd=root;
     }
     g_enabled=1u;
+    gui_register();
     ensure_refresh_timer();
 }
 static void try_frame_install(void) {
@@ -773,7 +847,7 @@ static void game_frame(IDirect3DDevice9 *device,void *user) {
     (void)user;
     if (!game_thread()) { ++g_frame_foreign_thread;return; }
     if (!g_enabled || !g_visible || !g_game_hwnd || g_frame_disabled ||
-        GetAncestor(GetForegroundWindow(),GA_ROOT)!=g_game_hwnd ||
+        !game_window_foreground() ||
         FAILED(IDirect3DDevice9_GetViewport(device,&vp)) ||
         !get_viewport(&view) || vp.X!=0u || vp.Y!=0u ||
         vp.Width!=(UINT)view.width || vp.Height!=(UINT)view.height)
@@ -794,6 +868,9 @@ static void game_frame(IDirect3DDevice9 *device,void *user) {
     drive(device);
 }
 static void check_insert(const MSG *message,WPARAM mode) {
+    /* Single hotkey owner when the shared GUI has registered this module. */
+    if(g_gui_registered && !(GetKeyState(VK_CONTROL)&0x8000 &&
+         GetKeyState(VK_SHIFT)&0x8000)) return;
     if (!g_enabled || !g_game_hwnd || !message || mode!=PM_REMOVE ||
         message->message!=WM_KEYUP || message->wParam!=VK_INSERT ||
         GetAncestor(message->hwnd,GA_ROOT)!=g_game_hwnd) return;

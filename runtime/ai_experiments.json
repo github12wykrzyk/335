@@ -45,6 +45,33 @@
       "verified_commit": null,
       "tests": [],
       "package": null
+    },
+    {
+      "id": "shared-gui-12340",
+      "goal": "Single future-proof in-game GUI, real loaded DLL status and settings registration; integrate current PlayerESP without introducing a second D3D9 owner",
+      "branch": "feature/shared-gui-12340",
+      "modules": [
+        "SharedGUI",
+        "PlayerESP"
+      ],
+      "dependencies": [
+        "Client12340",
+        "AutoLoot",
+        "PlayerESP"
+      ],
+      "shared_resources": [
+        "logical:input",
+        "win32:gui-hotkey-insert",
+        "win32:gui-popup-window",
+        "win32:WH_GETMESSAGE",
+        "win32:WH_CALLWNDPROC",
+        "logical:render"
+      ],
+      "status": "in_progress",
+      "observed_head": "61e03a76273e1b5074ce35551bb7f3fbf4718d68",
+      "verified_commit": null,
+      "tests": [],
+      "package": null
     }
   ]
 }

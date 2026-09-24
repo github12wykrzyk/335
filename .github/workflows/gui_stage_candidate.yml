@@ -1,0 +1,78 @@
+name: Stage shared GUI and ESP TEST
+on:
+  push:
+    branches: [feature/shared-gui-12340]
+    paths:
+      - 'src/SharedGUI/**'
+      - 'src/PlayerESP112Port/**'
+      - 'tools/stage_gui_candidate.py'
+      - 'tests/test_shared_gui.py'
+      - '.github/workflows/gui_stage_candidate.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: shared-gui-stage
+  cancel-in-progress: true
+jobs:
+  stage:
+    if: github.ref_name == 'feature/shared-gui-12340'
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Preflight exact feature HEAD, repo and current runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw 'STALE_CHECKOUT' }
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_module_registry.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build all native Windows PE32 x86 DLLs and stage exact runtime
+        shell: pwsh
+        run: |
+          python tools/stage_gui_candidate.py --stage
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_repo.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_current.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/verify_module_registry.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/build_active.py --all --report dist/gui-native-build.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit exact compiled binaries and manifest only to unchanged feature HEAD
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $remote=git ls-remote --exit-code origin refs/heads/feature/shared-gui-12340
+          if ($LASTEXITCODE -ne 0 -or -not $remote) { throw 'REMOTE_HEAD_MISSING' }
+          $actual=(($remote -split '\s+')[0]).Trim()
+          if ($actual -ne $env:GITHUB_SHA) { throw "STALE_BRANCH: $actual" }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add AI_INDEX.json runtime/current.json runtime/module_registry.json
+          git add -f runtime/AutoLoot335.dll runtime/WoW335GUI.dll runtime/PlayerESP335.dll
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 1) { throw 'NO_NATIVE_RUNTIME_DELTA' }
+          git commit -m "build(gui): pin native x86 shared GUI and ESP TEST runtime"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:refs/heads/feature/shared-gui-12340
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "SHARED_GUI_REGISTERED_HEAD: $((git rev-parse HEAD).Trim())"
+          Write-Host "GAME_TEST: NOT VERIFIED; canonical candidate workflow runs on new HEAD"
