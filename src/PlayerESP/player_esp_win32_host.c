@@ -1,4 +1,4 @@
-/* Read-only PlayerESP game-thread host, diagnostic stage, not a visual ESP. */
+/* PlayerESP in-game GUI + read-only scanner on WoW window thread. */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <wincrypt.h>
@@ -27,6 +27,15 @@ static uint64_t g_last_player_guid, g_epoch;
 static HWND g_game_window;
 static DWORD g_install_try_ms;
 static unsigned g_camera_ok, g_camera_bad, g_markers_rendered;
+static unsigned g_install_attempts, g_install_failures, g_bind_failed;
+static CRITICAL_SECTION g_frame_lock;
+static volatile LONG g_shared_ready, g_gui_open=1;
+static volatile LONG g_ui_flags=ESP335_GUI_DEFAULT;
+static Esp335Core g_frame_snapshot;
+static Esp335CameraAxes g_frame_axes;
+static DWORD g_frame_tick;
+static unsigned g_frame_camera_valid, g_frame_scan_valid;
+
 
 static int on_thread(void) { return g_thread && GetCurrentThreadId() == g_thread; }
 static int readable(uintptr_t ptr, size_t bytes) {
@@ -178,68 +187,90 @@ static int read_vec3(uintptr_t address, Esp335Vec3 *value) {
            read_float(address+4u,&value->y) &&
            read_float(address+8u,&value->z);
 }
-static int read_camera(IDirect3DDevice9 *device, Esp335Camera *camera) {
+static int read_camera_axes(Esp335CameraAxes *a) {
     uint32_t worldframe, active;
-    D3DVIEWPORT9 viewport;
-    Esp335CameraAxes a;
-    float source_aspect;
-    float viewport_aspect;
-    if (!on_thread() || !device || !camera ||
+    Esp335Camera temporary;
+    if (!on_thread() || !a ||
         !read32(NULL,WORLD_FRAME_PTR,&worldframe) ||
         worldframe < MIN_PTR || worldframe >= MAX_PTR ||
         !read32(NULL,(uintptr_t)worldframe+ACTIVE_CAMERA_OFFSET,&active) ||
-        active < MIN_PTR || active >= MAX_PTR ||
-        FAILED(IDirect3DDevice9_GetViewport(device,&viewport)) ||
-        viewport.Width < 64u || viewport.Height < 64u)
+        active < MIN_PTR || active >= MAX_PTR) return 0;
+    memset(a,0,sizeof(*a));
+    if (!read_vec3((uintptr_t)active+0x08u,&a->eye) ||
+        !read_vec3((uintptr_t)active+0x14u,&a->forward) ||
+        !read_vec3((uintptr_t)active+0x20u,&a->up) ||
+        !read_vec3((uintptr_t)active+0x2Cu,&a->right) ||
+        !read_float((uintptr_t)active+0x38u,&a->near_clip) ||
+        !read_float((uintptr_t)active+0x3Cu,&a->far_clip) ||
+        !read_float((uintptr_t)active+0x40u,&a->fov_y) ||
+        !read_float((uintptr_t)active+0x44u,&a->aspect))
         return 0;
-    memset(&a,0,sizeof(a));
-    if (!read_vec3((uintptr_t)active+0x08u,&a.eye) ||
-        !read_vec3((uintptr_t)active+0x14u,&a.forward) ||
-        !read_vec3((uintptr_t)active+0x20u,&a.up) ||
-        !read_vec3((uintptr_t)active+0x2Cu,&a.right) ||
-        !read_float((uintptr_t)active+0x38u,&a.near_clip) ||
-        !read_float((uintptr_t)active+0x3Cu,&a.far_clip) ||
-        !read_float((uintptr_t)active+0x40u,&a.fov_y) ||
-        !read_float((uintptr_t)active+0x44u,&source_aspect))
-        return 0;
-    viewport_aspect=(float)viewport.Width/(float)viewport.Height;
-    /* The stored field must at least agree with a sensible aspect
-     * before applying the actual live viewport's aspect ratio. */
-    if (source_aspect < 0.5f || source_aspect > 6.f ||
-        fabsf(source_aspect-viewport_aspect) > viewport_aspect*0.35f)
-        return 0;
-    a.aspect=viewport_aspect;
-    a.viewport_x=(float)viewport.X;
-    a.viewport_y=(float)viewport.Y;
-    a.viewport_width=(float)viewport.Width;
-    a.viewport_height=(float)viewport.Height;
-    return esp335_camera_build(&a,camera);
+    a->viewport_width=1024.f;
+    a->viewport_height=768.f;
+    /* Pure validation of candidate camera axes on the game thread.
+     * Renderer will substitute the live device viewport independently. */
+    return esp335_camera_build(a,&temporary);
 }
 static void draw_frame(IDirect3DDevice9 *device, void *user) {
+    Esp335Core frame;
+    Esp335CameraAxes axes;
     Esp335Camera camera;
     Esp335Filter filter;
     Esp335Label labels[ESP335_MAX_PLAYERS];
+    D3DVIEWPORT9 viewport;
     size_t count;
+    DWORD last_frame=0;
+    unsigned scan_ok=0,camera_ok=0,players=0,npcs=0;
+    unsigned flags=(unsigned)InterlockedCompareExchange(&g_ui_flags,0,0);
+    int show=InterlockedCompareExchange(&g_gui_open,0,0)!=0;
     (void)user;
-    if (!on_thread() || !g_enabled || !g_scanner.bound ||
-        !g_scanner.snapshot.world_epoch || g_scanner.snapshot.frame_open ||
-        g_scanner.snapshot.world_epoch != epoch(NULL) ||
-        (DWORD)(GetTickCount()-g_tick_ms)>250u)
+    if (!device || InterlockedCompareExchange(&g_shared_ready,0,0)==0)
         return;
-    if (!read_camera(device,&camera)) {
-        ++g_camera_bad;
-        return;
+    if (!TryEnterCriticalSection(&g_frame_lock)) return;
+    frame=g_frame_snapshot;
+    axes=g_frame_axes;
+    last_frame=g_frame_tick;
+    scan_ok=g_frame_scan_valid;
+    camera_ok=g_frame_camera_valid;
+    players=g_scanner.accepted_players;
+    npcs=g_scanner.accepted_npcs;
+    LeaveCriticalSection(&g_frame_lock);
+    if ((flags & ESP335_GUI_ESP) && scan_ok && camera_ok &&
+        frame.world_epoch && !frame.frame_open &&
+        (DWORD)(GetTickCount()-last_frame)<250u &&
+        SUCCEEDED(IDirect3DDevice9_GetViewport(device,&viewport)) &&
+        viewport.Width>=64u && viewport.Height>=64u) {
+        axes.viewport_x=(float)viewport.X;
+        axes.viewport_y=(float)viewport.Y;
+        axes.viewport_width=(float)viewport.Width;
+        axes.viewport_height=(float)viewport.Height;
+        axes.aspect=(float)viewport.Width/(float)viewport.Height;
+        if (esp335_camera_build(&axes,&camera)) {
+            memset(&filter,0,sizeof(filter));
+            filter.show_all=(flags & ESP335_GUI_PLAYERS)!=0u;
+            filter.show_players=(flags & (ESP335_GUI_PLAYERS|
+                ESP335_GUI_HORDE|ESP335_GUI_ALLIANCE|
+                ESP335_GUI_HOSTILE|ESP335_GUI_BG_ENEMY))!=0u;
+            filter.factions=0u;
+            if (flags & ESP335_GUI_HORDE) filter.factions|=ESP335_HORDE;
+            if (flags & ESP335_GUI_ALLIANCE) filter.factions|=ESP335_ALLIANCE;
+            filter.show_hostile=(flags & ESP335_GUI_HOSTILE)!=0u;
+            filter.show_bg_opponents=(flags & ESP335_GUI_BG_ENEMY)!=0u;
+            filter.show_npc=(flags & ESP335_GUI_NPC)!=0u;
+            filter.show_npc_hostile=(flags & ESP335_GUI_NPC_ENEMY)!=0u;
+            filter.show_unknown=(flags & ESP335_GUI_UNKNOWN)!=0u;
+            filter.max_distance=120.f;
+            count=esp335_labels(&frame,&camera,&filter,1,
+                                labels,ESP335_MAX_PLAYERS);
+            if (count) g_markers_rendered+=(unsigned)esp335_d3d9_draw_labels(
+                                                    device,labels,count);
+        }
     }
-    ++g_camera_ok;
-    memset(&filter,0,sizeof(filter));
-    /* Player metadata classification is still UNKNOWN; without show_all
-     * we would silently render zero labels despite a valid player scanner. */
-    filter.show_all=1u;
-    filter.max_distance=120.f;
-    count=esp335_labels(&g_scanner.snapshot,&camera,&filter,0,
-                        labels,ESP335_MAX_PLAYERS);
-    if (count) g_markers_rendered+=(unsigned)esp335_d3d9_draw_labels(device,
-                                                                    labels,count);
+    /* GUI is independent of camera/target visibility: always render it on
+     * the actual EndScene thread even if scanner or projection failed. */
+    if (show) esp335_d3d9_draw_panel(device,flags,scan_ok,players,npcs,
+                                    camera_ok,g_markers_rendered,
+                                    esp335_d3d9_dropped());
 }
 static void try_renderer(void) {
     DWORD now=GetTickCount();
@@ -247,14 +278,47 @@ static void try_renderer(void) {
         !g_game_window || (DWORD)(now-g_install_try_ms)<2500u) return;
     g_install_try_ms=now;
     if (!esp335_d3d9_installed()) {
-        esp335_d3d9_install(g_game_window,draw_frame,NULL);
+        ++g_install_attempts;
+        if (!esp335_d3d9_install(g_game_window,draw_frame,NULL))
+            ++g_install_failures;
     }
 }
-
+static void input(MSG *msg, WPARAM remove_mode) {
+    int index;
+    unsigned flags,bit;
+    float x,y;
+    if (!msg || !g_enabled || !on_thread() || remove_mode!=PM_REMOVE ||
+        !g_game_window || msg->hwnd!=g_game_window) return;
+    if (msg->message==WM_KEYUP && msg->wParam==VK_INSERT) {
+        InterlockedExchange(&g_gui_open,
+            InterlockedCompareExchange(&g_gui_open,0,0) ? 0 : 1);
+        msg->message=WM_NULL;
+        return;
+    }
+    if (msg->message!=WM_LBUTTONUP ||
+        !InterlockedCompareExchange(&g_gui_open,0,0)) return;
+    x=(float)(short)LOWORD(msg->lParam);
+    y=(float)(short)HIWORD(msg->lParam);
+    index=esp335_d3d9_panel_hit(x,y);
+    if (index<0) return;
+    flags=(unsigned)InterlockedCompareExchange(&g_ui_flags,0,0);
+    bit=1u << (unsigned)index;
+    flags^=bit;
+    /* Specific player filters deactivate ALL so the setting is effective.
+     * Faction and hostility remain separate on mixed-faction BGs. */
+    if (index>=2 && index<=5 && (flags & bit))
+        flags&=~ESP335_GUI_PLAYERS;
+    if (index==1 && (flags & ESP335_GUI_PLAYERS))
+        flags&=~(ESP335_GUI_HORDE|ESP335_GUI_ALLIANCE|
+                 ESP335_GUI_HOSTILE|ESP335_GUI_BG_ENEMY);
+    InterlockedExchange(&g_ui_flags,(LONG)flags);
+    /* Native game must not click through our checkbox into the world. */
+    msg->message=WM_NULL;
+}
 static void write_diag(int scan_ok) {
     wchar_t path[MAX_PATH], *slash;
     HANDLE file;
-    char line[400];
+    char line[640];
     DWORD written, now = GetTickCount();
     int length;
     if (!on_thread() || (DWORD)(now - g_log_ms) < 5000u) return;
@@ -272,30 +336,55 @@ static void write_diag(int scan_ok) {
     if (file == INVALID_HANDLE_VALUE) return;
     length = _snprintf_s(line, sizeof(line), _TRUNCATE,
         "{\"component\":\"PlayerESP\",\"scan_ok\":%u,\"players\":%u,"
-        "\"epoch\":%I64u,\"scans_ok\":%u,\"scans_failed\":%u,"
-        "\"render_frames\":%u,\"camera_ok\":%u,\"camera_bad\":%u,"
-        "\"markers\":%u}\n",
+        "\"epoch\":%I64u,\"seen_players\":%u,\"seen_npcs\":%u,"
+        "\"accepted_players\":%u,\"accepted_npcs\":%u,"
+        "\"position_failures\":%u,\"metadata_failures\":%u,"
+        "\"scan_failures\":%u,\"render_installed\":%u,"
+        "\"render_attempts\":%u,\"render_failures\":%u,"
+        "\"render_frames\":%u,\"render_dropped\":%u,"
+        "\"camera_ok\":%u,\"camera_bad\":%u,"
+        "\"markers\":%u,\"ui_flags\":%u,\"bind_failed\":%u}\n",
         scan_ok ? 1u : 0u,
         scan_ok ? (unsigned)g_scanner.snapshot.count : 0u,
         (unsigned __int64)g_scanner.snapshot.world_epoch,
-        g_scans_ok, g_scans_failed,
-        esp335_d3d9_frames(),g_camera_ok,g_camera_bad,g_markers_rendered);
+        g_scanner.seen_players,g_scanner.seen_npcs,
+        g_scanner.accepted_players,g_scanner.accepted_npcs,
+        g_scanner.position_failures,g_scanner.metadata_failures,
+        g_scanner.scan_failures,esp335_d3d9_installed()?1u:0u,
+        g_install_attempts,g_install_failures,
+        esp335_d3d9_frames(),esp335_d3d9_dropped(),
+        g_camera_ok,g_camera_bad,g_markers_rendered,
+        (unsigned)InterlockedCompareExchange(&g_ui_flags,0,0),g_bind_failed);
     if (length > 0) WriteFile(file, line, (DWORD)length, &written, NULL);
     CloseHandle(file);
 }
 static void drive(void) {
-    int ok;
+    int scan_ok,camera_ok;
+    Esp335CameraAxes axes;
     DWORD now;
-    if (!g_enabled || !g_scanner.bound || !on_thread() || g_driving) return;
-    now = GetTickCount();
-    if ((DWORD)(now - g_tick_ms) < 40u) return;
-    g_driving = 1u;
-    g_tick_ms = now;
-    ok = esp335_scanner_collect(&g_scanner);
-    if (ok) ++g_scans_ok; else ++g_scans_failed;
+    if (!g_enabled || !g_scanner.bound || !on_thread() || g_driving)
+        return;
+    now=GetTickCount();
+    if ((DWORD)(now-g_tick_ms)<40u) return;
+    g_driving=1u;
+    g_tick_ms=now;
+    scan_ok=esp335_scanner_collect(&g_scanner);
+    camera_ok=read_camera_axes(&axes);
+    if (scan_ok) ++g_scans_ok; else ++g_scans_failed;
+    if (camera_ok) ++g_camera_ok; else ++g_camera_bad;
+    if (InterlockedCompareExchange(&g_shared_ready,0,0)) {
+        EnterCriticalSection(&g_frame_lock);
+        if (scan_ok) g_frame_snapshot=g_scanner.snapshot;
+        else esp335_reset(&g_frame_snapshot);
+        if (camera_ok) g_frame_axes=axes;
+        g_frame_camera_valid=camera_ok?1u:0u;
+        g_frame_scan_valid=scan_ok?1u:0u;
+        g_frame_tick=now;
+        LeaveCriticalSection(&g_frame_lock);
+    }
     try_renderer();
-    write_diag(ok);
-    g_driving = 0u;
+    write_diag(scan_ok);
+    g_driving=0u;
 }
 __declspec(dllexport) UINT WINAPI W335_MessageId(void) {
     return RegisterWindowMessageA(MESSAGE_NAME);
@@ -308,6 +397,12 @@ static void control(UINT message, WPARAM command, HWND hwnd) {
         g_enabled = 0u;
         esp335_d3d9_uninstall();
         esp335_reset(&g_scanner.snapshot);
+        if (InterlockedCompareExchange(&g_shared_ready,0,0)) {
+            EnterCriticalSection(&g_frame_lock);
+            esp335_reset(&g_frame_snapshot);
+            g_frame_scan_valid=g_frame_camera_valid=0;
+            LeaveCriticalSection(&g_frame_lock);
+        }
         return;
     }
     if (command != 1u && command != 2u) return;
@@ -323,13 +418,24 @@ static void control(UINT message, WPARAM command, HWND hwnd) {
         host.player_metadata = metadata;
         host.world_epoch = epoch;
         if (!esp335_scanner_bind(&g_scanner, &host)) {
+            ++g_bind_failed;
+            g_log_ms=GetTickCount()-6000u;
+            write_diag(0);
             g_thread = 0u;
             return;
         }
     }
     if (g_scanner.bound && on_thread() && command == 1u) {
+        if (!InterlockedCompareExchange(&g_shared_ready,0,0)) {
+            if (!InitializeCriticalSectionAndSpinCount(&g_frame_lock,4000u)) return;
+            InterlockedExchange(&g_shared_ready,1);
+        }
         g_enabled = 1u;
-        if (hwnd && IsWindow(hwnd)) g_game_window=hwnd;
+        if (hwnd && IsWindow(hwnd)) {
+            HWND root=GetAncestor(hwnd,GA_ROOT);
+            DWORD tid=GetWindowThreadProcessId(root,NULL);
+            if (tid==g_thread) g_game_window=root;
+        }
         try_renderer();
     }
 }
@@ -339,6 +445,7 @@ __declspec(dllexport) LRESULT CALLBACK W335_HookProc(int code, WPARAM w, LPARAM 
     message = (MSG *)l;
     if (message->message != WM_QUIT) {
         control(message->message, message->wParam, message->hwnd);
+        input(message,w);
         drive();
     }
     return CallNextHookEx(NULL, code, w, l);
