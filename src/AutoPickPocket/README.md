@@ -168,3 +168,8 @@ the engine must never classify an unknown result as confirmed failure
 or successful theft. On the next exact-SHA report compare packet-only
 casts, result_timeout counts, repeated GUIDs and actual gold changes.
 Do not promote this candidate to stable without in-game confirmation.
+
+The `no_ack_count` log field is always zero in this packet-only TEST:
+previous native-switch bookkeeping was removed, not evidence that the
+server acknowledged all casts. Only authoritative spell/loot observations
+can establish a result; a 200ms timeout is an unknown outcome.
