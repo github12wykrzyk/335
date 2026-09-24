@@ -7,6 +7,7 @@
 #include <string.h>
 #include <wchar.h>
 #include <float.h>
+#include <math.h>
 #include "player_esp_scanner.h"
 #include "player_esp_camera.h"
 #include "player_esp_d3d9.h"
@@ -271,7 +272,9 @@ static void write_diag(int scan_ok) {
     if (file == INVALID_HANDLE_VALUE) return;
     length = _snprintf_s(line, sizeof(line), _TRUNCATE,
         "{\"component\":\"PlayerESP\",\"scan_ok\":%u,\"players\":%u,"
-        "\"epoch\":%I64u,\"scans_ok\":%u,\"scans_failed\":%u,"\n        "\"render_frames\":%u,\"camera_ok\":%u,\"camera_bad\":%u,"\n        "\"markers\":%u}\n",
+        "\"epoch\":%I64u,\"scans_ok\":%u,\"scans_failed\":%u,"
+        "\"render_frames\":%u,\"camera_ok\":%u,\"camera_bad\":%u,"
+        "\"markers\":%u}\n",
         scan_ok ? 1u : 0u,
         scan_ok ? (unsigned)g_scanner.snapshot.count : 0u,
         (unsigned __int64)g_scanner.snapshot.world_epoch,
@@ -345,7 +348,7 @@ __declspec(dllexport) LRESULT CALLBACK W335_CallWndProc(int code, WPARAM w, LPAR
     if (code < 0 || !l) return CallNextHookEx(NULL, code, w, l);
     message = (const CWPSTRUCT *)l;
     if (message->message != WM_QUIT) {
-        control(message->message, message->wParam);
+        control(message->message, message->wParam, message->hwnd);
         drive();
     }
     return CallNextHookEx(NULL, code, w, l);
