@@ -216,7 +216,7 @@ static void poll_burst(PpEngine *e,uint32_t now){
         }else if(outcome==PP_RESULT_PERMANENT){
             block(e,p->guid,now,0u,1);
             emit(e,PP_EVENT_INELIGIBLE,p->guid);
-        else if(outcome==PP_RESULT_OUT_OF_RANGE || outcome==PP_RESULT_LINE_OF_SIGHT ||
+        }else if(outcome==PP_RESULT_OUT_OF_RANGE || outcome==PP_RESULT_LINE_OF_SIGHT ||
                  outcome==PP_RESULT_NOT_STEALTHED || outcome==PP_RESULT_NOT_READY ||
                  outcome==PP_RESULT_CAST_REJECTED){
             PpEvent why=outcome==PP_RESULT_OUT_OF_RANGE ? PP_EVENT_OUT_OF_RANGE :
