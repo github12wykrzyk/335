@@ -112,3 +112,22 @@ This does not treat an unconfirmed spell as a success, force cooldown,
 change target/movement, or modify AutoLoot; the server still controls
 real spell availability. Validation requires a new exact x86 binary,
 finalized TEST candidate and a user's in-game report.
+
+## 1.0.7 TEST: same-pulse local range failover (Sprint phase 1)
+
+A pre-submission geometric range miss is distinct from a server-rejected
+packet. The adapter returns PP_CAST_LOCAL_RANGE without sending or treating
+that GUID as a server retry. The decision engine releases the exact attempt,
+temporarily excludes that GUID for 250 ms, and searches up to four different
+nearby candidates during the *same* loader pulse. It submits at most one
+actual spell cast per pulse and retains the 900 ms result timeout for casts
+that were actually submitted. A server-correlated OUT_OF_RANGE still releases
+the pending GUID and selects another candidate on its result pulse.
+
+The bypass is bounded to protect the WoW game thread from an unbounded
+object-manager search. It never forces server range, cooldown, stealth or
+movement and never guesses an unscoped UI error's GUID. Structured logs
+distinguish local_range_precheck_rejected from server out_of_range and
+from an actual cast_submitted. In-game Sprint testing must compare missed
+mobs, packet submission-to-result latency, pulse gap, and live transport
+(packet versus native fallback) on the exact installed commit SHA.
