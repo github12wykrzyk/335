@@ -44,3 +44,7 @@ ticków innego modułu. Przed rejestracją DLL: rzeczywisty PE32 x86,
 odtwarzalny build, zgodne hash/manifest, test konfliktów hooków,
 test przejścia do BG/arena, test po Alt+Tab/Reset D3D i kliknięcia GUID.
 Żaden PASS samego audytu archiwum albo rdzenia nie oznacza pakietu gry.
+
+## Audyt dokladnego klienta
+
+`tools/audit_player_esp_client.py` porownuje SHA i rozmiar dokladnego `Wow.exe`, mapuje kandydackie VA kamery, world frame i wyszukiwania GUID na sekcje PE32 i zapisuje pierwsze 16 bajtow do raportu CI. Jest to wyłącznie kontrola statyczna: obecność bajtów NIE potwierdza argumentów, konwencji wywołań, poprawności projekcji, zgodności z serwerem ani działania wizualnego ESP. Nie kopiuje adresow do runtime bez niezaleznej weryfikacji.

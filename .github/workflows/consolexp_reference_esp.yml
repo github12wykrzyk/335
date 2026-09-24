@@ -14,6 +14,8 @@ on:
       - 'tests/test_player_esp_core.py'
       - 'tests/test_player_esp_win32_host.py'
       - 'tools/verify_esp_native.py'
+      - 'tools/audit_player_esp_client.py'
+      - 'tests/test_esp_client_audit.py'
       - 'docs/CONSOLEXP_REFERENCE_ESP.md'
       - '.github/workflows/consolexp_reference_esp.yml'
   pull_request:
@@ -30,13 +32,17 @@ jobs:
           python-version: '3.12'
       - name: Validate uploaded archive identity and CRC without executing binaries
         run: python tools/audit_consolexp_reference.py --report dist/consolexp_reference_audit.json
+      - name: Audit camera/object reference VAs against exact selected Wow.exe
+        run: python tools/audit_player_esp_client.py --report dist/esp_client_static_audit.json
       - name: Test reference safety and portable ESP core
-        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v && python -m unittest discover -s tests -p 'test_player_esp_win32_host.py' -v
+        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v && python -m unittest discover -s tests -p 'test_player_esp_win32_host.py' -v && python -m unittest discover -s tests -p 'test_esp_client_audit.py' -v
       - name: Publish inert reference inventory (not game package)
         uses: actions/upload-artifact@v4
         with:
           name: consolexp-reference-audit-${{ github.sha }}
-          path: dist/consolexp_reference_audit.json
+          path: |
+            dist/consolexp_reference_audit.json
+            dist/esp_client_static_audit.json
           if-no-files-found: error
   esp-core-win32:
     runs-on: windows-2022
