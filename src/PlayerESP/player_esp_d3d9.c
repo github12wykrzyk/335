@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <d3d9.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include "player_esp_d3d9.h"
