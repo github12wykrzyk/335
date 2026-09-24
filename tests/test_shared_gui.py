@@ -10,7 +10,7 @@ from verify_module_registry import validate
 class SharedGuiContracts(unittest.TestCase):
     def test_no_second_d3d_owner_or_independent_loader(self):
         code=(ROOT/"src/SharedGUI/w335_gui_win32.c").read_text(encoding="utf-8")
-        for item in ("CreateToolhelp32Snapshot","Module32FirstA","Module32NextA",
+        for item in ("CreateToolhelp32Snapshot","Module32First","Module32Next",
                      "W335GUI_Register","W335GUI_Unregister","VK_INSERT"):
             self.assertIn(item,code)
         for item in ("MH_CreateHook","SetWindowsHookEx","Direct3DCreate9",

@@ -132,7 +132,7 @@ static void populate_fields(void) {
 }
 static void refresh_list(void) {
     HANDLE snapshot;
-    MODULEENTRY32A e;
+    MODULEENTRY32 e;
     char selected[96]={0};
     unsigned found=0;
     if (!g_list || !on_thread())return;
@@ -143,7 +143,7 @@ static void refresh_list(void) {
                                       GetCurrentProcessId());
     if(snapshot==INVALID_HANDLE_VALUE)return;
     memset(&e,0,sizeof(e));e.dwSize=sizeof(e);
-    if(Module32FirstA(snapshot,&e)) do {
+    if(Module32First(snapshot,&e)) do {
         char title[160];
         int index,owner;
         size_t n=strlen(e.szModule);
@@ -157,7 +157,7 @@ static void refresh_list(void) {
             if(owner>=0 && selected[0] && !_stricmp(selected,e.szModule))
                 found=(unsigned)index+1u;
         }
-    }while(Module32NextA(snapshot,&e));
+    }while(Module32Next(snapshot,&e));
     CloseHandle(snapshot);
     if(!found && g_mod_count) {
         int index;
