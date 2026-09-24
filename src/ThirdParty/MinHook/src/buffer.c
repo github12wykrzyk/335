@@ -26,6 +26,10 @@
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* 335: upstream MSVC x86 warnings only; preserve /W4 /WX on own sources. */
+#if defined(_MSC_VER) && defined(_M_IX86)
+#pragma warning(disable: 4201 4100)
+#endif
 #include <windows.h>
 #include "buffer.h"
 
