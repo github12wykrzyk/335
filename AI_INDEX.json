@@ -45,6 +45,11 @@
       "component": "AutoLoot",
       "source": "src/AutoLoot/autoloot_win32_host.c",
       "docs": "src/AutoLoot/NATIVE_ADAPTER.md"
+    },
+    {
+      "component": "PlayerESP",
+      "source": "src/PlayerESP/player_esp_win32_host.c",
+      "docs": "src/PlayerESP/README.md"
     }
   ],
   "state": "test-candidate"

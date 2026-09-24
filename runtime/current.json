@@ -8,7 +8,7 @@
     "platform": "Windows",
     "architecture": "x86"
   },
-  "release_id": "work-autoloot-input-responsive-12340",
+  "release_id": "feature-player-esp-12340-visual-test",
   "state": "test-candidate",
   "canonical_source_policy": "Each active runtime file must point to exact existing src/ lineage or documented external source.",
   "files": [
@@ -31,14 +31,25 @@
       "canonical_source": "src/AutoLoot/autoloot_win32_host.c",
       "depends_on": [],
       "kind": "dll"
+    },
+    {
+      "component": "PlayerESP",
+      "path": "runtime/PlayerESP335.dll",
+      "version": "0.1.0-visual-test",
+      "sha256": "b593b947264381a882c9d811d4c36f5974893e97915b6cb24a5707fb19f25650",
+      "arch": "x86",
+      "canonical_source": "src/PlayerESP/player_esp_win32_host.c",
+      "depends_on": [],
+      "kind": "dll"
     }
   ],
   "compatibility_sets": [
     {
-      "id": "client12340-autoloot",
+      "id": "client12340-autoloot-player-esp-test",
       "components": [
         "Client12340",
-        "AutoLoot"
+        "AutoLoot",
+        "PlayerESP"
       ]
     }
   ]
