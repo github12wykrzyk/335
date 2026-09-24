@@ -1,0 +1,25 @@
+#ifndef ESP112_OVERLAY_335_H
+#define ESP112_OVERLAY_335_H
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include "esp112_geometry.h"
+typedef struct {
+    HWND hwnd;
+    char caption[96];
+    DWORD hp,max_hp;
+    COLORREF color;
+    int left,top;
+    unsigned visible;
+} Esp112OverlayLabel;
+typedef struct {
+    HINSTANCE instance;
+    ATOM atom;
+    Esp112OverlayLabel labels[ESP112_MAX_LABELS];
+    unsigned visible;
+} Esp112Overlay;
+int esp112_overlay_init(Esp112Overlay *overlay,HINSTANCE instance);
+int esp112_overlay_show(Esp112Overlay *overlay,unsigned slot,int left,int top,
+                          const char *caption,DWORD hp,DWORD max_hp,COLORREF color);
+void esp112_overlay_hide_unused(Esp112Overlay *overlay,unsigned used);
+void esp112_overlay_shutdown(Esp112Overlay *overlay);
+#endif
