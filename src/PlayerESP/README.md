@@ -62,3 +62,8 @@ Wcześniejszy błąd: `control` wstrzymywał GUI i render D3D9, jeśli `esp335_s
 ## TEST fix Insert: polling na heartbeat
 
 Próba wciśnięcia Insert jest odczytywana niezależnie od WM_KEYUP za pomocą GetAsyncKeyState na wątku okna gry, gdy okno ma fokus; jeden key-down = jedno przełączenie, a WM_KEYUP obsługuje szybkie tapnięcie bez podwójnego toggla. GUI nadal rysuje się niezależnie od powodzenia skanera. W raporcie szukać insert_polls/gui_toggles/insert_events/render_frames/render_failures; brak wzrostu polls oznacza problem pulsu/fokusu, toggles bez render_frames oznacza osobny problem nakładki D3D9.
+
+
+## Fallback native WoW UI from ESP log 2026-09-24
+
+Observed uploaded report: render_installed=1, render_frames=0; Insert toggles increased and 101 NPCs were scanned. A dummy-device D3D9 vtable can appear installed but never receive the game's EndScene calls. This is a **runtime failure**, not an Insert failure. The visual TEST now uses WoW 3.3.5 native FrameScript/UIParent frames through a guarded AutoLoot-owned AL335_ExecuteUiScript export; do not independently invoke the client FrameScript address from ESP. In-game UI and 2D markers are updated from the same game-thread scan/camera pipeline. The old D3D9 prototype is retained as reference code only; it must not be installed in this runtime path. Mixed-BG hostility remains unknown until validated from an exact-client relation/team API.

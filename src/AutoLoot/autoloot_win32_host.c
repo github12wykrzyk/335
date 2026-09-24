@@ -223,6 +223,19 @@ static int can_act(void *ctx) {
             (g_engine.engine.state != AL_IDLE &&
              same(window, g_engine.engine.active)));
 }
+/* Single verified FrameScript owner: ESP may request UI commands through
+ * AutoLoot, but must not bind or call 0x00819210 independently.
+ * The existing game-thread/EXE/ABI check remains a prerequisite. */
+__declspec(dllexport) int WINAPI AL335_ExecuteUiScript(const char *script,
+                                                        const char *source) {
+    size_t length;
+    if (!g_engine.bound || !is_game_thread() || !script || !source)
+        return 0;
+    length=strnlen_s(script,16385u);
+    if (!length || length>16384u || strnlen_s(source,65u)>64u)
+        return 0;
+    return execute_lua(NULL,AL12340_LUA_EXECUTE_VA,script,source);
+}
 static int bind_host(void) {
     Al12340Host host;
     memset(&host, 0, sizeof(host));
