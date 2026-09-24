@@ -203,7 +203,7 @@ namespace WoW335Updater
                                         throw new InvalidOperationException("GitHub Issues HTTP " + (int)response.StatusCode + ": " + TrimForError(text));
                                     }
                                     issueNumber = GetLong(AsDictionary(json.DeserializeObject(text)), "number");
-                                    if (issueNumber <= 0) throw new InvalidOperationException("GitHub nie zwrocil numeru Issue.");
+                                    if (issueNumber <= 0) throw new InvalidOperationException("GitHub nie zwrocil numeru Issue. Token wymaga Issues: Read and write.");
                                     Log("Utworzono Issue #" + issueNumber + "; przesylanie danych archiwum...");
                                 }
                             }
