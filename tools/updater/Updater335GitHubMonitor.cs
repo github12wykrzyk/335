@@ -388,7 +388,7 @@ namespace WoW335Updater
                         output.AppendLine();
                     }
                 }
-                Arrange335MonitorBadges(branches); // sort after all current-HEAD states were read
+                Arrange335MonitorBadges(new List<string>(monitorKnownBranches)); // sort after all current-HEAD states were read
                 monitorReport = output.ToString();
                 monitorButton.Text = hasErrors ? "GH: błąd" : "GH: " + DateTime.Now.ToString("HH:mm:ss");
                 connectionBadge.Text = hasErrors ? "GitHub: częściowy odczyt" : "GitHub: połączono";
