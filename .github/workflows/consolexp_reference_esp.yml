@@ -54,6 +54,12 @@ jobs:
       - name: Inspect nearby projection alternatives for native ABI match
         run: |
           objdump -d -M intel --start-address=0x004943c0 --stop-address=0x00494530 Wow.exe | head -n 160
+      - name: Verify 335 native W2S viewport transform at 0x0047bff0
+        run: |
+          objdump -d -M intel --start-address=0x0047bff0 --stop-address=0x0047c1c0 Wow.exe | head -n 160
+      - name: Record exact-client callers of native W2S candidate
+        run: |
+          python -c "import struct;from pathlib import Path;from tools.audit_player_esp_client import pe_layout;d=Path('Wow.exe').read_bytes();b,h,ss=pe_layout(d);t=0x4f6d20;r=[];[(r.append(hex(b+v+i)) if d[o+i]==0xe8 and b+v+i+5+struct.unpack_from('<i',d,o+i+1)[0]==t else None) for _,v,vs,o,n,f in ss if f&0x20000000 for i in range(n-5)];print('NATIVE_W2S_CALLS',r[:64], 'total',len(r))"
       - name: Test reference safety and portable ESP core
         run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v && python -m unittest discover -s tests -p 'test_player_esp_win32_host.py' -v && python -m unittest discover -s tests -p 'test_esp_client_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_camera.py' -v && python -m unittest discover -s tests -p 'test_player_esp_render.py' -v && python -m unittest discover -s tests -p 'test_player_esp_lua.py' -v
       - name: Publish inert reference inventory (not game package)
