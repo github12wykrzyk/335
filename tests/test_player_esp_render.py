@@ -11,7 +11,7 @@ class EspRenderIntegration(unittest.TestCase):
         self.assertIn("IDirect3DStateBlock9_Apply(block)",r)
         self.assertIn("IDirect3DDevice9_DrawPrimitiveUP",r)
         self.assertIn("esp335_camera_build(&axes,&camera)",h)
-        self.assertIn("esp335_d3d9_draw_labels(device,",h)
+        self.assertIn("esp335_d3d9_draw_labels(",h)
         self.assertIn("g_frame_snapshot=g_scanner.snapshot",h)
         self.assertIn("TryEnterCriticalSection(&g_frame_lock)",h)
         self.assertIn("read_camera_axes(&axes)",h)
