@@ -36,7 +36,7 @@
       "component": "PlayerESP",
       "path": "runtime/PlayerESP335.dll",
       "version": "0.4.0-112-gdi-rebuild-test",
-      "sha256": "ba33c83953bce9d9f092701d29fd34c3aed42db8f3650d351c5a9eadafb605de",
+      "sha256": "00bf16163b3e34ecbe02fb2c926329dbd75aeffb9cdfb3889128f746ef86a07a",
       "arch": "x86",
       "canonical_source": "src/PlayerESP112Port/esp112_host335.c",
       "depends_on": [],
