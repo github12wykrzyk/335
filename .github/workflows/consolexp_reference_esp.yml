@@ -51,3 +51,7 @@ jobs:
           if errorlevel 1 exit /b 1
           tests\player_esp_core_harness.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /W4 /WX /TC /Fe:tests\player_esp_scanner_harness.exe src\PlayerESP\player_esp_core.c src\PlayerESP\player_esp_scanner.c tests\player_esp_scanner_harness.c
+          if errorlevel 1 exit /b 1
+          tests\player_esp_scanner_harness.exe
+          if errorlevel 1 exit /b 1
