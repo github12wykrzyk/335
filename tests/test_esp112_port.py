@@ -27,4 +27,12 @@ class PortTests(unittest.TestCase):
         self.assertIn("WS_EX_LAYERED",g)
         self.assertIn("ClientToScreen", (ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text())
         self.assertNotIn("UIParent:Get",g)
+    def test_no_second_native_ddc_or_bottom_up_y(self):
+        host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
+        geom=(ROOT/"src/PlayerESP112Port/esp112_geometry.c").read_text()
+        self.assertIn("esp112_ui_to_client(screen_xyz[0],screen_xyz[1],scale_x,scale_y",host)
+        self.assertNotIn("ddc(screen_xyz[0],screen_xyz[1]",host)
+        self.assertNotIn("NativeDdcToNdc ddc=",host)
+        self.assertIn("y=uy/scaley;",geom)
+        self.assertNotIn("1.f-ny",geom)
 if __name__=="__main__":unittest.main()

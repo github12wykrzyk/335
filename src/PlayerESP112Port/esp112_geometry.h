@@ -1,6 +1,7 @@
-/* WoW 3.3.5a (12340) adaptation of the two-stage native 112 projection.
- * W2S returns device-domain floats. The separate native DDC -> NDC
- * conversion happens BEFORE this portable viewport-to-pixels step.
+/* 12340-specific port of 112's native W2S + per-label Windows overlay.
+ * Unlike 112, native 12340 WorldToScreen CALLS DdcToNdc internally.
+ * Its raw output is already in native UI coordinate units. Do NOT call
+ * native DDC again. Undo the UI scale and convert TOP-LEFT to client pixels.
  */
 #ifndef ESP112_GEOMETRY_335_H
 #define ESP112_GEOMETRY_335_H
@@ -13,8 +14,9 @@ typedef struct {
     int screen_left, screen_top;
     int width, height;
 } Esp112Viewport;
-int esp112_ndc_to_client(float ndc_x,float ndc_y,const Esp112Viewport *view,
-                          int *out_client_x,int *out_client_y);
+int esp112_ui_to_client(float ui_x,float ui_y,float native_scale_x,
+                         float native_scale_y,const Esp112Viewport *view,
+                         int *out_client_x,int *out_client_y);
 int esp112_label_rect(int client_x,int client_y,const Esp112Viewport *view,
                        int *left,int *top);
 #endif

@@ -55,3 +55,7 @@ niezależnego D3D9 hooka.
 Testy x86 i FINAL_PACKAGE PASS dowodzą zgodności build/manifest, NIE
 rzeczywistego pokrycia etykiet na modelach. Wymagany test w grze na
 identycznym SHA z trybem okienkowym/bezramkowym, 1 NPC i zoom/obrót.
+
+## 2026-09-24: poprawka po rzeczywistym logu PlayerESP(2).jsonl
+
+Wskazano przyczynę pomyłki portowania 112: dla przypiętego klienta 12340 funkcja W2S `0x004F6D20` **już wywołuje** natywne `0x0047BFF0` wewnątrz (instrukcja `0x004F6E45`). W poprzednim ESP112Port kod wywoływał `0x0047BFF0` DRUGI RAZ. Z realnego logu `raw_xy=[0.18139,0.03538]` z `ddc_global_xy=[0.87158,0.49026]` druga konwersja dała `[0.15810,0.01734]` i po odwróceniu Y etykietę przy dolnej krawędzi. Poprawiony adapter używa jednego natywnego W2S, odwraca jedynie jednostki natywnego UI do pikseli przez podzielenie przez odpowiednio `0xAC0CB4`/`0xAC0CB8` i **nie odwraca osi Y**. Test natywnej geometrii zawiera dwie próbki z logu. Nowa telemetria używa `probe=native_12340_ui_once`; nie mieszać z poprzednim plikiem. Lokalizacja modelu w grze wciąż wymaga sprawdzenia exact-SHA, bo screenshot bez GUID i surowej pozycji obiektu nie daje absolutnego ground truth.

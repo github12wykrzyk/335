@@ -37,8 +37,6 @@
 #define MAX_MEM ((uintptr_t)0x7FFE0000u)
 #define PROBE_INTERVAL 5000u
 
-typedef void (__cdecl *NativeDdcToNdc)(float raw_x,float raw_y,
-                                         float *ndc_x,float *ndc_y);
 typedef struct {
     int x,y;
     unsigned hp,max_hp,kind,faction;
@@ -260,10 +258,9 @@ static int get_viewport(Esp112Viewport *v) {
 static int native_project(uint32_t world_frame,Esp335Vec3 world,
                            const Esp112Viewport *view,Esp112Candidate *c) {
     float world_xyz[3]={world.x,world.y,world.z},screen_xyz[3]={0.f,0.f,0.f};
-    float nx=-1.f,ny=-1.f;
+    float nx=-1.f,ny=-1.f,scale_x=0.f,scale_y=0.f;
     uint32_t flags=0u,success=0u;
     uintptr_t fn=WORLD_TO_SCREEN_VA;
-    NativeDdcToNdc ddc=(NativeDdcToNdc)DDC_TO_NDC_VA;
     if (!game_thread() || !view || !c || !_finite(world_xyz[0]) ||
         !_finite(world_xyz[1]) || !_finite(world_xyz[2]) ||
         !readable((uintptr_t)world_frame,0x340u)) return 0;
@@ -283,14 +280,19 @@ static int native_project(uint32_t world_frame,Esp335Vec3 world,
         if (!(success&0xffu)) return 0;
         if (!_finite(screen_xyz[0]) || !_finite(screen_xyz[1]) || !_finite(screen_xyz[2]))
             return 0;
-        /* 112's essential SECOND native step. For pinned 12340 this is
-         * 0x47BFF0, cdecl(float,float,float*,float*), NOT 112's
-         * 0x41ADE0 fastcall. It uses client's runtime pixel-scale globals.
-         * Never divide raw output by the clip rectangle or UIParent size. */
-        ddc(screen_xyz[0],screen_xyz[1],&nx,&ny);
+        /* Verified disassembly of 0x004F6D20: instruction 0x004F6E45
+         * ALREADY calls 0x0047BFF0 before writing screen_xyz[0..1].
+         * This is a material ABI difference from 112/5875, which needs
+         * a second native DDC call. Calling it again double-multiplies
+         * screen X/Y by 0xAC0CB4/0xAC0CB8 (observed in real logs).
+         * The already-converted coordinates are TOP-DOWN UI units. */
     } __except(EXCEPTION_EXECUTE_HANDLER) { return 0; }
-    if (!_finite(nx) || !_finite(ny) ||
-        !esp112_ndc_to_client(nx,ny,view,&c->x,&c->y)) return 0;
+    if (!read_float((uintptr_t)0x00AC0CB4u,&scale_x) ||
+        !read_float((uintptr_t)0x00AC0CB8u,&scale_y) ||
+        !esp112_ui_to_client(screen_xyz[0],screen_xyz[1],scale_x,scale_y,
+                             view,&c->x,&c->y)) return 0;
+    nx=screen_xyz[0]/scale_x;
+    ny=screen_xyz[1]/scale_y;
     c->raw_x=screen_xyz[0];c->raw_y=screen_xyz[1];
     c->ndc_x=nx;c->ndc_y=ny;
     return 1;
@@ -341,9 +343,9 @@ static void diagnostic(void) {
     if (g_probe_ready) {
         n=_snprintf_s(line,sizeof(line),_TRUNCATE,
             "{\"component\":\"PlayerESP\",\"backend\":\"112-gdi\","
-            "\"probe\":\"native_12340_ddc\","
-            "\"raw_xy\":[%.5f,%.5f],\"native_ndc\":[%.5f,%.5f],"
-            "\"ddc_global_xy\":[%.5f,%.5f],"
+            "\"probe\":\"native_12340_ui_once\","
+            "\"raw_ui_xy\":[%.5f,%.5f],\"viewport_normalized_xy\":[%.5f,%.5f],"
+            "\"ui_scale_xy\":[%.5f,%.5f],"
             "\"client_xy\":[%d,%d],\"client_wh\":[%d,%d],"
             "\"game_screen_xy\":[%d,%d]}\n",
             g_probe[0],g_probe[1],g_probe[2],g_probe[3],
