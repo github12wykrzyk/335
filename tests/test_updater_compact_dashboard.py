@@ -33,7 +33,7 @@ class CompactUpdaterDashboardTests(unittest.TestCase):
         self.assertIn('monitorMoreBranchesButton.Text = "Pozostałe (" + remaining.Count + ") ▾";', monitor)
         self.assertIn("foreach (var name in remaining)", monitor)
         self.assertIn("if (layoutKey != monitorLayoutKey)", monitor)
-        self.assertIn("Arrange335MonitorBadges(branches); // sort after all current-HEAD states were read", monitor)
+        self.assertIn("Arrange335MonitorBadges(new List<string>(monitorKnownBranches)); // sort after all current-HEAD states were read", monitor)
         self.assertIn('"/branches?per_page=100&page=" + page', monitor)
         self.assertIn('"/actions/runs?branch=" + Uri.EscapeDataString(b)', monitor)
         self.assertIn("if (refs.Length < 100) break;", monitor)
