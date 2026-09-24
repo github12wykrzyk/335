@@ -41,8 +41,16 @@ typedef struct {
     int x,y;
     unsigned hp,max_hp,kind,faction;
     uint64_t guid;
+    Esp335Vec3 world_base;
     float distance,raw_x,raw_y,ndc_x,ndc_y;
 } Esp112Candidate;
+typedef struct {
+    unsigned short_id;
+    Esp335Vec3 world_base;
+    int head_x,head_y,foot_x,foot_y;
+    float head_raw_x,head_raw_y,foot_raw_x,foot_raw_y;
+    float head_ui_x,head_ui_y,foot_ui_x,foot_ui_y;
+} Esp112PairProbe;
 
 static HINSTANCE g_instance;
 static DWORD g_game_tid,g_last_scan,g_last_log,g_last_bind,g_last_probe;
@@ -60,6 +68,8 @@ static Esp112Overlay g_overlay;
 static float g_probe[7];
 static int g_probe_x,g_probe_y;
 static Esp112Viewport g_probe_view;
+static Esp112PairProbe g_pairs[ESP112_DIAG_PAIRS];
+static unsigned g_pair_count;
 
 static int game_thread(void) {
     return g_game_tid && GetCurrentThreadId()==g_game_tid;
@@ -355,6 +365,25 @@ static void diagnostic(void) {
         if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
         g_probe_ready=0u;
     }
+    if (g_pair_count) {
+        unsigned i;
+        for (i=0u;i<g_pair_count;++i) {
+            const Esp112PairProbe *p=&g_pairs[i];
+            n=_snprintf_s(line,sizeof(line),_TRUNCATE,
+                "{\"component\":\"PlayerESP\",\"backend\":\"112-gdi\","
+                "\"probe\":\"paired_head_and_feet\",\"id\":\"%04X\","
+                "\"world_base\":[%.3f,%.3f,%.3f],"
+                "\"head_client_xy\":[%d,%d],\"feet_client_xy\":[%d,%d],"
+                "\"head_raw_ui\":[%.5f,%.5f],\"feet_raw_ui\":[%.5f,%.5f],"
+                "\"head_normalized\":[%.5f,%.5f],"
+                "\"feet_normalized\":[%.5f,%.5f]}\n",
+                p->short_id,p->world_base.x,p->world_base.y,p->world_base.z,
+                p->head_x,p->head_y,p->foot_x,p->foot_y,
+                p->head_raw_x,p->head_raw_y,p->foot_raw_x,p->foot_raw_y,
+                p->head_ui_x,p->head_ui_y,p->foot_ui_x,p->foot_ui_y);
+            if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
+        }
+    }
     CloseHandle(file);
 }
 static void drive(void) {
@@ -396,6 +425,7 @@ static void drive(void) {
     scan_ok=esp335_scanner_collect(&g_scanner);
     if (!scan_ok) { ++g_scan_errors;goto clear; }
     ++g_scans;
+    g_pair_count=0u;
     if (!get_world_frame(&world_frame,&eye) || !get_viewport(&view))
         goto clear;
     for (i=0u;i<g_scanner.snapshot.count && n<ESP335_MAX_PLAYERS;++i) {
@@ -417,6 +447,7 @@ static void drive(void) {
         ++g_proj_ok;
         candidate.hp=p->health;candidate.max_hp=p->max_health;
         candidate.guid=p->guid;candidate.kind=p->kind;
+        candidate.world_base=p->position;
         candidate.faction=p->faction;candidate.distance=distance;
         candidates[n++]=candidate;
         if (!g_probe_ready && (DWORD)(now-g_last_probe)>=PROBE_INTERVAL) {
@@ -443,11 +474,13 @@ static void drive(void) {
             continue;
         if (c->kind==ESP335_KIND_NPC) {
             _snprintf_s(title,sizeof(title),_TRUNCATE,
-                "NPC %u yd",(unsigned)(c->distance+0.5f));
+                "NPC %04X %u yd",(unsigned)(c->guid&0xFFFFu),
+                (unsigned)(c->distance+0.5f));
             color=RGB(80,205,250);
         } else {
             _snprintf_s(title,sizeof(title),_TRUNCATE,
-                "PLAYER %u yd",(unsigned)(c->distance+0.5f));
+                "PLAYER %04X %u yd",(unsigned)(c->guid&0xFFFFu),
+                (unsigned)(c->distance+0.5f));
             color=c->faction==ESP335_HORDE?RGB(240,65,65):
                   c->faction==ESP335_ALLIANCE?RGB(90,150,255):
                   RGB(238,230,145);
@@ -455,6 +488,34 @@ static void drive(void) {
         if (!esp112_overlay_show(&g_overlay,drawn,left,top,title,
                                   c->hp,c->max_hp,color)) {
             ++g_window_fail;continue;
+        }
+        /* Diagnostic pair: same object GUID, head label vs native
+         * projection of the actual base. No guessed head correction is
+         * applied to the base marker. Green cross MUST touch NPC feet if
+         * object position and the native viewport transform are correct. */
+        esp112_overlay_hide_foot(&g_overlay,drawn);
+        if (drawn<ESP112_DIAG_PAIRS) {
+            Esp112Candidate foot={0};
+            if (native_project(world_frame,c->world_base,&view,&foot)) {
+                char id[12];
+                _snprintf_s(id,sizeof(id),_TRUNCATE,"%04X",
+                            (unsigned)(c->guid&0xFFFFu));
+                if (!esp112_overlay_show_foot(&g_overlay,drawn,
+                        foot.x+view.screen_left,foot.y+view.screen_top,id))
+                    ++g_window_fail;
+                if (g_pair_count<ESP112_DIAG_PAIRS) {
+                    Esp112PairProbe *entry=&g_pairs[g_pair_count++];
+                    memset(entry,0,sizeof(*entry));
+                    entry->short_id=(unsigned)(c->guid&0xFFFFu);
+                    entry->world_base=c->world_base;
+                    entry->head_x=c->x;entry->head_y=c->y;
+                    entry->foot_x=foot.x;entry->foot_y=foot.y;
+                    entry->head_raw_x=c->raw_x;entry->head_raw_y=c->raw_y;
+                    entry->foot_raw_x=foot.raw_x;entry->foot_raw_y=foot.raw_y;
+                    entry->head_ui_x=c->ndc_x;entry->head_ui_y=c->ndc_y;
+                    entry->foot_ui_x=foot.ndc_x;entry->foot_ui_y=foot.ndc_y;
+                }
+            }
         }
         ++drawn;
     }

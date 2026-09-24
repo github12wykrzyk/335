@@ -27,6 +27,16 @@ class PortTests(unittest.TestCase):
         self.assertIn("WS_EX_LAYERED",g)
         self.assertIn("ClientToScreen", (ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text())
         self.assertNotIn("UIParent:Get",g)
+    def test_debug_pairs_bind_same_guid_and_ground_anchor(self):
+        host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
+        overlay=(ROOT/"src/PlayerESP112Port/esp112_overlay.c").read_text()
+        self.assertIn("candidate.world_base=p->position;",host)
+        self.assertIn("native_project(world_frame,c->world_base,&view,&foot)",host)
+        self.assertIn("esp112_overlay_show_foot(&g_overlay,drawn",host)
+        self.assertIn('\\\"probe\\\":\\\"paired_head_and_feet\\\"',host)
+        self.assertIn("ESP112_DIAG_PAIRS 6u",(ROOT/"src/PlayerESP112Port/esp112_overlay.h").read_text())
+        self.assertIn("foot_window",overlay)
+        self.assertIn("esp112_overlay_hide_foot(o,i);",overlay)
     def test_no_second_native_ddc_or_bottom_up_y(self):
         host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
         geom=(ROOT/"src/PlayerESP112Port/esp112_geometry.c").read_text()
