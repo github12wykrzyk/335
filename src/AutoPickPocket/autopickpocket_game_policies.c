@@ -118,54 +118,25 @@ static void report_ui_observation(void){
         "W335PP_UI_R","W335PP_UI_L","W335PP_UI_S",
         "W335PP_UI_C","W335PP_UI_E","W335PP_UI_U"
     };
-    static const char *reasons[6]={
-        "ui_out_of_range_unattributed","ui_line_of_sight_unattributed",
-        "ui_not_stealthed_unattributed","ui_not_ready_unattributed",
-        "ui_no_pockets_unattributed","ui_other_error_unattributed"
-    };
-    char sequence[32],line[320],boot[48];
+    char sequence[32],boot[48];
     unsigned long seen,delta;
     unsigned i;
-    wchar_t dir[MAX_PATH],path[MAX_PATH],*slash;
-    HANDLE file;DWORD written;int n;
-    if(!is_owner() || !observer())return;
-    /* The Lua VM discards _G and its error counters during /reload. Keep
-     * native history, but begin a fresh observer epoch and reset only the
-     * per-category counter baselines; never invent old UI errors. */
-    if(value("W335PP_BOOT",boot,sizeof(boot)) && boot[0] &&
-       strcmp(previous_boot,boot)!=0){
+    if(!is_owner())return;
+    /* Reinitialize the Lua observer only if /reload removed its global. */
+    if((!value("W335PP_BOOT",boot,sizeof(boot)) || !boot[0]) &&
+       (!observer() || !value("W335PP_BOOT",boot,sizeof(boot))))return;
+    if(boot[0] && strcmp(previous_boot,boot)!=0){
         memset(previous,0,sizeof(previous));
-        strcpy_s(previous_boot,sizeof(previous_boot),boot);
+        strcpy_s(previous_boot,sizeof(previous_boot,boot);
         PP335_LogLuaObserverEpoch();
     }
-    if(!GetModuleFileNameW(NULL,dir,MAX_PATH))return;
-    slash=wcsrchr(dir,L'\\');
-    if(!slash)return;
-    *slash=L'\0';
-    if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug",dir)<0)return;
-    if(!CreateDirectoryW(path,NULL) && GetLastError()!=ERROR_ALREADY_EXISTS)
-        return;
-    if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug\\AutoPickPocket.native.jsonl",dir)<0)
-        return;
     for(i=0u;i<6u;++i){
         if(!value(keys[i],sequence,sizeof(sequence)))continue;
         seen=strtoul(sequence,NULL,10);
         if(!seen || seen==previous[i])continue;
-        delta=seen>previous[i] ? seen-previous[i] : 1u;
+        delta=seen>previous[i] ? seen-previous[i] : seen;
         previous[i]=seen;
-        n=sprintf_s(line,sizeof(line),
-            "{\"module\":\"AutoPickPocket\",\"variant\":\"native\",\"ms\":%lu,"
-            "\"event\":90,\"reason\":\"%s\","
-            "\"attempt\":0,\"guid_lo\":0,\"guid_hi\":0,"
-            "\"guid_attribution\":\"none\","
-            "\"count_since_poll\":%lu,\"last_code_only\":false}\n",
-            (unsigned long)GetTickCount(),reasons[i],delta);
-        if(n<=0 || n>=(int)sizeof(line))continue;
-        file=CreateFileW(path,FILE_APPEND_DATA,FILE_SHARE_READ|FILE_SHARE_WRITE|
-             FILE_SHARE_DELETE,NULL,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
-        if(file==INVALID_HANDLE_VALUE)return;
-        (void)WriteFile(file,line,(DWORD)n,&written,NULL);
-        CloseHandle(file);
+        PP335_LogUiObservation(i,(unsigned)delta);
     }
 }
 static int observer(void){
