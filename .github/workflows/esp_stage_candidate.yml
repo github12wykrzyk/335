@@ -5,6 +5,8 @@ on:
     paths:
       - 'src/PlayerESP/**'
       - 'tools/stage_esp_candidate.py'
+      - 'tests/test_autoloot_normal_runtime.py'
+      - 'tests/test_updater_autoloot_delivery.py'
       - 'tools/verify_module_registry.py'
       - '.github/workflows/esp_stage_candidate.yml'
   workflow_dispatch:

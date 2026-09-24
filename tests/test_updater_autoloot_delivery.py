@@ -47,9 +47,12 @@ class AutoLootUpdaterDeliveryTests(unittest.TestCase):
             self.assertEqual(runtime["files"], [])
             self.assertEqual(registry["modules"], [])
         else:
-            self.assertEqual([x["component"] for x in runtime["files"]],
-                             ["Client12340", "AutoLoot"])
-            self.assertEqual([m["component"] for m in registry["modules"]], ["AutoLoot"])
+            components = [row["component"] for row in runtime["files"]]
+            owners = [row["component"] for row in registry["modules"]]
+            self.assertEqual(components[:2], ["Client12340", "AutoLoot"])
+            self.assertEqual(components[1:], owners)
+            self.assertNotIn("WoW335AutoLootDiag", components)
+            self.assertNotIn("WoW335AutoLootDiag", owners)
 
 
 if __name__ == "__main__":

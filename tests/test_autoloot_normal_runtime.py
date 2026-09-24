@@ -49,9 +49,21 @@ class RegisteredAutoLootTests(unittest.TestCase):
             self.assertEqual(runtime["files"], [])
             self.assertEqual(registry["modules"], [])
             return
-        self.assertEqual([r["component"] for r in runtime["files"]],
-                         ["Client12340", "AutoLoot"])
-        self.assertEqual([r["component"] for r in registry["modules"]], ["AutoLoot"])
+        # The loader may accept additional real modules, but every DLL must
+        # have an ordered owner and an exact checked-in PE32 x86 binary.
+        components = [row["component"] for row in runtime["files"]]
+        owners = [row["component"] for row in registry["modules"]]
+        self.assertEqual(components[:2], ["Client12340", "AutoLoot"])
+        self.assertEqual(components[1:], owners)
+        self.assertNotIn("WoW335AutoLootDiag", components)
+        from tools.manifest_common import pe_machine
+        for item in runtime["files"]:
+            if item["kind"] == "dll":
+                self.assertEqual(item["arch"], "x86")
+                self.assertEqual(item["sha256"],
+                                 __import__("hashlib").sha256(
+                                     (ROOT / item["path"]).read_bytes()).hexdigest())
+                self.assertEqual(pe_machine(ROOT / item["path"]), 0x014c)
         self.assertEqual(runtime["files"][1]["path"], "runtime/AutoLoot335.dll")
         self.assertEqual(runtime["files"][1]["sha256"],
                          __import__("hashlib").sha256(
