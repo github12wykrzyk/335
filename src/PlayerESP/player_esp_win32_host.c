@@ -11,6 +11,7 @@
 #include "player_esp_scanner.h"
 #include "player_esp_camera.h"
 #include "player_esp_d3d9.h"
+#include "player_esp_lua.h"
 #pragma comment(lib, "Advapi32.lib")
 #define MESSAGE_NAME "WoW335_PlayerESP_12340_GameThread_v1"
 #define GET_POS_VA ((uintptr_t)0x006E6F10u)
@@ -40,6 +41,11 @@ static Esp335CameraAxes g_frame_axes;
 static DWORD g_frame_tick;
 static unsigned g_frame_camera_valid, g_frame_scan_valid;
 static unsigned g_frame_players, g_frame_npcs;
+static Esp335LuaGate g_lua_gate;
+static DWORD g_lua_init_tick, g_lua_update_tick;
+static unsigned g_lua_init_attempts,g_lua_init_ok,g_lua_updates,g_lua_update_errors,g_lua_gate_missing;
+static unsigned g_lua_ready;
+static int g_lua_last_visibility=-1;
 
 
 static int on_thread(void) { return g_thread && GetCurrentThreadId() == g_thread; }
@@ -243,77 +249,33 @@ static int read_camera_axes(Esp335CameraAxes *a) {
      * Renderer will substitute the live device viewport independently. */
     return esp335_camera_build(a,&temporary);
 }
-static void draw_frame(IDirect3DDevice9 *device, void *user) {
-    Esp335Core frame;
-    Esp335CameraAxes axes;
-    Esp335Camera camera;
-    Esp335Filter filter;
-    Esp335Label labels[ESP335_MAX_PLAYERS];
-    D3DVIEWPORT9 viewport;
-    size_t count;
-    DWORD last_frame=0;
-    unsigned scan_ok=0,camera_ok=0,players=0,npcs=0;
-    unsigned flags=(unsigned)InterlockedCompareExchange(&g_ui_flags,0,0);
-    int show=InterlockedCompareExchange(&g_gui_open,0,0)!=0;
-    (void)user;
-    if (!device || InterlockedCompareExchange(&g_shared_ready,0,0)==0)
-        return;
-    if (!TryEnterCriticalSection(&g_frame_lock)) return;
-    frame=g_frame_snapshot;
-    axes=g_frame_axes;
-    last_frame=g_frame_tick;
-    scan_ok=g_frame_scan_valid;
-    camera_ok=g_frame_camera_valid;
-    players=g_frame_players;
-    npcs=g_frame_npcs;
-    LeaveCriticalSection(&g_frame_lock);
-    if ((flags & ESP335_GUI_ESP) && scan_ok && camera_ok &&
-        frame.world_epoch && !frame.frame_open &&
-        (DWORD)(GetTickCount()-last_frame)<250u &&
-        SUCCEEDED(IDirect3DDevice9_GetViewport(device,&viewport)) &&
-        viewport.Width>=64u && viewport.Height>=64u) {
-        axes.viewport_x=(float)viewport.X;
-        axes.viewport_y=(float)viewport.Y;
-        axes.viewport_width=(float)viewport.Width;
-        axes.viewport_height=(float)viewport.Height;
-        axes.aspect=(float)viewport.Width/(float)viewport.Height;
-        if (esp335_camera_build(&axes,&camera)) {
-            memset(&filter,0,sizeof(filter));
-            filter.show_all=(flags & ESP335_GUI_PLAYERS)!=0u;
-            filter.show_players=(flags & (ESP335_GUI_PLAYERS|
-                ESP335_GUI_HORDE|ESP335_GUI_ALLIANCE|
-                ESP335_GUI_HOSTILE|ESP335_GUI_BG_ENEMY))!=0u;
-            filter.factions=0u;
-            if (flags & ESP335_GUI_HORDE) filter.factions|=ESP335_HORDE;
-            if (flags & ESP335_GUI_ALLIANCE) filter.factions|=ESP335_ALLIANCE;
-            filter.show_hostile=(flags & ESP335_GUI_HOSTILE)!=0u;
-            filter.show_bg_opponents=(flags & ESP335_GUI_BG_ENEMY)!=0u;
-            filter.show_npc=(flags & ESP335_GUI_NPC)!=0u;
-            filter.show_npc_hostile=(flags & ESP335_GUI_NPC_ENEMY)!=0u;
-            filter.show_unknown=(flags & ESP335_GUI_UNKNOWN)!=0u;
-            filter.max_distance=120.f;
-            count=esp335_labels(&frame,&camera,&filter,1,
-                                labels,ESP335_MAX_PLAYERS);
-            if (count) g_markers_rendered+=(unsigned)esp335_d3d9_draw_labels(
-                                                    device,labels,count);
-        }
-    }
-    /* GUI is independent of camera/target visibility: always render it on
-     * the actual EndScene thread even if scanner or projection failed. */
-    if (show) esp335_d3d9_draw_panel(device,flags,scan_ok,players,npcs,
-                                    camera_ok,g_markers_rendered,
-                                    esp335_d3d9_dropped());
+/* The 2026-09-24 game report showed hook installed=1 but EndScene frames=0.
+ * Do not install dummy-device D3D9 hooks. WoW-native UIParent is rendered by
+ * the actual client's own UI; AutoLoot remains the sole FrameScript ABI owner.
+ */
+static Esp335LuaGate get_lua_gate(void) {
+    HMODULE host=GetModuleHandleW(L"AutoLoot335.dll");
+    FARPROC symbol;
+    if (!host) return NULL;
+    symbol=GetProcAddress(host,"AL335_ExecuteUiScript");
+    if (!symbol) symbol=GetProcAddress(host,"_AL335_ExecuteUiScript@8");
+    return (Esp335LuaGate)symbol;
 }
-static void try_renderer(void) {
+static void try_lua_gui(void) {
     DWORD now=GetTickCount();
-    if (!g_enabled || !on_thread() ||
-        !g_game_window || (DWORD)(now-g_install_try_ms)<2500u) return;
-    g_install_try_ms=now;
-    if (!esp335_d3d9_installed()) {
-        ++g_install_attempts;
-        if (!esp335_d3d9_install(g_game_window,draw_frame,NULL))
-            ++g_install_failures;
+    if (!g_enabled || !on_thread() || !g_game_window ||
+        (g_lua_init_tick && (DWORD)(now-g_lua_init_tick)<5000u)) return;
+    g_lua_init_tick=now;
+    ++g_lua_init_attempts;
+    g_lua_gate=get_lua_gate();
+    if (!g_lua_gate) { ++g_lua_gate_missing;g_lua_ready=0u;return; }
+    if (!esp335_lua_create(g_lua_gate)) {
+        g_lua_ready=0u;
+        return;
     }
+    g_lua_ready=1u;
+    ++g_lua_init_ok;
+    g_lua_last_visibility=-1; /* restore after /reload or world UI teardown */
 }
 static void input(MSG *msg, WPARAM remove_mode) {
     int index;
@@ -380,7 +342,7 @@ static void poll_insert(void) {
 static void write_diag(int scan_ok) {
     wchar_t path[MAX_PATH], *slash;
     HANDLE file;
-    char line[1024];
+    char line[1200];
     DWORD written, now = GetTickCount();
     int length;
     if (!on_thread() || (DWORD)(now - g_log_ms) < 5000u) return;
@@ -408,7 +370,10 @@ static void write_diag(int scan_ok) {
         "\"markers\":%u,\"ui_flags\":%u,\"bind_failed\":%u,"
         "\"init_attempts\":%u,\"sha_rejects\":%u,\"layout_rejects\":%u,"
         "\"hook_calls\":%u,\"insert_events\":%u,"
-        "\"insert_polls\":%u,\"gui_toggles\":%u,\"gui_open\":%u}\n",
+        "\"insert_polls\":%u,\"gui_toggles\":%u,\"gui_open\":%u,"
+        "\"lua_gate_missing\":%u,\"lua_init_attempts\":%u,"
+        "\"lua_init_ok\":%u,\"lua_updates\":%u,"
+        "\"lua_update_errors\":%u,\"lua_ready\":%u}\n",
         scan_ok ? 1u : 0u,
         scan_ok ? (unsigned)g_scanner.snapshot.count : 0u,
         (unsigned __int64)g_scanner.snapshot.world_epoch,
@@ -422,13 +387,19 @@ static void write_diag(int scan_ok) {
         (unsigned)InterlockedCompareExchange(&g_ui_flags,0,0),g_bind_failed,
         g_init_attempts,g_sha_rejects,g_layout_rejects,
         g_hook_calls,g_insert_events,g_insert_polls,g_gui_toggles,
-        (unsigned)InterlockedCompareExchange(&g_gui_open,0,0));
+        (unsigned)InterlockedCompareExchange(&g_gui_open,0,0),
+        g_lua_gate_missing,g_lua_init_attempts,g_lua_init_ok,
+        g_lua_updates,g_lua_update_errors,g_lua_ready);
     if (length > 0) WriteFile(file, line, (DWORD)length, &written, NULL);
     CloseHandle(file);
 }
 static void drive(void) {
     int scan_ok,camera_ok;
     Esp335CameraAxes axes;
+    Esp335Camera camera;
+    RECT viewport;
+    unsigned visibility;
+    int valid_viewport;
     DWORD now;
     if (!g_enabled || !on_thread() || g_driving)
         return;
@@ -437,6 +408,13 @@ static void drive(void) {
     g_driving=1u;
     g_tick_ms=now;
     poll_insert();
+    try_lua_gui();
+    if (g_lua_ready && g_lua_gate) {
+        visibility=(unsigned)InterlockedCompareExchange(&g_gui_open,0,0);
+        if (g_lua_last_visibility!=(int)visibility &&
+            esp335_lua_visibility(g_lua_gate,visibility))
+            g_lua_last_visibility=(int)visibility;
+    }
     scan_ok=g_scanner.bound ? esp335_scanner_collect(&g_scanner) : 0;
     camera_ok=g_scanner.bound ? read_camera_axes(&axes) : 0;
     if (scan_ok) ++g_scans_ok; else ++g_scans_failed;
@@ -453,7 +431,25 @@ static void drive(void) {
         g_frame_npcs=g_scanner.accepted_npcs;
         LeaveCriticalSection(&g_frame_lock);
     }
-    try_renderer();
+    valid_viewport=g_game_window && GetClientRect(g_game_window,&viewport) &&
+        viewport.right-viewport.left>=64 && viewport.bottom-viewport.top>=64;
+    memset(&camera,0,sizeof(camera));
+    if (camera_ok && valid_viewport) {
+        axes.viewport_x=0.f;
+        axes.viewport_y=0.f;
+        axes.viewport_width=(float)(viewport.right-viewport.left);
+        axes.viewport_height=(float)(viewport.bottom-viewport.top);
+        axes.aspect=axes.viewport_width/axes.viewport_height;
+        camera_ok=esp335_camera_build(&axes,&camera);
+    } else camera_ok=0;
+    if (g_lua_ready && g_lua_gate &&
+        (!g_lua_update_tick || (DWORD)(now-g_lua_update_tick)>=200u)) {
+        g_lua_update_tick=now;
+        if (esp335_lua_update(g_lua_gate,&g_scanner.snapshot,&camera,
+            scan_ok?1u:0u,g_scanner.accepted_players,g_scanner.accepted_npcs,
+            camera_ok?1u:0u)) ++g_lua_updates;
+        else ++g_lua_update_errors;
+    }
     write_diag(scan_ok);
     g_driving=0u;
 }
@@ -466,7 +462,10 @@ static void control(UINT message, WPARAM command, HWND hwnd) {
     if (message != g_message) return;
     if (command == 0u) {
         g_enabled = 0u;
-        esp335_d3d9_uninstall();
+        if (g_lua_ready && g_lua_gate)
+            esp335_lua_visibility(g_lua_gate,0u);
+        g_lua_ready=0u;
+        g_lua_last_visibility=-1;
         esp335_reset(&g_scanner.snapshot);
         if (InterlockedCompareExchange(&g_shared_ready,0,0)) {
             EnterCriticalSection(&g_frame_lock);
@@ -493,7 +492,7 @@ static void control(UINT message, WPARAM command, HWND hwnd) {
         if (tid==g_thread) g_game_window=root;
     }
     g_enabled=1u;
-    try_renderer();
+    try_lua_gui();
     if (!g_scanner.bound &&
         (g_bind_try_ms==0u ||
          (DWORD)(GetTickCount()-g_bind_try_ms)>=5000u)) {

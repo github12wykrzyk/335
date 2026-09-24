@@ -67,3 +67,7 @@ Próba wciśnięcia Insert jest odczytywana niezależnie od WM_KEYUP za pomocą 
 ## Fallback native WoW UI from ESP log 2026-09-24
 
 Observed uploaded report: render_installed=1, render_frames=0; Insert toggles increased and 101 NPCs were scanned. A dummy-device D3D9 vtable can appear installed but never receive the game's EndScene calls. This is a **runtime failure**, not an Insert failure. The visual TEST now uses WoW 3.3.5 native FrameScript/UIParent frames through a guarded AutoLoot-owned AL335_ExecuteUiScript export; do not independently invoke the client FrameScript address from ESP. In-game UI and 2D markers are updated from the same game-thread scan/camera pipeline. The old D3D9 prototype is retained as reference code only; it must not be installed in this runtime path. Mixed-BG hostility remains unknown until validated from an exact-client relation/team API.
+
+## TEST NPC / panel w grze
+
+W analizowanym miejscu brak graczy jest spodziewany; testuj NPC ALL (domyślnie włączone) i panel widoczny po starcie. Raport z gry pokazał render_frames=0 pomimo render_installed=1, dlatego D3D9 dummy-vtable NIE jest już instalowane. ESP buduje WoW-native ramkę Lua przez zweryfikowanego właściciela FrameScript AutoLoot; nowe pola raportu to lua_gate_missing, lua_init_attempts, lua_init_ok, lua_updates, lua_update_errors i lua_ready. Obie DLL kompilowane i rejestrowane atomowo. Filtry BG ENEMY/HOSTILE nie zostały zweryfikowane na mieszanym BG.

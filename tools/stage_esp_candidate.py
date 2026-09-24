@@ -26,6 +26,8 @@ SOURCE = [
     "src/PlayerESP/player_esp_d3d9.c",
     "src/PlayerESP/player_esp_d3d9.h",
     "src/PlayerESP/player_esp_win32_host.c",
+    "src/PlayerESP/player_esp_lua.c",
+    "src/PlayerESP/player_esp_lua.h",
 ]
 BUILD = [name for name in SOURCE if name.endswith(".c")]
 
@@ -33,8 +35,10 @@ def esp_contract():
     return {
         "component": "PlayerESP",
         "sources": SOURCE,
-        "requires": [],
+        "requires": ["AutoLoot"],
         "resources": [
+            {"id": "wow12340:0x00819210-framescript-execute", "mode": "observe"},
+            {"id": "logical:game-ui", "mode": "exclusive"},
             {"id": "wow12340:object-manager", "mode": "observe"},
             {"id": "wow12340:d3d9-endscene-vtable", "mode": "exclusive"},
             {"id": "logical:render", "mode": "exclusive"},
@@ -54,13 +58,18 @@ def esp_contract():
         },
     }
 
-def prepare_registration(runtime, registry, index, dll_sha):
+def prepare_registration(runtime, registry, index, dll_sha, loot_sha=None):
     """Only the expected unmodified feature baseline may be staged."""
     runtime, registry, index = [copy.deepcopy(x) for x in
                                 (runtime, registry, index)]
     if (not isinstance(dll_sha, str) or len(dll_sha) != 64 or
             any(ch not in "0123456789abcdef" for ch in dll_sha)):
         raise ValueError("unverified DLL identity")
+    if loot_sha is not None:
+        if not isinstance(loot_sha,str) or len(loot_sha)!=64 or any(ch not in "0123456789abcdef" for ch in loot_sha):
+            raise ValueError("invalid AutoLoot x86 DLL identity")
+        runtime["files"][1]["sha256"]=loot_sha
+        runtime["files"][1]["version"]="1.0.2-esp-ui-gate-test"
     current = [entry["component"] for entry in runtime["files"]]
     if current == ["Client12340", "AutoLoot", "PlayerESP"]:
         if ([m["component"] for m in registry["modules"]] != ["AutoLoot","PlayerESP"] or
@@ -71,8 +80,9 @@ def prepare_registration(runtime, registry, index, dll_sha):
             registry["modules"][1].get("component") != "PlayerESP"):
             raise ValueError("existing ESP registration diverged; refusing overwrite")
         runtime["files"][2]["sha256"] = dll_sha
-        runtime["files"][2]["version"] = "0.2.0-gui-npc-test"
-        runtime["release_id"] = "feature-player-esp-12340-gui-npc-test"
+        runtime["files"][2]["version"] = "0.3.0-native-ui-test"
+        runtime["files"][2]["depends_on"]=["AutoLoot"]
+        runtime["release_id"] = "feature-player-esp-12340-native-ui-npc-test"
         registry["modules"][1] = esp_contract()
         return runtime, registry, index
     if current != ["Client12340", "AutoLoot"]:
@@ -136,16 +146,26 @@ def main():
     elif destination.exists():
         raise ValueError("unregistered existing ESP binary; refusing overwrite")
     folder = ROOT / "dist/esp-stage"
+    vcvars=find_vcvars()
+    loot_compiled=compile_module(registry["modules"][0],runtime["files"][1],
+                                 vcvars,folder,verify_registered=False)
+    loot_binary=folder/"AutoLoot"/"AutoLoot335.dll"
+    if sha256_file(loot_binary)!=loot_compiled["binary_sha256"]:
+        raise ValueError("compiled AutoLoot bridge not exact PE32 x86")
     compiled = compile_module(
         esp_contract(), {"path": "runtime/PlayerESP335.dll"},
-        find_vcvars(), folder, verify_registered=False)
+        vcvars, folder, verify_registered=False)
     binary = folder / "PlayerESP/PlayerESP335.dll"
     if (compiled.get("verification") !=
             "PE32_X86_BUILD_AWAITING_REGISTRATION" or
             sha256_file(binary) != compiled["binary_sha256"]):
         raise ValueError("native x86 build not verified")
     manifest, owners, idx = prepare_registration(
-        runtime, registry, index, compiled["binary_sha256"])
+        runtime, registry, index, compiled["binary_sha256"],
+        loot_compiled["binary_sha256"])
+    shutil.copyfile(loot_binary, ROOT/"runtime/AutoLoot335.dll")
+    if sha256_file(ROOT/"runtime/AutoLoot335.dll")!=loot_compiled["binary_sha256"]:
+        raise ValueError("AutoLoot bridge binary changed during registration")
     shutil.copyfile(binary, destination)
     if sha256_file(destination) != compiled["binary_sha256"]:
         raise ValueError("copied DLL is not the compiled artifact")
@@ -157,7 +177,7 @@ def main():
         raise ValueError("hook/module ownership conflict: " + "; ".join(errors))
     print("ESP_STAGE: real Windows PE32 x86 DLL sha256=",
           compiled["binary_sha256"])
-    print("ESP_STAGE: visual TEST runtime, gameplay remains unverified")
+    print("ESP_STAGE: native UI runtime with real AutoLoot FrameScript bridge; gameplay unverified")
 
 if __name__ == "__main__":
     sys.exit(main())
