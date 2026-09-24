@@ -69,36 +69,68 @@ try {
         $menuNames -notcontains 'promote/stable-infrastructure-12340') {
         throw "A dynamically added or historical branch disappeared from the menu."
     }
-    # Status priority must be determined from current data, not fixed branch order.
-    $null=$set.Invoke($form,[object[]]@('work','UNKNOWN','','missing'))
+    # New yellow ESP must follow red and displace green regardless of branch name.
+    $esp='feature/player-esp-12340'
+    $branches.Add($esp)
+    $null=$set.Invoke($form,[object[]]@('work','SUCCESS','1234567890','passed'))
     $null=$set.Invoke($form,[object[]]@('main','SUCCESS','1234567890','passed'))
-    $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-12340','RUNNING','1234567890','running'))
+    $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-12340','SUCCESS','1234567890','passed'))
     $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-packets-12340','FAIL','1234567890','failed'))
-    $null=$set.Invoke($form,[object[]]@('feature/new-c','FAIL','1234567890','failed'))
+    $null=$set.Invoke($form,[object[]]@($esp,'RUNNING','1234567890','running'))
     $null=$arrange.Invoke($form,$parameters)
     $badges.PerformLayout()
-    $expected=@('PP pakiety','PP natywny','main','work')
+    $expected=@('PP pakiety','player-esp-12340','work','main')
     for ($i=0; $i -lt 4; $i++) {
         if ($badges.Controls[$i].Controls[0].Text -notlike "$($expected[$i])*") {
-            throw "Incorrect CI status priority at ${i}: $($badges.Controls[$i].Controls[0].Text)"
+            throw "Global status priority failed at $($i): $($badges.Controls[$i].Controls[0].Text)"
         }
     }
-    if ($menu.Items[0].Tag -ne 'feature/new-c') {
-        throw "Expandable menu did not sort the failing branch first."
+    if (@($menu.Items | ForEach-Object { $_.Tag }) -contains $esp) {
+        throw "Running ESP was hidden behind green branches in the overflow menu."
     }
-    $null=$set.Invoke($form,[object[]]@('work','FAIL','1234567890','failed'))
-    $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-packets-12340','SUCCESS','1234567890','passed'))
+    # Brand-new red branches also displace older green statuses.
+    $newFail='feature/new-critical-12340'
+    $branches.Add($newFail)
+    $null=$set.Invoke($form,[object[]]@($newFail,'FAIL','1234567890','failed'))
     $null=$arrange.Invoke($form,$parameters)
-    if ($badges.Controls[0].Controls[0].Text -notlike 'work*' -or
-        $badges.Controls[3].Controls[0].Text -notlike 'PP pakiety*') {
-        throw "Status changes did not reorder the main bar dynamically."
+    if ($badges.Controls[1].Controls[0].Text -notlike 'new-critical-12340*' -or
+        $badges.Controls[2].Controls[0].Text -notlike 'player-esp-12340*') {
+        throw "New red and yellow branches did not displace green statuses."
+    }
+    # More urgent branches than slots: menu retains overflow in the SAME order.
+    foreach ($n in 1..5) {
+        $name="feature/critical-$n"
+        $branches.Add($name)
+        $null=$set.Invoke($form,[object[]]@($name,'FAIL','1234567890','failed'))
+    }
+    $null=$arrange.Invoke($form,$parameters)
+    if ($badges.Controls[0].Controls[0].Text -notlike 'PP pakiety*' -or
+        $menu.Items[0].Tag -notlike 'feature/critical-*') {
+        throw "Overflowed failures must precede yellow and green menu items."
+    }
+    $overflowNames=@($menu.Items | ForEach-Object { $_.Tag })
+    if ($overflowNames -notcontains $esp -or $overflowNames -notcontains 'work') {
+        throw "Urgent overflow or green fallback was lost."
+    }
+    # Dynamic status change and removal of deleted branches on refresh.
+    $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-packets-12340','SUCCESS','1234567890','passed'))
+    $fresh=New-Object 'System.Collections.Generic.List[string]'
+    foreach ($name in @('work','main',$esp,'feature/autopickpocket-packets-12340')) {
+        $fresh.Add($name)
+    }
+    $parameters[0]=$fresh.PSObject.BaseObject
+    $null=$arrange.Invoke($form,$parameters)
+    if ($badges.Controls[0].Controls[0].Text -notlike 'player-esp-12340*' -or
+        $menu.Items.Count -ne 0 -or -not $badges.Controls[4] -or
+        $badges.Controls[4].Enabled) {
+        throw "Latest CI status/discovered branch set did not replace stale data."
     }
     $top=$badges.Controls[0].Top
     foreach ($item in $badges.Controls) {
-        if ($item.Top -ne $top) { throw "Featured branch badges wrapped onto another row." }
+        if ($item.Top -ne $top) { throw "Branch badges wrapped onto another row." }
     }
     if ($badges.HorizontalScroll.Visible) {
-        throw "Four featured badges and menu do not fit the compact dashboard."
+        throw "Four priority badges and menu do not fit the compact dashboard."
     }
     $tools=$root.GetControlFromPosition(0,3)
     if ($root.RowStyles[3].Height -ne 37) { throw "Advanced tools must start collapsed." }

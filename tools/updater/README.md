@@ -74,3 +74,17 @@ branchy (w tym nowych); są one uporządkowane według tej samej hierarchii
 statusów. Kliknięcie otwiera szczegóły GitHub. Branch gry wybiera się nadal
 w Konfiguracji, bez automatycznej zmiany wskutek sortowania statusów.
 Self-update i zestaw aktywnych DLL pozostają bez zmian.
+
+## 0.3.18-335 — globalny priorytet CI, nowe branche bez zmian w kodzie
+
+Po odczycie aktualnego HEAD updater sortuje wszystkie rzeczywiście odkryte
+branche od czerwonych przez żółte i zielone do szarych. Cztery pierwsze
+zajmują belkę, a reszta jest dostępna w menu w tej samej kolejności.
+Nowe feature/player-esp-* i dowolny przyszły branch z błędem lub aktywnym
+workflow wypierają zielone statusy, niezależnie od nazwy. Jeśli więcej
+niż cztery mają czerwony status, pozostałe czerwone są na początku menu;
+zielone nigdy nie wypierają czerwonego ani żółtego na belce.
+W remisie work/main/PP mają stałą kolejność, następnie nazwy alfabetycznie.
+Usunięte branche znikają po kolejnym poprawnym odczycie listy GitHub.
+Zmiana sortowania nie przełącza wybranego brancha gry; wynik CI
+nie jest dowodem gotowej paczki ani działania w grze.

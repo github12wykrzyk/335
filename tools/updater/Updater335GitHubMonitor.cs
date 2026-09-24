@@ -24,8 +24,8 @@ namespace WoW335Updater
         {
             { "work", new Panel() }, { "main", new Panel() }
         };
-        // Only four operational branches occupy the compact status bar.
-        // Every other discovered branch remains visible in the expandable menu.
+        // Initial placeholders only; after GitHub discovery ALL branch names
+        // compete equally for the four visible slots, sorted by live CI state.
         private static readonly string[] FeaturedBranches = {
             "work", "main", "feature/autopickpocket-12340",
             "feature/autopickpocket-packets-12340"
@@ -99,9 +99,9 @@ namespace WoW335Updater
             monitorResizing = true;
             try
             {
-                // Four status frames and one 140px menu button fit without
-                // horizontal scrolling at the supported 960px minimum width.
-                int count = FeaturedBranches.Length;
+                // Up to four highest-priority branch frames and the 140px menu
+                // fit without scrolling at the supported 960px minimum width.
+                int count = 4;
                 int available = Math.Max(1, monitorStrips.ClientSize.Width -
                     monitorStrips.Padding.Horizontal - monitorMoreBranchesButton.Width);
                 int width = Math.Max(138, Math.Min(218, (available - (count + 1) * 6 - 8) / count));
@@ -113,16 +113,28 @@ namespace WoW335Updater
             finally { monitorResizing = false; }
         }
 
+        private static int Badge335TieBreak(string branch)
+        {
+            int index = Array.IndexOf(FeaturedBranches, branch);
+            return index < 0 ? FeaturedBranches.Length : index;
+        }
+
+        private static string Compact335Name(string branch)
+        {
+            return branch == "feature/autopickpocket-12340" ? "PP natywny" :
+                branch == "feature/autopickpocket-packets-12340" ? "PP pakiety" :
+                branch.Replace("feature/", "").Replace("promote/", "p/");
+        }
+
         private void Arrange335MonitorBadges(IList<string> branches)
         {
             if (monitorStrips == null) return;
-            var known = new HashSet<string>(FeaturedBranches, StringComparer.OrdinalIgnoreCase);
+            var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (branches != null)
                 foreach (var name in branches)
                     if (ValidGameBranch(name)) known.Add(name);
             monitorKnownBranches.Clear();
             monitorKnownBranches.AddRange(known);
-            monitorKnownBranches.Sort(StringComparer.OrdinalIgnoreCase);
             foreach (var name in monitorKnownBranches)
             {
                 if (!monitorBadges.ContainsKey(name))
@@ -133,21 +145,21 @@ namespace WoW335Updater
                 if (!monitorBadgeStates.ContainsKey(name))
                     Set335Badge(name, "UNKNOWN", "", "Oczekiwanie na bieżący HEAD.");
             }
-            var featured = new List<string>(FeaturedBranches);
-            featured.Sort(delegate(string a, string b) {
+
+            // Globally sort every discovered branch BEFORE choosing four visible
+            // badges: newly created red/yellow feature/* displace green badges.
+            var ordered = new List<string>(monitorKnownBranches);
+            ordered.Sort(delegate(string a, string b) {
                 int cmp = Badge335PriorityFor(a).CompareTo(Badge335PriorityFor(b));
-                return cmp != 0 ? cmp :
-                    Array.IndexOf(FeaturedBranches, a).CompareTo(Array.IndexOf(FeaturedBranches, b));
-            });
-            var remaining = new List<string>();
-            foreach (var name in monitorKnownBranches)
-                if (Array.IndexOf(FeaturedBranches, name) < 0) remaining.Add(name);
-            remaining.Sort(delegate(string a, string b) {
-                int cmp = Badge335PriorityFor(a).CompareTo(Badge335PriorityFor(b));
+                if (cmp != 0) return cmp;
+                cmp = Badge335TieBreak(a).CompareTo(Badge335TieBreak(b));
                 return cmp != 0 ? cmp : StringComparer.OrdinalIgnoreCase.Compare(a, b);
             });
+            int visibleCount = Math.Min(4, ordered.Count);
+            var visible = ordered.GetRange(0, visibleCount);
+            var remaining = ordered.GetRange(visibleCount, ordered.Count - visibleCount);
 
-            var layoutKey = string.Join("|", featured);
+            var layoutKey = string.Join("|", visible);
             if (layoutKey != monitorLayoutKey)
             {
                 monitorLayoutKey = layoutKey;
@@ -155,7 +167,7 @@ namespace WoW335Updater
                 try
                 {
                     monitorStrips.Controls.Clear();
-                    foreach (var name in featured)
+                    foreach (var name in visible)
                     {
                         var badge = monitorBadges[name];
                         var outline = monitorBadgeFrames[name];
@@ -176,8 +188,6 @@ namespace WoW335Updater
                 finally { monitorStrips.ResumeLayout(true); }
                 Resize335MonitorBadges();
             }
-            // Menu reflects every discovered branch, including future feature/*.
-            // CI state changes reorder both the four frames and menu entries.
             monitorMoreBranches.Items.Clear();
             foreach (var name in remaining)
             {
@@ -216,9 +226,7 @@ namespace WoW335Updater
                 : yellow ? Color.FromArgb(255, 221, 153)
                 : red ? Color.FromArgb(255, 178, 188) : UiMuted;
             var shortHead = string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length));
-            var compactName = branch == "feature/autopickpocket-12340" ? "PP natywny" :
-                branch == "feature/autopickpocket-packets-12340" ? "PP pakiety" :
-                branch.Replace("feature/", "").Replace("promote/", "p/");
+            var compactName = Compact335Name(branch);
             var compactState = Compact335Status(state);
             badge.Text = compactName + "  •  " + compactState;
             var tooltip = detail + "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss");
@@ -361,8 +369,6 @@ namespace WoW335Updater
                     if (rows.Count == 0 && hasErrors)
                         throw new InvalidOperationException("Nie udało się odczytać listy branchy.");
                     var branches = new List<string>(rows.Keys);
-                    foreach (var featured in FeaturedBranches)
-                        if (!branches.Contains(featured)) branches.Add(featured);
                     branches.Sort(StringComparer.OrdinalIgnoreCase);
                     Arrange335MonitorBadges(branches);
                     foreach (var b in branches)
@@ -388,7 +394,7 @@ namespace WoW335Updater
                         output.AppendLine();
                     }
                 }
-                Arrange335MonitorBadges(new List<string>(monitorKnownBranches)); // sort after all current-HEAD states were read
+                Arrange335MonitorBadges(new List<string>(monitorKnownBranches)); // globally sort all current-HEAD states
                 monitorReport = output.ToString();
                 monitorButton.Text = hasErrors ? "GH: błąd" : "GH: " + DateTime.Now.ToString("HH:mm:ss");
                 connectionBadge.Text = hasErrors ? "GitHub: częściowy odczyt" : "GitHub: połączono";
