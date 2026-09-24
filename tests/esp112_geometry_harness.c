@@ -25,6 +25,25 @@ int main(void) {
     assert(!esp112_ui_to_client(-0.01f,0.01f,sx,sy,&view,&x,&y));
     assert(!esp112_ui_to_client(sx+0.01f,0.01f,sx,sy,&view,&x,&y));
     assert(!esp112_ui_to_client(0.f,0.f,0.f,sy,&view,&x,&y));
+    /* A camera displacement of less than a pixel must reach D3D9 without
+     * premature round-to-int; legacy GDI remains exactly as before. */
+    {
+        float fx=0.f,fy=0.f,fx2=0.f,fy2=0.f;
+        const float half_x=sx*(123.25f/2560.f);
+        const float half_y=sy*(1.f-456.75f/1440.f);
+        assert(esp112_ui_to_client_precise(half_x,half_y,sx,sy,
+                                           &view,&fx,&fy));
+        assert(fx>123.20f && fx<123.30f);
+        assert(fy>456.70f && fy<456.80f);
+        assert(esp112_ui_to_client(half_x,half_y,sx,sy,&view,&x,&y));
+        assert(x==123 && y==457);
+        assert(esp112_ui_to_client_precise(half_x+sx*(0.25f/2560.f),
+                                           half_y, sx,sy,&view,&fx2,&fy2));
+        assert(fx2>fx && fx2-fx>0.20f && fx2-fx<0.30f);
+        assert(fy2>456.70f && fy2<456.80f);
+        assert(!esp112_ui_to_client_precise(half_x,half_y,0.f,sy,
+                                            &view,&fx2,&fy2));
+    }
     /* Paired data from PlayerESP(4).jsonl, same NPC 0D70:
      * old top-left mapping: raised head Y=697, feet Y=335 (WRONG).
      * new Windows mapping must have raised head ABOVE feet. */

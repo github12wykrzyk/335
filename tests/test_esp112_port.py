@@ -21,6 +21,11 @@ class PortTests(unittest.TestCase):
             run=subprocess.run([str(executable)],capture_output=True,text=True,timeout=30)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
             self.assertIn("ESP112_335_GEOMETRY: PASS",run.stdout)
+        host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
+        self.assertIn("esp112_ui_to_client_precise(screen_xyz[0],screen_xyz[1]",host)
+        self.assertIn("label->client_x=c->precise_x;",host)
+        self.assertIn("label->client_y=c->precise_y;",host)
+        self.assertNotIn("label->client_x=(float)c->x;",host)
     def test_stable_npc_slots(self):
         compiler=shutil.which("clang") or shutil.which("gcc")
         if not compiler:self.skipTest("C compiler absent")
@@ -112,7 +117,7 @@ class PortTests(unittest.TestCase):
     def test_native_single_ddc_and_bottom_up_y(self):
         host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
         geom=(ROOT/"src/PlayerESP112Port/esp112_geometry.c").read_text()
-        self.assertIn("esp112_ui_to_client(screen_xyz[0],screen_xyz[1],scale_x,scale_y",host)
+        self.assertIn("esp112_ui_to_client_precise(screen_xyz[0],screen_xyz[1]",host)
         self.assertNotIn("ddc(screen_xyz[0],screen_xyz[1]",host)
         self.assertNotIn("NativeDdcToNdc ddc=",host)
         self.assertIn("y=uy/scaley;",geom)

@@ -49,6 +49,7 @@ typedef struct {
     uint64_t guid;
     Esp335Vec3 world_base;
     float distance,raw_x,raw_y,ndc_x,ndc_y;
+    float precise_x,precise_y; /* only D3D9 uses subpixel camera projection */
 } Esp112Candidate;
 typedef struct {
     unsigned short_id;
@@ -342,8 +343,14 @@ static int native_project(uint32_t world_frame,Esp335Vec3 world,
     } __except(EXCEPTION_EXECUTE_HANDLER) { return 0; }
     if (!read_float((uintptr_t)0x00AC0CB4u,&scale_x) ||
         !read_float((uintptr_t)0x00AC0CB8u,&scale_y) ||
-        !esp112_ui_to_client(screen_xyz[0],screen_xyz[1],scale_x,scale_y,
-                             view,&c->x,&c->y)) return 0;
+        !esp112_ui_to_client_precise(screen_xyz[0],screen_xyz[1],
+                                     scale_x,scale_y,view,
+                                     &c->precise_x,&c->precise_y))
+        return 0;
+    /* Existing GDI HWND and diagnostic coordinates retain rounded pixels;
+     * D3D9 receives precise floats from this exact same native W2S sample. */
+    c->x=(int)(c->precise_x+0.5f);
+    c->y=(int)(c->precise_y+0.5f);
     nx=screen_xyz[0]/scale_x;
     ny=screen_xyz[1]/scale_y;
     c->raw_x=screen_xyz[0];c->raw_y=screen_xyz[1];
@@ -608,8 +615,8 @@ static void drive(IDirect3DDevice9 *device) {
             if (frame_count>=ESP112_MAX_LABELS) break;
             label=&frame_labels[frame_count++];
             memset(label,0,sizeof(*label));
-            label->client_x=(float)c->x;
-            label->client_y=(float)c->y;
+            label->client_x=c->precise_x;
+            label->client_y=c->precise_y;
             label->guid=c->guid;label->kind=c->kind;
             label->faction=c->faction;
             label->health=c->hp;label->max_health=c->max_hp;

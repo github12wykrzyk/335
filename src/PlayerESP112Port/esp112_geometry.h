@@ -14,6 +14,11 @@ typedef struct {
     int screen_left, screen_top;
     int width, height;
 } Esp112Viewport;
+/* D3D9 draws in the same frame: preserve fractional pixel coordinates,
+ * whereas the GDI fallback continues using the historical int helper. */
+int esp112_ui_to_client_precise(float ui_x,float ui_y,float native_scale_x,
+                               float native_scale_y,const Esp112Viewport *view,
+                               float *out_client_x,float *out_client_y);
 int esp112_ui_to_client(float ui_x,float ui_y,float native_scale_x,
                          float native_scale_y,const Esp112Viewport *view,
                          int *out_client_x,int *out_client_y);

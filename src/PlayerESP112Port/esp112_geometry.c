@@ -6,9 +6,9 @@
  * so raw (0.18139,0.03538) is viewport (0.2081,0.0722), NOT
  * native DDC again (0.1581,0.01734). Native Y is BOTTOM-UP;
  * Windows screen/popup coordinates are TOP-DOWN. */
-int esp112_ui_to_client(float ux,float uy,float scalex,float scaley,
-                         const Esp112Viewport *v,int *out_x,int *out_y) {
-    float x,y;
+int esp112_ui_to_client_precise(float ux,float uy,float scalex,float scaley,
+                               const Esp112Viewport *v,float *out_x,float *out_y) {
+    float x,y,px,py;
     if (!v || !out_x || !out_y || !isfinite(ux) || !isfinite(uy) ||
         !isfinite(scalex) || !isfinite(scaley) ||
         scalex<=0.f || scaley<=0.f || scalex>10000.f || scaley>10000.f ||
@@ -18,8 +18,23 @@ int esp112_ui_to_client(float ux,float uy,float scalex,float scaley,
     y=uy/scaley;
     if (!isfinite(x) || !isfinite(y) ||
         x<0.f || x>1.f || y<0.f || y>1.f) return 0;
-    *out_x=(int)(x*(float)v->width+0.5f);
-    *out_y=(int)((1.f-y)*(float)v->height+0.5f);
+    px=x*(float)v->width;
+    py=(1.f-y)*(float)v->height;
+    if (!isfinite(px) || !isfinite(py)) return 0;
+    *out_x=px;
+    *out_y=py;
+    return 1;
+}
+int esp112_ui_to_client(float ux,float uy,float scalex,float scaley,
+                         const Esp112Viewport *v,int *out_x,int *out_y) {
+    float x,y;
+    if (!out_x || !out_y ||
+        !esp112_ui_to_client_precise(ux,uy,scalex,scaley,v,&x,&y))
+        return 0;
+    /* Compatibility: keep the previous pixel rounding for the GDI
+     * fallback and green debug feet markers. */
+    *out_x=(int)(x+0.5f);
+    *out_y=(int)(y+0.5f);
     return 1;
 }
 int esp112_label_rect(int client_x,int client_y,const Esp112Viewport *v,
