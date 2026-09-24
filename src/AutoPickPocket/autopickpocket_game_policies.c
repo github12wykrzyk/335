@@ -140,7 +140,7 @@ static void report_ui_observation(void){
         return;
     n=sprintf_s(line,sizeof(line),
         "{\"module\":\"AutoPickPocket\",\"variant\":\"native\",\"ms\":%lu,"
-        "\"event\":25,\"reason\":\"%s\","
+        "\"event\":90,\"reason\":\"%s\","
         "\"attempt\":0,\"guid_lo\":0,\"guid_hi\":0,"
         "\"guid_attribution\":\"none\","
         "\"count_since_poll\":%lu,\"last_code_only\":true}\n",
