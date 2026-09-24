@@ -23,6 +23,7 @@
 #include "esp112_geometry.h"
 #include "esp112_overlay.h"
 #include "esp112_slots.h"
+#include "esp112_motion.h"
 #define ESP112_PROJECTION_INTERVAL_MS 16u
 #define ESP112_OBJECT_SCAN_INTERVAL_MS 50u
 #pragma comment(lib,"Advapi32.lib")
@@ -60,6 +61,11 @@ static DWORD g_game_tid,g_last_scan,g_last_object_scan,g_last_log,g_last_bind,g_
 static unsigned g_snapshot_valid,g_projection_ticks;
 static uint64_t g_snapshot_epoch;
 static Esp112Slots g_slots;
+static Esp112Motion g_motion[ESP112_SLOT_COUNT];
+static UINT_PTR g_refresh_timer;
+static unsigned g_timer_wakeups,g_debug_pairs;
+static DWORD g_worst_tick_gap,g_last_cadence_report;
+static unsigned g_last_cadence_ticks,g_last_cadence_scans,g_last_cadence_timers;
 static HWND g_game_hwnd;
 static UINT g_message;
 static unsigned g_enabled,g_visible=1u,g_driving,g_initialised;
@@ -79,6 +85,25 @@ static unsigned g_pair_count;
 
 static int game_thread(void) {
     return g_game_tid && GetCurrentThreadId()==g_game_tid;
+}
+/* Thread-owned WM_TIMER: no second client hook, no game-window timer ID,
+ * no Win32 timer callback into a DLL after unhook. Timer messages are low
+ * priority and therefore do not promise hard 60 FPS under game load. */
+static void stop_refresh_timer(void) {
+    if (game_thread() && g_refresh_timer) {
+        KillTimer(NULL,g_refresh_timer);
+        g_refresh_timer=0u;
+    }
+}
+static void ensure_refresh_timer(void) {
+    if (game_thread() && g_enabled && g_visible &&
+        g_game_hwnd && !g_refresh_timer)
+        g_refresh_timer=SetTimer(NULL,0u,ESP112_PROJECTION_INTERVAL_MS,NULL);
+}
+static void reset_guid_motion(void) {
+    unsigned i;
+    esp112_slots_reset(&g_slots);
+    for (i=0u;i<ESP112_SLOT_COUNT;++i) esp112_motion_reset(&g_motion[i]);
 }
 static int readable(uintptr_t p,size_t len) {
     MEMORY_BASIC_INFORMATION info;
@@ -359,6 +384,28 @@ static void diagnostic(void) {
         g_overlay_init_fail+g_window_fail,g_hash_rejects,g_native_gate_fail,
         g_hook_calls,g_visible,g_projection_ticks);
     if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
+    {
+        DWORD elapsed=g_last_cadence_report?
+            (DWORD)(now-g_last_cadence_report):PROBE_INTERVAL;
+        unsigned cadence_hz=elapsed?
+            (unsigned)((g_projection_ticks-g_last_cadence_ticks)*1000u/elapsed):0u;
+        unsigned scans_hz=elapsed?
+            (unsigned)((g_scans-g_last_cadence_scans)*1000u/elapsed):0u;
+        unsigned timer_delta=g_timer_wakeups-g_last_cadence_timers;
+        n=_snprintf_s(line,sizeof(line),_TRUNCATE,
+            "{\"component\":\"PlayerESP\",\"backend\":\"112-gdi\","
+            "\"probe\":\"cadence\",\"projection_hz\":%u,\"scan_hz\":%u,"
+            "\"timer_wakeups\":%u,\"max_tick_gap_ms\":%lu,"
+            "\"elapsed_ms\":%lu,\"debug_pairs\":%u}\n",
+            cadence_hz,scans_hz,timer_delta,(unsigned long)g_worst_tick_gap,
+            (unsigned long)elapsed,g_debug_pairs);
+        if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
+        g_last_cadence_report=now;
+        g_last_cadence_ticks=g_projection_ticks;
+        g_last_cadence_scans=g_scans;
+        g_last_cadence_timers=g_timer_wakeups;
+        g_worst_tick_gap=0u;
+    }
     if (g_probe_ready) {
         n=_snprintf_s(line,sizeof(line),_TRUNCATE,
             "{\"component\":\"PlayerESP\",\"backend\":\"112-gdi\","
@@ -408,15 +455,21 @@ static void drive(void) {
     if (!game_thread() || !g_enabled || g_driving) return;
     now=GetTickCount();
     if ((DWORD)(now-g_last_scan)<ESP112_PROJECTION_INTERVAL_MS) return;
+    if (g_last_scan) {
+        DWORD gap=(DWORD)(now-g_last_scan);
+        if (gap>g_worst_tick_gap) g_worst_tick_gap=gap;
+    }
     g_last_scan=now;
     ++g_projection_ticks;
     g_driving=1u;
     foreground=GetForegroundWindow();
     if (!g_visible || !g_game_hwnd || IsIconic(g_game_hwnd) ||
         GetAncestor(foreground,GA_ROOT)!=g_game_hwnd) {
+        stop_refresh_timer();
         esp112_overlay_hide_unused(&g_overlay,0u);
         goto done;
     }
+    ensure_refresh_timer();
     if (!g_scanner.bound) {
         g_snapshot_valid=0u;
         if (!g_last_bind || (DWORD)(now-g_last_bind)>=5000u) {
@@ -443,7 +496,7 @@ static void drive(void) {
         if (!scan_ok) {
             ++g_scan_errors;
             g_snapshot_valid=0u;
-            esp112_slots_reset(&g_slots);
+            reset_guid_motion();
             goto clear;
         }
         ++g_scans;
@@ -453,11 +506,11 @@ static void drive(void) {
     if (!g_scanner.snapshot.world_epoch ||
         world_epoch(NULL)!=g_scanner.snapshot.world_epoch) {
         g_snapshot_valid=0u;
-        esp112_slots_reset(&g_slots);
+        reset_guid_motion();
         goto clear;
     }
     if (g_snapshot_epoch!=g_scanner.snapshot.world_epoch) {
-        esp112_slots_reset(&g_slots);
+        reset_guid_motion();
         g_snapshot_epoch=g_scanner.snapshot.world_epoch;
     }
     esp112_slots_next_frame(&g_slots);
@@ -503,13 +556,16 @@ static void drive(void) {
     if (g_overlay.atom && !g_overlay_binds) ++g_overlay_binds;
     for (i=0u;i<n && drawn<ESP112_MAX_LABELS;++i) {
         char title[96];
-        int left,top,slot;
+        int left,top,slot,smooth_left,smooth_top;
         COLORREF color;
         const Esp112Candidate *c=&candidates[i];
         if (!esp112_label_rect(c->x,c->y,&view,&left,&top))
             continue;
         slot=esp112_slots_reserve(&g_slots,c->guid,visible_mask);
-        if (slot<0) continue;
+        if (slot<0 || !esp112_motion_step(&g_motion[slot],c->guid,
+                                          (float)left,(float)top,now,
+                                          &smooth_left,&smooth_top))
+            continue;
         if (c->kind==ESP335_KIND_NPC) {
             _snprintf_s(title,sizeof(title),_TRUNCATE,
                 "NPC %04X %u yd",(unsigned)(c->guid&0xFFFFu),
@@ -523,7 +579,7 @@ static void drive(void) {
                   c->faction==ESP335_ALLIANCE?RGB(90,150,255):
                   RGB(238,230,145);
         }
-        if (!esp112_overlay_show(&g_overlay,(unsigned)slot,left,top,title,
+        if (!esp112_overlay_show(&g_overlay,(unsigned)slot,smooth_left,smooth_top,title,
                                   c->hp,c->max_hp,color)) {
             ++g_window_fail;continue;
         }
@@ -531,7 +587,7 @@ static void drive(void) {
          * projection of the actual base. No guessed head correction is
          * applied to the base marker. Green cross MUST touch NPC feet if
          * object position and the native viewport transform are correct. */
-        if ((unsigned)slot<ESP112_DIAG_PAIRS) {
+        if (g_debug_pairs && (unsigned)slot<ESP112_DIAG_PAIRS) {
             Esp112Candidate foot={0};
             if (native_project(world_frame,c->world_base,&view,&foot)) {
                 char id[12];
@@ -553,7 +609,7 @@ static void drive(void) {
                     entry->foot_ui_x=foot.ndc_x;entry->foot_ui_y=foot.ndc_y;
                 }
             } else esp112_overlay_hide_foot(&g_overlay,(unsigned)slot);
-        }
+        } else esp112_overlay_hide_foot(&g_overlay,(unsigned)slot);
         visible_mask|=1u<<(unsigned)slot;
         ++drawn;
     }
@@ -572,10 +628,11 @@ static void control(UINT message,WPARAM command,HWND hwnd) {
     if (!g_message) g_message=RegisterWindowMessageA(ESP112_MSG);
     if (message!=g_message) return;
     if (command==0u) {
+        stop_refresh_timer();
         g_enabled=0u;
         g_snapshot_valid=0u;
         g_snapshot_epoch=0u;
-        esp112_slots_reset(&g_slots);
+        reset_guid_motion();
         esp112_overlay_shutdown(&g_overlay);
         esp335_scanner_unbind(&g_scanner);
         return;
@@ -592,18 +649,34 @@ static void control(UINT message,WPARAM command,HWND hwnd) {
             g_game_hwnd=root;
     }
     g_enabled=1u;
+    ensure_refresh_timer();
 }
 static void check_insert(const MSG *message,WPARAM mode) {
     if (!g_enabled || !g_game_hwnd || !message || mode!=PM_REMOVE ||
         message->message!=WM_KEYUP || message->wParam!=VK_INSERT ||
         GetAncestor(message->hwnd,GA_ROOT)!=g_game_hwnd) return;
+    if ((GetKeyState(VK_CONTROL)&0x8000) &&
+        (GetKeyState(VK_SHIFT)&0x8000)) {
+        unsigned i;
+        g_debug_pairs=!g_debug_pairs;
+        if (!g_debug_pairs)
+            for (i=0u;i<ESP112_DIAG_PAIRS;++i)
+                esp112_overlay_hide_foot(&g_overlay,i);
+        return;
+    }
     g_visible=!g_visible;
-    if (!g_visible) esp112_overlay_hide_unused(&g_overlay,0u);
+    if (!g_visible) {
+        stop_refresh_timer();
+        esp112_overlay_hide_unused(&g_overlay,0u);
+    } else ensure_refresh_timer();
 }
 __declspec(dllexport) LRESULT CALLBACK W335_HookProc(int code,WPARAM w,LPARAM l) {
     if (code>=0 && l) {
         MSG *msg=(MSG *)l;
         ++g_hook_calls;
+        if (g_refresh_timer && msg->message==WM_TIMER &&
+            !msg->hwnd && msg->wParam==g_refresh_timer && w==PM_REMOVE)
+            ++g_timer_wakeups;
         if (msg->message!=WM_QUIT) {
             control(msg->message,msg->wParam,msg->hwnd);
             if (game_thread()) check_insert(msg,w);

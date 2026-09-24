@@ -27,6 +27,8 @@ SOURCE = [
     "src/PlayerESP112Port/esp112_overlay.h",
     "src/PlayerESP112Port/esp112_slots.c",
     "src/PlayerESP112Port/esp112_slots.h",
+    "src/PlayerESP112Port/esp112_motion.c",
+    "src/PlayerESP112Port/esp112_motion.h",
     "src/PlayerESP112Port/esp112_host335.c",
 ]
 BUILD = [name for name in SOURCE if name.endswith(".c")]

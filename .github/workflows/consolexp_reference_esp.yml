@@ -12,6 +12,7 @@ on:
       - 'tests/test_esp112_port.py'
       - 'tests/esp112_geometry_harness.c'
       - 'tests/esp112_slots_harness.c'
+      - 'tests/esp112_motion_harness.c'
       - 'tests/player_esp_core_harness.c'
       - 'tests/player_esp_camera_harness.c'
       - 'tests/test_player_esp_camera.py'
@@ -124,7 +125,7 @@ jobs:
           call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=x64
           if errorlevel 1 exit /b 1
           if not exist dist\esp112-native mkdir dist\esp112-native
-          cl /nologo /LD /O2 /W4 /WX /TC /Brepro /Fo:dist\esp112-native\ /Fe:dist\esp112-native\PlayerESP335.dll src\PlayerESP\player_esp_core.c src\PlayerESP\player_esp_scanner.c src\PlayerESP112Port\esp112_geometry.c src\PlayerESP112Port\esp112_overlay.c src\PlayerESP112Port\esp112_slots.c src\PlayerESP112Port\esp112_host335.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib Gdi32.lib
+          cl /nologo /LD /O2 /W4 /WX /TC /Brepro /Fo:dist\esp112-native\ /Fe:dist\esp112-native\PlayerESP335.dll src\PlayerESP\player_esp_core.c src\PlayerESP\player_esp_scanner.c src\PlayerESP112Port\esp112_geometry.c src\PlayerESP112Port\esp112_overlay.c src\PlayerESP112Port\esp112_slots.c src\PlayerESP112Port\esp112_motion.c src\PlayerESP112Port\esp112_host335.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib Gdi32.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports dist\esp112-native\PlayerESP335.dll > dist\esp112-native\exports.txt
           if errorlevel 1 exit /b 1

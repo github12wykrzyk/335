@@ -33,6 +33,25 @@ class PortTests(unittest.TestCase):
             run=subprocess.run([str(exe)],capture_output=True,text=True,timeout=30)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
             self.assertIn("ESP112_STABLE_SLOTS: PASS",run.stdout)
+    def test_guid_motion_smoothing_and_timer(self):
+        compiler=shutil.which("clang") or shutil.which("gcc")
+        if not compiler:self.skipTest("C compiler absent")
+        with tempfile.TemporaryDirectory() as tmp:
+            exe=Path(tmp)/"esp112_motion"
+            cmd=[compiler,"-std=c11","-Wall","-Wextra","-Werror",
+                 str(ROOT/"src/PlayerESP112Port/esp112_motion.c"),
+                 str(ROOT/"tests/esp112_motion_harness.c"),"-o",str(exe)]
+            if sys.platform!="win32":cmd.append("-lm")
+            subprocess.run(cmd,check=True,capture_output=True,text=True,timeout=60)
+            run=subprocess.run([str(exe)],capture_output=True,text=True,timeout=30)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+            self.assertIn("ESP112_ADAPTIVE_MOTION: PASS",run.stdout)
+        source=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
+        self.assertIn("SetTimer(NULL,0u,ESP112_PROJECTION_INTERVAL_MS,NULL)",source)
+        self.assertIn("KillTimer(NULL,g_refresh_timer)",source)
+        self.assertIn("esp112_motion_step(&g_motion[slot],c->guid",source)
+        self.assertIn('\\\\\\"probe\\\\\\":\\\\\\"cadence\\\\\\"',source)
+        self.assertIn("g_debug_pairs && (unsigned)slot<ESP112_DIAG_PAIRS",source)
     def test_projection_tick_separate_from_scan_and_stable_slots(self):
         src=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
         ui=(ROOT/"src/PlayerESP112Port/esp112_overlay.c").read_text()
