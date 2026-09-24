@@ -33,6 +33,7 @@ static unsigned g_desired_enable;
 static unsigned g_pulse_running;
 static uint32_t g_last_pulse_ms,g_pulse_delta_ms;
 static uint32_t g_last_cast_ms,g_last_result_ms,g_inflight_attempt;
+static uint32_t g_log_session;
 static uint8_t g_packet_cast_count;
 static unsigned g_native_failover,g_packet_unanswered,g_last_submitted_native;
 static uint32_t g_packet_nonce,g_packet_started_ms;
@@ -360,17 +361,20 @@ static uint64_t world_token(void *ctx) {
     return g_policy.world_token(g_policy.context);
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
-    wchar_t path[MAX_PATH],dir[MAX_PATH],*slash;
+    wchar_t path[MAX_PATH],dir[MAX_PATH],older[MAX_PATH],newer[MAX_PATH],*slash;
     char line[432];
     const char *reason="attempt";
     DWORD ignored;
     HANDLE file;
     LARGE_INTEGER length;
     int n;
+    unsigned i;
     uint32_t now,cast_gap=0u,result_wait=0u,next_wait=0u,queue_age=0u;
     (void)ctx;
     if(!is_game_thread())return;
     now=(uint32_t)GetTickCount();
+    if(!g_log_session)g_log_session=now ^ (uint32_t)GetCurrentProcessId() ^
+        (uint32_t)(uintptr_t)g_self;
     if(kind==PP_EVENT_CAST){
         if(g_last_cast_ms)cast_gap=(uint32_t)(now-g_last_cast_ms);
         if(g_last_result_ms)next_wait=(uint32_t)(now-g_last_result_ms);
@@ -378,7 +382,10 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
         g_inflight_attempt=attempt_id;
     } else if((kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
                kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
-               (kind==PP_EVENT_INELIGIBLE || kind==PP_EVENT_MONEY_SUCCESS)) &&
+               (kind==PP_EVENT_INELIGIBLE || kind==PP_EVENT_MONEY_SUCCESS ||
+                kind==PP_EVENT_OUT_OF_RANGE || kind==PP_EVENT_LINE_OF_SIGHT ||
+                kind==PP_EVENT_NOT_STEALTHED || kind==PP_EVENT_NOT_READY ||
+                kind==PP_EVENT_CAST_REJECTED)) &&
               g_inflight_attempt && attempt_id==g_inflight_attempt){
         result_wait=(uint32_t)(now-g_last_cast_ms);
         g_last_result_ms=now;
@@ -398,10 +405,26 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|
           FILE_SHARE_DELETE,NULL,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
     if(file==INVALID_HANDLE_VALUE)return;
-    if(GetFileSizeEx(file,&length) && length.QuadPart>PP_LOG_CAP) {
-        SetFilePointer(file,0,NULL,FILE_BEGIN);
-        SetEndOfFile(file); /* bounded log; no personal data or chat */
-    }else SetFilePointer(file,0,NULL,FILE_END);
+    if(GetFileSizeEx(file,&length) && length.QuadPart>=PP_LOG_CAP) {
+        CloseHandle(file);
+        for(i=3u;i>0u;--i){
+            if(i==1u){
+                if(swprintf_s(older,MAX_PATH,
+                    L"%ls\\.wow335_debug\\AutoPickPocket.jsonl",dir)<0)return;
+            }else if(swprintf_s(older,MAX_PATH,
+                L"%ls\\.wow335_debug\\AutoPickPocket.%u.jsonl",dir,i-1u)<0)
+                return;
+            if(swprintf_s(newer,MAX_PATH,
+                L"%ls\\.wow335_debug\\AutoPickPocket.%u.jsonl",dir,i)<0)
+                return;
+            (void)MoveFileExW(older,newer,
+                MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
+        }
+        file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|
+             FILE_SHARE_DELETE,NULL,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+        if(file==INVALID_HANDLE_VALUE)return;
+    }
+    SetFilePointer(file,0,NULL,FILE_END);
     switch(kind) {
     case PP_EVENT_CAST: reason="cast_submitted";break;
     case PP_EVENT_SUCCESS: reason="verified_result";break;
@@ -429,8 +452,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"transport\":\"%s\",\"no_ack_count\":%u}\n",
-       (unsigned long)now,(unsigned)kind,reason,
+       "{\"module\":\"AutoPickPocket\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"transport\":\"%s\",\"no_ack_count\":%u}\n",
+       (unsigned long)g_log_session,(unsigned long)now,(unsigned)kind,reason,
        (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi,
        (unsigned long)g_adapter.last_scan_duration_ms,
        (unsigned long)g_adapter.last_scan_candidates,
