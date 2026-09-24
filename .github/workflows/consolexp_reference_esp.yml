@@ -12,6 +12,7 @@ on:
       - 'tests/player_esp_camera_harness.c'
       - 'tests/test_player_esp_camera.py'
       - 'tests/test_player_esp_render.py'
+      - 'tests/test_player_esp_lua.py'
       - 'tests/player_esp_scanner_harness.c'
       - 'tests/test_player_esp_scanner.py'
       - 'tests/test_player_esp_core.py'
@@ -38,7 +39,7 @@ jobs:
       - name: Audit camera/object reference VAs against exact selected Wow.exe
         run: python tools/audit_player_esp_client.py --report dist/esp_client_static_audit.json
       - name: Test reference safety and portable ESP core
-        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v && python -m unittest discover -s tests -p 'test_player_esp_win32_host.py' -v && python -m unittest discover -s tests -p 'test_esp_client_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_camera.py' -v && python -m unittest discover -s tests -p 'test_player_esp_render.py' -v
+        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v && python -m unittest discover -s tests -p 'test_player_esp_win32_host.py' -v && python -m unittest discover -s tests -p 'test_esp_client_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_camera.py' -v && python -m unittest discover -s tests -p 'test_player_esp_render.py' -v && python -m unittest discover -s tests -p 'test_player_esp_lua.py' -v
       - name: Publish inert reference inventory (not game package)
         uses: actions/upload-artifact@v4
         with:
@@ -78,7 +79,7 @@ jobs:
           call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=x64
           if errorlevel 1 exit /b 1
           if not exist dist\esp-native mkdir dist\esp-native
-          cl /nologo /LD /O2 /W4 /WX /TC /Brepro /Fo:dist\esp-native\ /Fe:dist\esp-native\PlayerESP335.dll src\PlayerESP\player_esp_core.c src\PlayerESP\player_esp_scanner.c src\PlayerESP\player_esp_camera.c src\PlayerESP\player_esp_d3d9.c src\PlayerESP\player_esp_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib d3d9.lib
+          cl /nologo /LD /O2 /W4 /WX /TC /Brepro /Fo:dist\esp-native\ /Fe:dist\esp-native\PlayerESP335.dll src\PlayerESP\player_esp_core.c src\PlayerESP\player_esp_scanner.c src\PlayerESP\player_esp_camera.c src\PlayerESP\player_esp_d3d9.c src\PlayerESP\player_esp_lua.c src\PlayerESP\player_esp_win32_host.c /link /MACHINE:X86 /Brepro Advapi32.lib User32.lib d3d9.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports dist\esp-native\PlayerESP335.dll > dist\esp-native\exports.txt
           if errorlevel 1 exit /b 1
