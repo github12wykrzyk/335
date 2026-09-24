@@ -23,15 +23,15 @@ class SpellAndResultTests(unittest.TestCase):
                       'nonce!=current_attempt','!same(guid,current_target)',
                       'read_u32(LOOT_SOURCE,&source.lo)','same(source,guid)',
                       'PP_RESULT_PENDING','PP_RESULT_EMPTY',
-                      'PP_RESULT_RETRYABLE','elapsed>=80u'):
+                      'PP_RESULT_OUT_OF_RANGE','PP_RESULT_CAST_REJECTED','elapsed>=80u'):
             self.assertIn(value,POLICY)
         main_policy=POLICY[POLICY.index('static PpResult cast_result('):]
         self.assertLess(main_policy.index('!strcmp(empty,want)'),
                         main_policy.index('return PP_RESULT_SUCCESS;'))
         self.assertLess(main_policy.index('!strcmp(fail,want)'),
                         main_policy.index('return PP_RESULT_SUCCESS;'))
-        self.assertIn('string.upper(dst)==_G.W335PP_G',POLICY)
-        self.assertIn('GetTime()-_G.W335PP_T<=1.5',POLICY)
+        self.assertIn('dg==_G.W335PP_G',POLICY)
+        self.assertIn('t-_G.W335PP_T<=0.4',POLICY)
         self.assertIn('W335PP_RANGE',POLICY)
         self.assertIn('SPELL_FAILED_OUT_OF_RANGE',POLICY)
         self.assertIn('ERR_OUT_OF_RANGE',POLICY)
@@ -42,8 +42,9 @@ class SpellAndResultTests(unittest.TestCase):
         header=(ROOT/"src/AutoPickPocket/autopickpocket_core.h").read_text()
         self.assertIn("f:RegisterEvent('PLAYER_MONEY')",POLICY)
         self.assertIn("_G.W335PP_MB=GetMoney and GetMoney() or -1",POLICY)
-        self.assertIn("GetTime()-_G.W335PP_T<=0.4",POLICY)
-        self.assertIn("if balance>_G.W335PP_MB then _G.W335PP_M=n",POLICY)
+        self.assertIn("t-_G.W335PP_T<=0.4",POLICY)
+        self.assertIn("if balance>_G.W335PP_MB then",POLICY)
+        self.assertIn("_G.W335PP_M=n",POLICY)
         self.assertIn("!strcmp(money,want) && !strcmp(loot,want)",POLICY)
         self.assertIn("(!source_read || (source.lo|source.hi)==0u || same(source,guid))",POLICY)
         self.assertLess(POLICY.index("!strcmp(empty,want)"),
@@ -55,7 +56,7 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn("PP_EVENT_MONEY_SUCCESS = 17",header)
         self.assertIn("case PP_RESULT_MONEY_SUCCESS:",core)
         self.assertIn("emit(engine,PP_EVENT_MONEY_SUCCESS,engine->active);",core)
-        self.assertIn("result>PP_RESULT_MONEY_SUCCESS",adapter)
+        self.assertIn("result>PP_RESULT_CAST_REJECTED",adapter)
         self.assertIn('reason="wallet_loot_signal"',HOST)
         self.assertIn("kind==PP_EVENT_MONEY_SUCCESS",HOST)
     def test_exact_attempt_cancellation_unifies_timers(self):
@@ -95,13 +96,13 @@ class SpellAndResultTests(unittest.TestCase):
                       "pending_index(guid,nonce)","if(pending_size()>=PP_MAX_PENDING)",
                       "burst_overlap=1","if(burst_overlap || !active",
                       "return burst_result(guid,nonce,elapsed);",
-                      "rec=_G.W335PP_BURST and dst",
+                      "rec=_G.W335PP_BURST and _G.W335PP_BURST[dg]",
                       "_G.W335PP_BURST[_G.W335PP_G]={n=_G.W335PP_N",
-                      "GetTime()-rec.t<=0.4","string.upper(src)==string.upper(UnitGUID('player'))",
-                      "rec.s='1'","rec.f='1'",
+                      "t-rec.t>1.5","string.upper(src)==string.upper(UnitGUID('player'))",
+                      "rec.s='1'","rec.f=why=='U' and 'F' or why",
                       "_G.W335PP_BURST['0X%08lX%08lX']",
                       "r.n=='%lu'",
-                      "if r.f=='1'","elseif r.s=='1'",
+                      "if r.f~='0'","elseif r.s=='1'",
                       "p[g].n=='%lu' then p[g]=nil"):
             self.assertIn(token,POLICY)
         self.assertNotIn("ready_for_burst(",core)
@@ -140,7 +141,8 @@ class SpellAndResultTests(unittest.TestCase):
         self.assertIn("_G.W335PP_N=='%lu'",POLICY)
         self.assertIn("_G.W335PP_G=='0X%08lX%08lX'",POLICY)
         self.assertIn("string.upper(t)==_G.W335PP_G",POLICY)
-        self.assertIn("if t and ClearTarget and string.upper(t)==_G.W335PP_G then ClearTarget() end",POLICY)
+        self.assertIn("if t and ClearTarget and string.upper(t)==_G.W335PP_G",POLICY)
+        self.assertIn("then ClearTarget() end",POLICY)
         self.assertEqual(POLICY.count("ClearTarget()"),2)
         self.assertLess(HOST.index("((cast_fn)va)(spell,0u,target.lo,target.hi,0u);"),
                         HOST.index("g_policy.after_cast_submitted(g_policy.context,target,attempt_id)"))
