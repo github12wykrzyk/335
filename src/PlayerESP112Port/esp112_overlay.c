@@ -145,8 +145,8 @@ int esp112_overlay_show(Esp112Overlay *o,unsigned i,int x,int y,
         InvalidateRect(label->hwnd,NULL,FALSE);
     }
     if (!label->visible || label->left!=x || label->top!=y) {
-        if (!SetWindowPos(label->hwnd,HWND_TOPMOST,x,y,0,0,
-                          SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW))
+        if (!SetWindowPos(label->hwnd,NULL,x,y,0,0,
+                          SWP_NOZORDER|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW))
             return 0;
         label->left=x;label->top=y;
         label->visible=1u;
@@ -182,8 +182,8 @@ int esp112_overlay_show_foot(Esp112Overlay *o,unsigned i,int sx,int sy,
         InvalidateRect(label->foot_hwnd,NULL,FALSE);
     }
     if (!label->foot_visible || label->foot_left!=left || label->foot_top!=top) {
-        if (!SetWindowPos(label->foot_hwnd,HWND_TOPMOST,left,top,0,0,
-                          SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW))
+        if (!SetWindowPos(label->foot_hwnd,NULL,left,top,0,0,
+                          SWP_NOZORDER|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW))
             return 0;
         label->foot_left=left;label->foot_top=top;
         label->foot_visible=1u;
@@ -213,6 +213,23 @@ void esp112_overlay_hide_unused(Esp112Overlay *o,unsigned used) {
         }
     }
     o->visible=used;
+}
+void esp112_overlay_finish_frame(Esp112Overlay *o,unsigned frame_mask) {
+    unsigned i,visible=0u;
+    if (!o) return;
+    for (i=0u;i<ESP112_MAX_LABELS;++i) {
+        Esp112OverlayLabel *label=&o->labels[i];
+        if (frame_mask & (1u<<i)) {
+            ++visible;
+            continue;
+        }
+        esp112_overlay_hide_foot(o,i);
+        if (label->hwnd && label->visible) {
+            ShowWindow(label->hwnd,SW_HIDE);
+            label->visible=0u;
+        }
+    }
+    o->visible=visible;
 }
 void esp112_overlay_shutdown(Esp112Overlay *o) {
     unsigned i;

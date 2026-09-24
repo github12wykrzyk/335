@@ -22,6 +22,9 @@
 #include "../PlayerESP/player_esp_scanner.h"
 #include "esp112_geometry.h"
 #include "esp112_overlay.h"
+#include "esp112_slots.h"
+#define ESP112_PROJECTION_INTERVAL_MS 16u
+#define ESP112_OBJECT_SCAN_INTERVAL_MS 50u
 #pragma comment(lib,"Advapi32.lib")
 #pragma comment(lib,"User32.lib")
 #pragma comment(lib,"Gdi32.lib")
@@ -53,7 +56,10 @@ typedef struct {
 } Esp112PairProbe;
 
 static HINSTANCE g_instance;
-static DWORD g_game_tid,g_last_scan,g_last_log,g_last_bind,g_last_probe;
+static DWORD g_game_tid,g_last_scan,g_last_object_scan,g_last_log,g_last_bind,g_last_probe;
+static unsigned g_snapshot_valid,g_projection_ticks;
+static uint64_t g_snapshot_epoch;
+static Esp112Slots g_slots;
 static HWND g_game_hwnd;
 static UINT g_message;
 static unsigned g_enabled,g_visible=1u,g_driving,g_initialised;
@@ -346,12 +352,12 @@ static void diagnostic(void) {
         "\"projection_failed\":%u,\"labels\":%u,"
         "\"overlay_created\":%u,\"overlay_create_errors\":%u,"
         "\"client_hash_rejects\":%u,\"layout_rejects\":%u,"
-        "\"hook_calls\":%u,\"insert_visible\":%u}\n",
+        "\"hook_calls\":%u,\"insert_visible\":%u,\"projection_ticks\":%u}\n",
         g_scanner.snapshot.world_epoch?1u:0u,g_scanner.accepted_npcs,
         g_scanner.accepted_players,g_scans,g_scan_errors,
         g_proj_ok,g_proj_error,g_overlay.visible,g_overlay_binds,
         g_overlay_init_fail+g_window_fail,g_hash_rejects,g_native_gate_fail,
-        g_hook_calls,g_visible);
+        g_hook_calls,g_visible,g_projection_ticks);
     if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
     if (g_probe_ready) {
         n=_snprintf_s(line,sizeof(line),_TRUNCATE,
@@ -395,13 +401,15 @@ static void drive(void) {
     Esp335Vec3 eye;
     uint32_t world_frame;
     unsigned n=0u,drawn=0u,i;
+    unsigned visible_mask=0u;
     DWORD now;
     HWND foreground;
     int scan_ok;
     if (!game_thread() || !g_enabled || g_driving) return;
     now=GetTickCount();
-    if ((DWORD)(now-g_last_scan)<50u) return;
+    if ((DWORD)(now-g_last_scan)<ESP112_PROJECTION_INTERVAL_MS) return;
     g_last_scan=now;
+    ++g_projection_ticks;
     g_driving=1u;
     foreground=GetForegroundWindow();
     if (!g_visible || !g_game_hwnd || IsIconic(g_game_hwnd) ||
@@ -410,6 +418,7 @@ static void drive(void) {
         goto done;
     }
     if (!g_scanner.bound) {
+        g_snapshot_valid=0u;
         if (!g_last_bind || (DWORD)(now-g_last_bind)>=5000u) {
             Esp335ScannerHost host;
             memset(&host,0,sizeof(host));
@@ -425,9 +434,33 @@ static void drive(void) {
         }
         if (!g_scanner.bound) goto clear;
     }
-    scan_ok=esp335_scanner_collect(&g_scanner);
-    if (!scan_ok) { ++g_scan_errors;goto clear; }
-    ++g_scans;
+    /* Read object list at 20 Hz, but reproject the CURRENT world frame at
+     * up to 60 Hz. 50 ms camera-only freezes were visibly jerking labels. */
+    if (!g_snapshot_valid || !g_last_object_scan ||
+        (DWORD)(now-g_last_object_scan)>=ESP112_OBJECT_SCAN_INTERVAL_MS) {
+        g_last_object_scan=now;
+        scan_ok=esp335_scanner_collect(&g_scanner);
+        if (!scan_ok) {
+            ++g_scan_errors;
+            g_snapshot_valid=0u;
+            esp112_slots_reset(&g_slots);
+            goto clear;
+        }
+        ++g_scans;
+        g_snapshot_valid=1u;
+    }
+    /* No cached snapshot may escape a relog/map/instance change. */
+    if (!g_scanner.snapshot.world_epoch ||
+        world_epoch(NULL)!=g_scanner.snapshot.world_epoch) {
+        g_snapshot_valid=0u;
+        esp112_slots_reset(&g_slots);
+        goto clear;
+    }
+    if (g_snapshot_epoch!=g_scanner.snapshot.world_epoch) {
+        esp112_slots_reset(&g_slots);
+        g_snapshot_epoch=g_scanner.snapshot.world_epoch;
+    }
+    esp112_slots_next_frame(&g_slots);
     g_pair_count=0u;
     if (!get_world_frame(&world_frame,&eye) || !get_viewport(&view))
         goto clear;
@@ -470,11 +503,13 @@ static void drive(void) {
     if (g_overlay.atom && !g_overlay_binds) ++g_overlay_binds;
     for (i=0u;i<n && drawn<ESP112_MAX_LABELS;++i) {
         char title[96];
-        int left,top;
+        int left,top,slot;
         COLORREF color;
         const Esp112Candidate *c=&candidates[i];
         if (!esp112_label_rect(c->x,c->y,&view,&left,&top))
             continue;
+        slot=esp112_slots_reserve(&g_slots,c->guid,visible_mask);
+        if (slot<0) continue;
         if (c->kind==ESP335_KIND_NPC) {
             _snprintf_s(title,sizeof(title),_TRUNCATE,
                 "NPC %04X %u yd",(unsigned)(c->guid&0xFFFFu),
@@ -488,7 +523,7 @@ static void drive(void) {
                   c->faction==ESP335_ALLIANCE?RGB(90,150,255):
                   RGB(238,230,145);
         }
-        if (!esp112_overlay_show(&g_overlay,drawn,left,top,title,
+        if (!esp112_overlay_show(&g_overlay,(unsigned)slot,left,top,title,
                                   c->hp,c->max_hp,color)) {
             ++g_window_fail;continue;
         }
@@ -496,14 +531,13 @@ static void drive(void) {
          * projection of the actual base. No guessed head correction is
          * applied to the base marker. Green cross MUST touch NPC feet if
          * object position and the native viewport transform are correct. */
-        esp112_overlay_hide_foot(&g_overlay,drawn);
-        if (drawn<ESP112_DIAG_PAIRS) {
+        if ((unsigned)slot<ESP112_DIAG_PAIRS) {
             Esp112Candidate foot={0};
             if (native_project(world_frame,c->world_base,&view,&foot)) {
                 char id[12];
                 _snprintf_s(id,sizeof(id),_TRUNCATE,"%04X",
                             (unsigned)(c->guid&0xFFFFu));
-                if (!esp112_overlay_show_foot(&g_overlay,drawn,
+                if (!esp112_overlay_show_foot(&g_overlay,(unsigned)slot,
                         foot.x+view.screen_left,foot.y+view.screen_top,id))
                     ++g_window_fail;
                 if (g_pair_count<ESP112_DIAG_PAIRS) {
@@ -518,11 +552,12 @@ static void drive(void) {
                     entry->head_ui_x=c->ndc_x;entry->head_ui_y=c->ndc_y;
                     entry->foot_ui_x=foot.ndc_x;entry->foot_ui_y=foot.ndc_y;
                 }
-            }
+            } else esp112_overlay_hide_foot(&g_overlay,(unsigned)slot);
         }
+        visible_mask|=1u<<(unsigned)slot;
         ++drawn;
     }
-    esp112_overlay_hide_unused(&g_overlay,drawn);
+    esp112_overlay_finish_frame(&g_overlay,visible_mask);
     goto done;
 clear:
     esp112_overlay_hide_unused(&g_overlay,0u);
@@ -538,6 +573,9 @@ static void control(UINT message,WPARAM command,HWND hwnd) {
     if (message!=g_message) return;
     if (command==0u) {
         g_enabled=0u;
+        g_snapshot_valid=0u;
+        g_snapshot_epoch=0u;
+        esp112_slots_reset(&g_slots);
         esp112_overlay_shutdown(&g_overlay);
         esp335_scanner_unbind(&g_scanner);
         return;

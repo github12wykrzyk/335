@@ -30,5 +30,7 @@ int esp112_overlay_show_foot(Esp112Overlay *overlay,unsigned slot,int screen_x,
                               int screen_y,const char *short_id);
 void esp112_overlay_hide_foot(Esp112Overlay *overlay,unsigned slot);
 void esp112_overlay_hide_unused(Esp112Overlay *overlay,unsigned used);
+/* Finish the frame by window identity, not the number of sorted rows. */
+void esp112_overlay_finish_frame(Esp112Overlay *overlay,unsigned frame_mask);
 void esp112_overlay_shutdown(Esp112Overlay *overlay);
 #endif

@@ -21,6 +21,27 @@ class PortTests(unittest.TestCase):
             run=subprocess.run([str(executable)],capture_output=True,text=True,timeout=30)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
             self.assertIn("ESP112_335_GEOMETRY: PASS",run.stdout)
+    def test_stable_npc_slots(self):
+        compiler=shutil.which("clang") or shutil.which("gcc")
+        if not compiler:self.skipTest("C compiler absent")
+        with tempfile.TemporaryDirectory() as tmp:
+            exe=Path(tmp)/"esp112_slots"
+            cmd=[compiler,"-std=c11","-Wall","-Wextra","-Werror",
+                 str(ROOT/"src/PlayerESP112Port/esp112_slots.c"),
+                 str(ROOT/"tests/esp112_slots_harness.c"),"-o",str(exe)]
+            subprocess.run(cmd,check=True,capture_output=True,text=True,timeout=60)
+            run=subprocess.run([str(exe)],capture_output=True,text=True,timeout=30)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+            self.assertIn("ESP112_STABLE_SLOTS: PASS",run.stdout)
+    def test_projection_tick_separate_from_scan_and_stable_slots(self):
+        src=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
+        ui=(ROOT/"src/PlayerESP112Port/esp112_overlay.c").read_text()
+        self.assertIn("ESP112_PROJECTION_INTERVAL_MS 16u",src)
+        self.assertIn("ESP112_OBJECT_SCAN_INTERVAL_MS 50u",src)
+        self.assertIn("esp112_slots_reserve(&g_slots,c->guid,visible_mask)",src)
+        self.assertIn("esp112_overlay_finish_frame(&g_overlay,visible_mask)",src)
+        self.assertNotIn("esp112_overlay_hide_unused(&g_overlay,drawn)",src)
+        self.assertIn("SWP_NOZORDER",ui)
     def test_os_overlay_not_lua(self):
         g=(ROOT/"src/PlayerESP112Port/esp112_overlay.c").read_text()
         self.assertIn("CreateWindowExA",g)
