@@ -82,6 +82,8 @@
         "src/PlayerESP112Port/esp112_geometry.h",
         "src/PlayerESP112Port/esp112_overlay.c",
         "src/PlayerESP112Port/esp112_overlay.h",
+        "src/PlayerESP112Port/esp112_slots.c",
+        "src/PlayerESP112Port/esp112_slots.h",
         "src/PlayerESP112Port/esp112_host335.c"
       ],
       "requires": [],
@@ -128,6 +130,7 @@
           "src/PlayerESP/player_esp_scanner.c",
           "src/PlayerESP112Port/esp112_geometry.c",
           "src/PlayerESP112Port/esp112_overlay.c",
+          "src/PlayerESP112Port/esp112_slots.c",
           "src/PlayerESP112Port/esp112_host335.c"
         ],
         "include_dirs": [
