@@ -23,14 +23,14 @@ class SpellAndResultTests(unittest.TestCase):
                       'nonce!=current_attempt','!same(guid,current_target)',
                       'read_u32(LOOT_SOURCE,&source.lo)','same(source,guid)',
                       'PP_RESULT_PENDING','PP_RESULT_EMPTY',
-                      'PP_RESULT_RETRYABLE','elapsed>=80u'):
+                      'PP_RESULT_OUT_OF_RANGE','PP_RESULT_CAST_REJECTED','elapsed>=80u'):
             self.assertIn(value,POLICY)
         self.assertLess(POLICY.index('!strcmp(empty,want)'),
                         POLICY.index('return PP_RESULT_SUCCESS;'))
         self.assertLess(POLICY.index('!strcmp(fail,want)'),
                         POLICY.index('return PP_RESULT_SUCCESS;'))
-        self.assertIn('string.upper(dst)==_G.W335PP_G',POLICY)
-        self.assertIn('GetTime()-_G.W335PP_T<=1.5',POLICY)
+        self.assertIn('dg==_G.W335PP_G',POLICY)
+        self.assertIn('t-_G.W335PP_T<=0.4',POLICY)
         self.assertIn('W335PP_RANGE',POLICY)
         self.assertIn('SPELL_FAILED_OUT_OF_RANGE',POLICY)
         self.assertIn('ERR_OUT_OF_RANGE',POLICY)
