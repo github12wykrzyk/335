@@ -53,7 +53,7 @@ class PortTests(unittest.TestCase):
         overlay=(ROOT/"src/PlayerESP112Port/esp112_overlay.c").read_text()
         self.assertIn("candidate.world_base=p->position;",host)
         self.assertIn("native_project(world_frame,c->world_base,&view,&foot)",host)
-        self.assertIn("esp112_overlay_show_foot(&g_overlay,drawn",host)
+        self.assertIn("esp112_overlay_show_foot(&g_overlay,(unsigned)slot",host)
         self.assertIn('\\\"probe\\\":\\\"paired_head_and_feet\\\"',host)
         self.assertIn("ESP112_DIAG_PAIRS 6u",(ROOT/"src/PlayerESP112Port/esp112_overlay.h").read_text())
         self.assertIn("foot_window",overlay)
