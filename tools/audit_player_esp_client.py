@@ -16,6 +16,7 @@ CANDIDATES=(
     ("get_object_position",0x006E6F10,"335 AutoLoot host"),
     ("get_active_camera",0x004F5960,"ConsoleXP upstream Game.cpp"),
     ("world_frame_pointer",0x00B7436C,"ConsoleXP upstream Game.cpp"),
+    ("world_frame_alternative",0x00EEEA8C,"jrsa 3.3.5a camera study: alternative worldframe global"),
     ("get_object_by_guid",0x004D4DB0,"ConsoleXP upstream Game.h"),
 )
 
@@ -83,6 +84,27 @@ def audit(exe: Path,manifest: dict):
         row.update({"id":name,"origin":origin,
                     "exact_12340_abi_verified":False})
         result.append(row)
+    # Absolute-memory immediates in executable sections are candidate xrefs;
+    # finding a reference does not prove a global points at a world frame.
+    for row in result:
+        if row["id"] not in ("world_frame_pointer","world_frame_alternative","get_active_camera"):
+            continue
+        needle=struct.pack("<I",int(row["va"],16))
+        refs=[]
+        for name,rva,virtual_size,raw_ptr,raw_size,flags in sections:
+            if not (flags & 0x20000000):
+                continue
+            section=raw[raw_ptr:raw_ptr+raw_size]
+            pos=0
+            while len(refs)<20:
+                at=section.find(needle,pos)
+                if at<0:break
+                pos=at+4
+                refs.append({"immediate_va":f"0x{base+rva+at:08x}",
+                             "context":section[max(0,at-12):at+20].hex()})
+        row["executable_immediate_xrefs"]=refs
+        row["first_64_bytes"]=(raw[row["file_offset"]:row["file_offset"]+64].hex()
+            if row.get("mapped") else None)
     return {"client_sha256":digest,"client_bytes":len(raw),
             "image_base":f"0x{base:08x}",
             "purpose":"static leads only; no function signatures/ABIs proven",
