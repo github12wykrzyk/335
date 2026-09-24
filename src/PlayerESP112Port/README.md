@@ -97,3 +97,12 @@ Użytkownik potwierdził, że napisy **nie migają**, jedynie lekko szarpią. Po
 ## 2026-09-24: ruch NPC aktualizowany w kazdej klatce
 
 Użytkownik potwierdził płynne śledzenie kamery, ale mikro-szarpanie etykiet wyłącznie, kiedy NPC się porusza. Przyczyna w poprzedniej implementacji: Object Manager skanowany co 50ms, a pomiędzy tymi skanami renderer D3D9 wykonywał natywny W2S na STARYM XYZ NPC. Teraz snapshot nadal odświeża metadane i listę GUID co 50ms, ale w każdej klatce renderowania, dla pobliskich jednostek, wywoływany jest `esp335_scanner_live_position`: weryfikuje obiekt przez GUID, typ, world epoch, game thread i chronione read32, a dopiero potem pobiera bieżące XYZ natywnym callbackiem. Nieprawidłowe obiekty są pomijane (bez etykiety na starym XYZ). Nie zmieniono Present/D3D9, zoomu, filtra kamery ani częstotliwości pełnej enumeracji. `PlayerESP.jsonl` zapisuje kumulacyjne `probe=live_npc_position` z `ok/rejected`; test C symuluje ruch między skanami, reuse GUID, relog i błąd pamięci. Jeżeli klient 12340 dostarcza współrzędne obiektu tylko co tick serwera (zamiast animowanej render-position), następny etap wymaga audytu transformacji modelu/velocity z dokładnej binarki i raportu z gry, a nie wzmacniania filtra kamery. TEST build sam nie potwierdza płynności in-game.
+
+## Shared GUI integration (feature/shared-gui-12340)
+
+This document records historical standalone ESP iterations. In the integrated
+SharedGUI candidate, PlayerESP no longer handles Insert (including the old
+Ctrl+Shift+Insert diagnostic shortcut) or supplies a standalone settings window.
+Visibility, filters, range and diagnostic foot markers are controlled exclusively
+through the PlayerESP page in WoW335GUI.dll. ESP rendering overlays are not GUI
+windows and remain unchanged. No fallback hotkey is installed without SharedGUI.

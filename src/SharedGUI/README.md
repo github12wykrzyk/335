@@ -40,8 +40,9 @@ does not substitute for hostile-to-me classification.
 
 Shutdown: loader calls ESP disable (unregister), GUI disable destroys windows.
 A game focus check accepts GUI-owned windows so ESP remains visible when
-controls are clicked. Insert is suppressed in ESP when shared GUI is loaded;
-Ctrl+Shift+Insert remains ESP's separate diagnostic shortcut.
+controls are clicked. ESP never intercepts Insert or creates its own settings window. SharedGUI is
+the only Insert owner; its PlayerESP page also controls diagnostic foot markers.
+No fallback ESP hotkey is installed when SharedGUI is unavailable.
 
 Runtime current.json and module_registry.json require the exact PE32 x86
 native build and registered SHA on the isolated feature branch before any

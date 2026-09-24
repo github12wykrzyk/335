@@ -867,28 +867,6 @@ static void game_frame(IDirect3DDevice9 *device,void *user) {
     if (g_last_frame_ms && (DWORD)(now-g_last_frame_ms)<2u) return;
     drive(device);
 }
-static void check_insert(const MSG *message,WPARAM mode) {
-    /* Single hotkey owner when the shared GUI has registered this module. */
-    if(g_gui_registered && !(GetKeyState(VK_CONTROL)&0x8000 &&
-         GetKeyState(VK_SHIFT)&0x8000)) return;
-    if (!g_enabled || !g_game_hwnd || !message || mode!=PM_REMOVE ||
-        message->message!=WM_KEYUP || message->wParam!=VK_INSERT ||
-        GetAncestor(message->hwnd,GA_ROOT)!=g_game_hwnd) return;
-    if ((GetKeyState(VK_CONTROL)&0x8000) &&
-        (GetKeyState(VK_SHIFT)&0x8000)) {
-        unsigned i;
-        g_debug_pairs=!g_debug_pairs;
-        if (!g_debug_pairs)
-            for (i=0u;i<ESP112_DIAG_PAIRS;++i)
-                esp112_overlay_hide_foot(&g_overlay,i);
-        return;
-    }
-    g_visible=!g_visible;
-    if (!g_visible) {
-        stop_refresh_timer();
-        esp112_overlay_hide_unused(&g_overlay,0u);
-    } else ensure_refresh_timer();
-}
 __declspec(dllexport) LRESULT CALLBACK W335_HookProc(int code,WPARAM w,LPARAM l) {
     if (code>=0 && l) {
         MSG *msg=(MSG *)l;
@@ -899,7 +877,6 @@ __declspec(dllexport) LRESULT CALLBACK W335_HookProc(int code,WPARAM w,LPARAM l)
         if (msg->message!=WM_QUIT) {
             control(msg->message,msg->wParam,msg->hwnd);
             if (game_thread()) {
-                check_insert(msg,w);
                 try_frame_install();
             }
             drive(NULL);

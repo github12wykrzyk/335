@@ -31,6 +31,12 @@ class SharedGuiContracts(unittest.TestCase):
             self.assertIn(item,esp)
         self.assertNotIn('{"hostile","',esp)
         self.assertNotIn('{"mixed_bg","',esp)
+        self.assertNotIn("VK_INSERT",esp)
+        self.assertNotIn("check_insert(",esp)
+        self.assertNotIn("CreateWindowExA(",esp)
+        gui=(ROOT/"src/SharedGUI/w335_gui_win32.c").read_text(encoding="utf-8")
+        self.assertIn("VK_INSERT",gui)
+        self.assertIn('{"debug","Debug foot markers"',esp)
     def test_full_runtime_registration_order_and_resource_owner(self):
         rt={"target":{"build":12340},"files":[
             {"component":"Client12340","kind":"exe"},

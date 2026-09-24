@@ -11,8 +11,10 @@ After FINAL_PACKAGE: PASS on the **exact current branch HEAD**, check in game:
 1. Run the pinned Wow.exe in windowed/borderless mode using the updater's
    complete verified feature candidate; do not install a single DLL manually.
 2. Insert opens/closes the single GUI without toggling ESP labels. Verify mouse
-   interaction; focus on the GUI must not hide ESP markers. Ctrl+Shift+Insert
-   retains the separate ESP foot-marker diagnostic.
+   interaction; focus on the GUI must not hide ESP markers. ESP has no private
+   Insert or Ctrl+Shift+Insert shortcut; use its shared GUI Debug foot markers
+   toggle instead. When the shared GUI is unavailable, Insert must not toggle
+   ESP visibility.
 3. DLL list shows **only managed DLLs from verified dlls.txt** that are mapped
    in Wow.exe (AutoLoot335.dll, WoW335GUI.dll, PlayerESP335.dll). Windows,
    NVIDIA, DirectX and unrelated libraries must not appear. AutoLoot335.dll
