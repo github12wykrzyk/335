@@ -42,37 +42,63 @@ try {
         -not $badges.AutoScroll) {
         throw "Branch statuses must occupy one scrollable horizontal row."
     }
-    if ($badges.Controls.Count -ne 2) { throw "Expected initial work/main badges." }
-    # Simulate GitHub returning nine branches: none may be dropped or wrapped.
+    if ($badges.Controls.Count -ne 5) { throw "Expected four main badges and the remaining-branches button." }
     $branches=New-Object 'System.Collections.Generic.List[string]'
     foreach ($name in @('work','main','feature/autoloot-12340',
-        'feature/autopickpocket-12340','feature/loader-12340',
-        'promote/stable-infrastructure-12340','feature/new-a',
-        'feature/new-b','feature/new-c')) { $branches.Add($name) }
+        'feature/autopickpocket-12340','feature/autopickpocket-packets-12340',
+        'feature/loader-12340','promote/stable-infrastructure-12340',
+        'feature/new-a','feature/new-b','feature/new-c')) { $branches.Add($name) }
     $arrange=$type.GetMethod('Arrange335MonitorBadges',
+        [Reflection.BindingFlags]::NonPublic -bor [Reflection.BindingFlags]::Instance)
+    $set=$type.GetMethod('Set335Badge',
         [Reflection.BindingFlags]::NonPublic -bor [Reflection.BindingFlags]::Instance)
     $parameters=[object[]]::new(1)
     $parameters[0]=$branches.PSObject.BaseObject
     $null=$arrange.Invoke($form,$parameters)
     $form.PerformLayout()
     $badges.PerformLayout()
-    if ($badges.Controls.Count -ne $branches.Count) {
-        throw "A branch was omitted from the single status bar."
+    if ($badges.Controls.Count -ne 5) { throw "Only four featured statuses and one menu should be on the bar." }
+    $more=$badges.Controls[4]
+    $menu=$more.ContextMenuStrip
+    if ($more -isnot [System.Windows.Forms.Button] -or
+        $null -eq $menu -or $menu.Items.Count -ne 6 -or $more.Text -notmatch '6') {
+        throw "Six non-featured branches must be accessible in the expandable menu."
+    }
+    $menuNames=@($menu.Items | ForEach-Object { $_.Tag })
+    if ($menuNames -notcontains 'feature/new-c' -or
+        $menuNames -notcontains 'promote/stable-infrastructure-12340') {
+        throw "A dynamically added or historical branch disappeared from the menu."
+    }
+    # Status priority must be determined from current data, not fixed branch order.
+    $null=$set.Invoke($form,[object[]]@('work','UNKNOWN','','missing'))
+    $null=$set.Invoke($form,[object[]]@('main','SUCCESS','1234567890','passed'))
+    $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-12340','RUNNING','1234567890','running'))
+    $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-packets-12340','FAIL','1234567890','failed'))
+    $null=$set.Invoke($form,[object[]]@('feature/new-c','FAIL','1234567890','failed'))
+    $null=$arrange.Invoke($form,$parameters)
+    $badges.PerformLayout()
+    $expected=@('PP pakiety','PP natywny','main','work')
+    for ($i=0; $i -lt 4; $i++) {
+        if ($badges.Controls[$i].Controls[0].Text -notlike "$($expected[$i])*") {
+            throw "Incorrect CI status priority at $i: $($badges.Controls[$i].Controls[0].Text)"
+        }
+    }
+    if ($menu.Items[0].Tag -ne 'feature/new-c') {
+        throw "Expandable menu did not sort the failing branch first."
+    }
+    $null=$set.Invoke($form,[object[]]@('work','FAIL','1234567890','failed'))
+    $null=$set.Invoke($form,[object[]]@('feature/autopickpocket-packets-12340','SUCCESS','1234567890','passed'))
+    $null=$arrange.Invoke($form,$parameters)
+    if ($badges.Controls[0].Controls[0].Text -notlike 'work*' -or
+        $badges.Controls[3].Controls[0].Text -notlike 'PP pakiety*') {
+        throw "Status changes did not reorder the main bar dynamically."
     }
     $top=$badges.Controls[0].Top
     foreach ($item in $badges.Controls) {
-        if ($item.Top -ne $top) { throw "Branch badges wrapped into a second row." }
+        if ($item.Top -ne $top) { throw "Featured branch badges wrapped onto another row." }
     }
-    $fitWidth=($badges.ClientSize.Width - 6 * 6 - 4) / 6
-    $six=New-Object 'System.Collections.Generic.List[string]'
-    foreach ($name in @('work','main','feature/autoloot-12340',
-        'feature/autopickpocket-12340','feature/loader-12340',
-        'promote/stable-infrastructure-12340')) { $six.Add($name) }
-    $parameters[0]=$six.PSObject.BaseObject
-    $null=$arrange.Invoke($form,$parameters)
-    $badges.PerformLayout()
-    if ($badges.Controls.Count -ne 6 -or $badges.Controls[0].Width -lt 112) {
-        throw "Six existing branches did not fit the compact bar."
+    if ($badges.HorizontalScroll.Visible) {
+        throw "Four featured badges and menu do not fit the compact dashboard."
     }
     $tools=$root.GetControlFromPosition(0,3)
     if ($root.RowStyles[3].Height -ne 37) { throw "Advanced tools must start collapsed." }

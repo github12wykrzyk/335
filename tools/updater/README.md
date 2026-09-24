@@ -59,3 +59,18 @@ Szczegóły SHA i workflow pozostają w podpowiedziach oraz monitorze.
 Layout nie przebudowuje się podczas samych zmian statusu, więc nie
 gubi pozycji paska. Test WinForms x86 sprawdza jeden rząd oraz to, że
 dodanie dziewięciu branchy nie pomija ani nie zawija statusów.
+
+## 0.3.17-335 — dynamiczna belka operacyjna
+
+Belka nad konfiguracją pokazuje tylko cztery branche: work, main, standardowy
+AutoPickPocket i AutoPickPocket Packets. Przy każdym odświeżeniu odczytuje CI
+aktualnego HEAD i sortuje je od lewej: czerwony błąd → żółty run/oczekiwanie
+→ zielony sukces → szary brak danych. W obrębie tego samego statusu zachowuje
+kolejność work/main/PP natywny/PP pakiety. Stan Actions nie poświadcza gotowej
+paczki ani działania w grze.
+
+Przycisk "Pozostałe (N)" rozwija dynamiczną listę wszystkich pozostałych
+branchy (w tym nowych); są one uporządkowane według tej samej hierarchii
+statusów. Kliknięcie otwiera szczegóły GitHub. Branch gry wybiera się nadal
+w Konfiguracji, bez automatycznej zmiany wskutek sortowania statusów.
+Self-update i zestaw aktywnych DLL pozostają bez zmian.

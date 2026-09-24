@@ -24,6 +24,19 @@ namespace WoW335Updater
         {
             { "work", new Panel() }, { "main", new Panel() }
         };
+        // Only four operational branches occupy the compact status bar.
+        // Every other discovered branch remains visible in the expandable menu.
+        private static readonly string[] FeaturedBranches = {
+            "work", "main", "feature/autopickpocket-12340",
+            "feature/autopickpocket-packets-12340"
+        };
+        private readonly Button monitorMoreBranchesButton = new Button();
+        private readonly ContextMenuStrip monitorMoreBranches = new ContextMenuStrip();
+        private readonly Dictionary<string, string> monitorBadgeStates =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> monitorBadgeDetails =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> monitorKnownBranches = new List<string>();
         private bool monitorBusy;
         private Form monitorWindow;
         private RichTextBox monitorOutput;
@@ -31,7 +44,6 @@ namespace WoW335Updater
 
         private FlowLayoutPanel Build335MonitorHeader()
         {
-            // One row across the full window: new branches extend right, never wrap.
             monitorStrips = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -43,26 +55,59 @@ namespace WoW335Updater
                 Padding = new Padding(0, 1, 0, 0)
             };
             monitorStrips.Resize += delegate { Resize335MonitorBadges(); };
-            Arrange335MonitorBadges(new[] { "work", "main" });
+            monitorMoreBranches.BackColor = UiSurface;
+            monitorMoreBranches.ForeColor = UiInk;
+            monitorMoreBranches.ShowImageMargin = false;
+            UiButton(monitorMoreBranchesButton, "Pozostałe (0) ▾");
+            monitorMoreBranchesButton.Dock = DockStyle.None;
+            monitorMoreBranchesButton.Height = 25;
+            monitorMoreBranchesButton.Width = 140;
+            monitorMoreBranchesButton.Margin = new Padding(3, 1, 3, 1);
+            monitorMoreBranchesButton.ContextMenuStrip = monitorMoreBranches;
+            monitorMoreBranchesButton.Click += delegate {
+                if (monitorMoreBranches.Items.Count > 0)
+                    monitorMoreBranches.Show(monitorMoreBranchesButton,
+                        new Point(0, monitorMoreBranchesButton.Height));
+            };
+            Arrange335MonitorBadges(FeaturedBranches);
             monitorButton.Click += delegate { Open335Monitor(); };
             return monitorStrips;
+        }
+
+        private static int Badge335Priority(string state)
+        {
+            // Unavailable/unknown data is neutral and comes after measured CI states.
+            return state == "FAIL" ? 0 : state == "RUNNING" || state == "PENDING" ? 1
+                : state == "SUCCESS" ? 2 : 3;
+        }
+
+        private int Badge335PriorityFor(string branch)
+        {
+            string state;
+            return Badge335Priority(monitorBadgeStates.TryGetValue(branch, out state) ? state : "UNKNOWN");
+        }
+
+        private static string Compact335Status(string state)
+        {
+            return state == "SUCCESS" ? "OK" : state == "RUNNING" ? "RUN" :
+                state == "PENDING" ? "WAIT" : state == "UNKNOWN" ? "?" : state;
         }
 
         private void Resize335MonitorBadges()
         {
             if (monitorStrips == null || monitorResizing) return;
-            var count = monitorStrips.Controls.Count;
-            if (count == 0) return;
             monitorResizing = true;
             try
             {
-                // Six current branches fit a typical 960px window; with more
-                // branches, keep every badge on one horizontally scrollable row.
-                var available = Math.Max(1, monitorStrips.ClientSize.Width - monitorStrips.Padding.Horizontal);
-                var width = Math.Max(112, Math.Min(210, (available - count * 6 - 4) / count));
+                // Four status frames and one 140px menu button fit without
+                // horizontal scrolling at the supported 960px minimum width.
+                int count = FeaturedBranches.Length;
+                int available = Math.Max(1, monitorStrips.ClientSize.Width -
+                    monitorStrips.Padding.Horizontal - monitorMoreBranchesButton.Width);
+                int width = Math.Max(138, Math.Min(218, (available - (count + 1) * 6 - 8) / count));
                 monitorStrips.SuspendLayout();
                 foreach (Control item in monitorStrips.Controls)
-                    if (item.Width != width) item.Width = width;
+                    if (item != monitorMoreBranchesButton && item.Width != width) item.Width = width;
                 monitorStrips.ResumeLayout(true);
             }
             finally { monitorResizing = false; }
@@ -71,48 +116,93 @@ namespace WoW335Updater
         private void Arrange335MonitorBadges(IList<string> branches)
         {
             if (monitorStrips == null) return;
-            // Compare *all* branch names, not the first six. Preserve layout on
-            // routine status refresh so the user's horizontal scroll won't jump.
-            var layoutKey = string.Join("|", branches);
-            if (layoutKey == monitorLayoutKey) return;
-            monitorLayoutKey = layoutKey;
-            monitorStrips.SuspendLayout();
-            try
-            {
-                monitorStrips.Controls.Clear();
+            var known = new HashSet<string>(FeaturedBranches, StringComparer.OrdinalIgnoreCase);
+            if (branches != null)
                 foreach (var name in branches)
+                    if (ValidGameBranch(name)) known.Add(name);
+            monitorKnownBranches.Clear();
+            monitorKnownBranches.AddRange(known);
+            monitorKnownBranches.Sort(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in monitorKnownBranches)
+            {
+                if (!monitorBadges.ContainsKey(name))
                 {
-                    Label badge;
-                    Panel outline;
-                    if (!monitorBadges.TryGetValue(name, out badge))
-                    {
-                        badge = new Label();
-                        outline = new Panel();
-                        monitorBadges[name] = badge;
-                        monitorBadgeFrames[name] = outline;
-                    }
-                    else outline = monitorBadgeFrames[name];
-                    badge.Dock = DockStyle.Fill;
-                    badge.AutoEllipsis = true;
-                    badge.Margin = Padding.Empty;
-                    badge.Padding = new Padding(5, 0, 3, 0);
-                    badge.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular);
-                    badge.TextAlign = ContentAlignment.MiddleLeft;
-                    // Leave room for the horizontal scrollbar even at 125% DPI.
-                    outline.Height = 25;
-                    outline.Margin = new Padding(3, 1, 3, 1);
-                    outline.Padding = new Padding(1);
-                    if (!outline.Controls.Contains(badge)) outline.Controls.Add(badge);
-                    monitorStrips.Controls.Add(outline);
-                    Set335Badge(name, "UNKNOWN", "", "Oczekiwanie na bieżący HEAD.");
+                    monitorBadges[name] = new Label();
+                    monitorBadgeFrames[name] = new Panel();
                 }
+                if (!monitorBadgeStates.ContainsKey(name))
+                    Set335Badge(name, "UNKNOWN", "", "Oczekiwanie na bieżący HEAD.");
             }
-            finally { monitorStrips.ResumeLayout(true); }
-            Resize335MonitorBadges();
+            var featured = new List<string>(FeaturedBranches);
+            featured.Sort(delegate(string a, string b) {
+                int cmp = Badge335PriorityFor(a).CompareTo(Badge335PriorityFor(b));
+                return cmp != 0 ? cmp :
+                    Array.IndexOf(FeaturedBranches, a).CompareTo(Array.IndexOf(FeaturedBranches, b));
+            });
+            var remaining = new List<string>();
+            foreach (var name in monitorKnownBranches)
+                if (Array.IndexOf(FeaturedBranches, name) < 0) remaining.Add(name);
+            remaining.Sort(delegate(string a, string b) {
+                int cmp = Badge335PriorityFor(a).CompareTo(Badge335PriorityFor(b));
+                return cmp != 0 ? cmp : StringComparer.OrdinalIgnoreCase.Compare(a, b);
+            });
+
+            var layoutKey = string.Join("|", featured);
+            if (layoutKey != monitorLayoutKey)
+            {
+                monitorLayoutKey = layoutKey;
+                monitorStrips.SuspendLayout();
+                try
+                {
+                    monitorStrips.Controls.Clear();
+                    foreach (var name in featured)
+                    {
+                        var badge = monitorBadges[name];
+                        var outline = monitorBadgeFrames[name];
+                        badge.Dock = DockStyle.Fill;
+                        badge.AutoEllipsis = true;
+                        badge.Margin = Padding.Empty;
+                        badge.Padding = new Padding(5, 0, 3, 0);
+                        badge.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular);
+                        badge.TextAlign = ContentAlignment.MiddleLeft;
+                        outline.Height = 25;
+                        outline.Margin = new Padding(3, 1, 3, 1);
+                        outline.Padding = new Padding(1);
+                        if (!outline.Controls.Contains(badge)) outline.Controls.Add(badge);
+                        monitorStrips.Controls.Add(outline);
+                    }
+                    monitorStrips.Controls.Add(monitorMoreBranchesButton);
+                }
+                finally { monitorStrips.ResumeLayout(true); }
+                Resize335MonitorBadges();
+            }
+            // Menu reflects every discovered branch, including future feature/*.
+            // CI state changes reorder both the four frames and menu entries.
+            monitorMoreBranches.Items.Clear();
+            foreach (var name in remaining)
+            {
+                string state;
+                if (!monitorBadgeStates.TryGetValue(name, out state)) state = "UNKNOWN";
+                var item = new ToolStripMenuItem(name + "  •  " + Compact335Status(state));
+                item.Tag = name;
+                item.ForeColor = state == "FAIL" ? Color.FromArgb(255, 178, 188) :
+                    state == "RUNNING" || state == "PENDING" ? Color.FromArgb(255, 221, 153) :
+                    state == "SUCCESS" ? Color.FromArgb(183, 241, 231) : UiMuted;
+                string detail;
+                item.ToolTipText = monitorBadgeDetails.TryGetValue(name, out detail) ? detail : name;
+                item.Click += delegate { Open335Monitor(); };
+                monitorMoreBranches.Items.Add(item);
+            }
+            monitorMoreBranchesButton.Text = "Pozostałe (" + remaining.Count + ") ▾";
+            monitorMoreBranchesButton.Enabled = remaining.Count > 0;
+            dashboardTips.SetToolTip(monitorMoreBranchesButton,
+                "Pozostałe branche GitHub; wybór brancha gry pozostaje w Konfiguracji.");
         }
 
         private void Set335Badge(string branch, string state, string head, string detail)
         {
+            monitorBadgeStates[branch] = state;
+            monitorBadgeDetails[branch] = detail;
             var badge = monitorBadges[branch];
             var outline = monitorBadgeFrames[branch];
             bool green = state == "SUCCESS", yellow = state == "RUNNING" || state == "PENDING", red = state == "FAIL";
@@ -126,9 +216,10 @@ namespace WoW335Updater
                 : yellow ? Color.FromArgb(255, 221, 153)
                 : red ? Color.FromArgb(255, 178, 188) : UiMuted;
             var shortHead = string.IsNullOrEmpty(head) ? "HEAD ?" : head.Substring(0, Math.Min(8, head.Length));
-            var compactName = branch.Replace("feature/", "").Replace("promote/", "p/");
-            var compactState = state == "SUCCESS" ? "OK" : state == "RUNNING" ? "RUN" :
-                state == "PENDING" ? "WAIT" : state == "UNKNOWN" ? "?" : state;
+            var compactName = branch == "feature/autopickpocket-12340" ? "PP natywny" :
+                branch == "feature/autopickpocket-packets-12340" ? "PP pakiety" :
+                branch.Replace("feature/", "").Replace("promote/", "p/");
+            var compactState = Compact335Status(state);
             badge.Text = compactName + "  •  " + compactState;
             var tooltip = detail + "\nOdczyt: " + DateTime.Now.ToString("HH:mm:ss");
             dashboardTips.SetToolTip(outline, tooltip);
@@ -145,6 +236,7 @@ namespace WoW335Updater
             {
                 monitorTimer.Stop();
                 monitorTimer.Dispose();
+                monitorMoreBranches.Dispose();
                 if (monitorWindow != null && !monitorWindow.IsDisposed) monitorWindow.Close();
             };
         }
@@ -231,8 +323,9 @@ namespace WoW335Updater
                 if (string.IsNullOrWhiteSpace(token.Text))
                 {
                     output.AppendLine("Brak tokenu (Contents: Read, Actions: Read).");
-                    foreach (var b in new List<string>(monitorBadges.Keys))
+                    foreach (var b in new List<string>(monitorKnownBranches))
                         Set335Badge(b, "UNKNOWN", "", "Brak tokenu GitHub.");
+                    Arrange335MonitorBadges(new List<string>(monitorKnownBranches));
                     monitorReport = output.ToString();
                     return;
                 }
@@ -265,12 +358,12 @@ namespace WoW335Updater
                         hasErrors = true;
                         output.AppendLine("Lista branchy: " + ex.Message);
                     }
+                    if (rows.Count == 0 && hasErrors)
+                        throw new InvalidOperationException("Nie udało się odczytać listy branchy.");
                     var branches = new List<string>(rows.Keys);
+                    foreach (var featured in FeaturedBranches)
+                        if (!branches.Contains(featured)) branches.Add(featured);
                     branches.Sort(StringComparer.OrdinalIgnoreCase);
-                    branches.Remove("work");
-                    branches.Remove("main");
-                    branches.Insert(0, "main");
-                    branches.Insert(0, "work");
                     Arrange335MonitorBadges(branches);
                     foreach (var b in branches)
                     {
@@ -295,6 +388,7 @@ namespace WoW335Updater
                         output.AppendLine();
                     }
                 }
+                Arrange335MonitorBadges(branches); // sort after all current-HEAD states were read
                 monitorReport = output.ToString();
                 monitorButton.Text = hasErrors ? "GH: błąd" : "GH: " + DateTime.Now.ToString("HH:mm:ss");
                 connectionBadge.Text = hasErrors ? "GitHub: częściowy odczyt" : "GitHub: połączono";
@@ -303,8 +397,9 @@ namespace WoW335Updater
             catch (Exception ex)
             {
                 monitorReport = "Monitor GitHub: " + ex.Message;
-                foreach (var b in new List<string>(monitorBadges.Keys))
+                foreach (var b in new List<string>(monitorKnownBranches))
                     Set335Badge(b, "UNKNOWN", "", monitorReport);
+                Arrange335MonitorBadges(new List<string>(monitorKnownBranches));
             }
             finally
             {
