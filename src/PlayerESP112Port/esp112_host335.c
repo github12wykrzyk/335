@@ -259,39 +259,39 @@ static int get_viewport(Esp112Viewport *v) {
 }
 static int native_project(uint32_t world_frame,Esp335Vec3 world,
                            const Esp112Viewport *view,Esp112Candidate *c) {
-    float in[3]={world.x,world.y,world.z},out[3]={0.f,0.f,0.f};
+    float world_xyz[3]={world.x,world.y,world.z},screen_xyz[3]={0.f,0.f,0.f};
     float nx=-1.f,ny=-1.f;
     uint32_t flags=0u,success=0u;
     uintptr_t fn=WORLD_TO_SCREEN_VA;
     NativeDdcToNdc ddc=(NativeDdcToNdc)DDC_TO_NDC_VA;
-    if (!game_thread() || !view || !c || !_finite(in[0]) ||
-        !_finite(in[1]) || !_finite(in[2]) ||
+    if (!game_thread() || !view || !c || !_finite(world_xyz[0]) ||
+        !_finite(world_xyz[1]) || !_finite(world_xyz[2]) ||
         !readable((uintptr_t)world_frame,0x340u)) return 0;
     __try {
         __asm {
             mov ecx,world_frame
             lea eax,flags
             push eax
-            lea eax,out
+            lea eax,screen_xyz
             push eax
-            lea eax,in
+            lea eax,world_xyz
             push eax
             mov eax,fn
             call eax
             mov success,eax
         }
         if (!(success&0xffu)) return 0;
-        if (!_finite(out[0]) || !_finite(out[1]) || !_finite(out[2]))
+        if (!_finite(screen_xyz[0]) || !_finite(screen_xyz[1]) || !_finite(screen_xyz[2]))
             return 0;
         /* 112's essential SECOND native step. For pinned 12340 this is
          * 0x47BFF0, cdecl(float,float,float*,float*), NOT 112's
          * 0x41ADE0 fastcall. It uses client's runtime pixel-scale globals.
          * Never divide raw output by the clip rectangle or UIParent size. */
-        ddc(out[0],out[1],&nx,&ny);
+        ddc(screen_xyz[0],screen_xyz[1],&nx,&ny);
     } __except(EXCEPTION_EXECUTE_HANDLER) { return 0; }
     if (!_finite(nx) || !_finite(ny) ||
         !esp112_ndc_to_client(nx,ny,view,&c->x,&c->y)) return 0;
-    c->raw_x=out[0];c->raw_y=out[1];
+    c->raw_x=screen_xyz[0];c->raw_y=screen_xyz[1];
     c->ndc_x=nx;c->ndc_y=ny;
     return 1;
 }
