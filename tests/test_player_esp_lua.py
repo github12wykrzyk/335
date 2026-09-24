@@ -9,7 +9,8 @@ class EspLuaFallback(unittest.TestCase):
         assert 'CreateFrame(\\"Button\\",nil,frame)' in src
         assert 'ESP335HUD:SetVisible' in src
         assert 'ESP335HUD:Paint({' in src
-        assert 'esp335_project(cam,anchor' in src
+        assert 'project(project_context,anchor,&px,&py)' in src
+        assert 'esp335_project(cam,anchor' not in src
         assert 'qsort(candidates,found' in src
         assert 'e.range=40' in src
         assert 'r[7]<=self.range' in src

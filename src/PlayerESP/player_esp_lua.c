@@ -161,7 +161,8 @@ static int compare_nearest(const void *left, const void *right) {
 }
 int esp335_lua_update(Esp335LuaGate run,const Esp335Core *core,
                        const Esp335Camera *cam,unsigned scan_ok,
-                       unsigned players,unsigned npcs,unsigned camera_ok) {
+                       unsigned players,unsigned npcs,unsigned camera_ok,
+                       Esp335NativeProject project,void *project_context) {
     char script[ESP335_SCRIPT_CAP];
     Esp335LuaCandidate candidates[ESP335_LUA_CANDIDATES];
     size_t n=0u,i,found=0u,shown=0u;
@@ -171,16 +172,15 @@ int esp335_lua_update(Esp335LuaGate run,const Esp335Core *core,
         "if ESP335HUD then ESP335HUD:Paint({");
     if (written<0) return 0;
     n=(size_t)written;
-    if (scan_ok && camera_ok && core->world_epoch && !core->frame_open &&
-        isfinite(cam->viewport_w) && cam->viewport_w>0.f &&
-        isfinite(cam->viewport_h) && cam->viewport_h>0.f) {
+    if (scan_ok && camera_ok && project && core->world_epoch &&
+        !core->frame_open) {
         /* Object-manager iteration order is NOT screen proximity: collect,
          * sort nearest first and let the Lua GUI apply its own range/filters.
          * In particular do not let distant NPCs exhaust the label budget. */
         for (i=0u;i<core->count && i<ESP335_MAX_PLAYERS;++i) {
             const Esp335Player *p=&core->players[i];
             Esp335Vec3 anchor;
-            float sx,sy,depth,dx,dy,dz,distance,px,py;
+            float dx,dy,dz,distance,px,py;
             if (!p->guid || !p->max_health) continue;
             dx=p->position.x-cam->local_position.x;
             dy=p->position.y-cam->local_position.y;
@@ -191,9 +191,8 @@ int esp335_lua_update(Esp335LuaGate run,const Esp335Core *core,
             anchor=p->position;
             anchor.z+=(p->kind==ESP335_KIND_NPC)
                 ? ESP335_NPC_LABEL_Z : ESP335_PLAYER_LABEL_Z;
-            if (!esp335_project(cam,anchor,&sx,&sy,&depth)) continue;
-            px=(sx-cam->viewport_x)/cam->viewport_w;
-            py=(sy-cam->viewport_y)/cam->viewport_h;
+            /* Never rebuild a camera projection: call pinned client's W2S. */
+            if (!project(project_context,anchor,&px,&py)) continue;
             if (!isfinite(px) || !isfinite(py) ||
                 px<0.f || px>1.f || py<0.f || py>1.f) continue;
             candidates[found].player=p;

@@ -16,6 +16,11 @@
 #define MESSAGE_NAME "WoW335_PlayerESP_12340_GameThread_v1"
 #define GET_POS_VA ((uintptr_t)0x006E6F10u)
 #define WORLD_FRAME_PTR ((uintptr_t)0x00B7436Cu)
+#define W2S_NATIVE_VA ((uintptr_t)0x004F6D20u)
+#define W2S_RECT_LEFT 0x64u
+#define W2S_RECT_BOTTOM 0x68u
+#define W2S_RECT_RIGHT 0x6Cu
+#define W2S_RECT_TOP 0x70u
 #define ACTIVE_CAMERA_OFFSET ((uintptr_t)0x7E20u)
 #define MIN_PTR ((uintptr_t)0x10000u)
 #define MAX_PTR ((uintptr_t)0x7FFE0000u)
@@ -118,16 +123,24 @@ done:
 }
 static int check_layout(void *ctx, uintptr_t connection, uintptr_t offset) {
     static const BYTE prolog[] = {0x55, 0x8b, 0xec};
+    /* Verified exact Wow.exe native W2S prolog and x86 calling convention. */
+    static const BYTE w2s_prefix[] = {
+        0x55,0x8b,0xec,0x83,0xec,0x24,0x8b,0x45,
+        0x08,0xd9,0x00,0x56,0xd9,0x55,0xdc,0x8b,0xf1
+    };
     (void)ctx;
     if (!on_thread() || connection != ESP335_CONNECTION_VA ||
         offset != ESP335_MANAGER_OFFSET ||
-        !readable(GET_POS_VA, sizeof(prolog))) {
+        !readable(GET_POS_VA, sizeof(prolog)) ||
+        !readable(W2S_NATIVE_VA, sizeof(w2s_prefix))) {
         ++g_layout_rejects;
         return 0;
     }
     /* Prolog is a necessary gate, not an independent full ABI verification. */
     __try {
-        int ok=memcmp((const void *)GET_POS_VA, prolog, sizeof(prolog)) == 0;
+        int ok=memcmp((const void *)GET_POS_VA, prolog, sizeof(prolog)) == 0 &&
+               memcmp((const void *)W2S_NATIVE_VA, w2s_prefix,
+                      sizeof(w2s_prefix)) == 0;
         if (!ok) ++g_layout_rejects;
         return ok;
     } __except (EXCEPTION_EXECUTE_HANDLER) { ++g_layout_rejects; return 0; }
@@ -248,6 +261,57 @@ static int read_camera_axes(Esp335CameraAxes *a) {
     /* Pure validation of candidate camera axes on the game thread.
      * Renderer will substitute the live device viewport independently. */
     return esp335_camera_build(a,&temporary);
+}
+/* Port 112's native projection mechanism to the ABI of the pinned 12340 EXE.
+ * 12340 callers 0x5253A5/0x5253DA: ECX=worldFrame, push flags*, out[3]*,
+ * world[3]*; callee returns with ret 0x0c, AL means on-screen.
+ * 112's 0x483EE0 must never be called in 335.
+ */
+static int native_camera_eye(Esp335Vec3 *eye) {
+    uint32_t world,cam;
+    if (!on_thread() || !eye || !read32(NULL,WORLD_FRAME_PTR,&world) ||
+        !read32(NULL,(uintptr_t)world+ACTIVE_CAMERA_OFFSET,&cam)) return 0;
+    return read_vec3((uintptr_t)cam+0x08u,eye);
+}
+static int project_native(void *context,Esp335Vec3 point,float *px,float *py) {
+    uint32_t frame,flags=0u,success=0u;
+    uintptr_t fn=W2S_NATIVE_VA;
+    float world[3],screen[3]={0.f,0.f,0.f};
+    float min_x,min_y,max_x,max_y,x,y;
+    (void)context;
+    if (!g_scanner.bound || !on_thread() || !px || !py ||
+        !_finite(point.x) || !_finite(point.y) || !_finite(point.z) ||
+        !read32(NULL,WORLD_FRAME_PTR,&frame) ||
+        !readable((uintptr_t)frame,0x74u) ||
+        !read_float((uintptr_t)frame+W2S_RECT_LEFT,&min_x) ||
+        !read_float((uintptr_t)frame+W2S_RECT_BOTTOM,&min_y) ||
+        !read_float((uintptr_t)frame+W2S_RECT_RIGHT,&max_x) ||
+        !read_float((uintptr_t)frame+W2S_RECT_TOP,&max_y) ||
+        max_x<=min_x || max_y<=min_y) return 0;
+    world[0]=point.x;world[1]=point.y;world[2]=point.z;
+    __try {
+        __asm {
+            mov ecx,frame
+            lea eax,flags
+            push eax
+            lea eax,screen
+            push eax
+            lea eax,world
+            push eax
+            mov eax,fn
+            call eax
+            mov success,eax
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {return 0;}
+    if (!(success&0xffu) || !_finite(screen[0]) ||
+        !_finite(screen[1]) || !_finite(screen[2])) return 0;
+    x=(screen[0]-min_x)/(max_x-min_x);
+    y=(screen[1]-min_y)/(max_y-min_y);
+    if (!_finite(x) || !_finite(y) || x<0.f || x>1.f ||
+        y<0.f || y>1.f) return 0;
+    *px=x;
+    *py=1.f-y; /* viewport bottom-up -> Lua top-left */
+    return 1;
 }
 /* The 2026-09-24 game report showed hook installed=1 but EndScene frames=0.
  * Do not install dummy-device D3D9 hooks. WoW-native UIParent is rendered by
@@ -434,20 +498,25 @@ static void drive(void) {
     valid_viewport=g_game_window && GetClientRect(g_game_window,&viewport) &&
         viewport.right-viewport.left>=64 && viewport.bottom-viewport.top>=64;
     memset(&camera,0,sizeof(camera));
+    /* The old reconstructed matrix is only diagnostic. It must never gate
+     * labels: the game's WorldToScreen owns projection, FOV and clipping. */
     if (camera_ok && valid_viewport) {
+        Esp335Camera old_matrix={0};
         axes.viewport_x=0.f;
         axes.viewport_y=0.f;
         axes.viewport_width=(float)(viewport.right-viewport.left);
         axes.viewport_height=(float)(viewport.bottom-viewport.top);
         axes.aspect=axes.viewport_width/axes.viewport_height;
-        camera_ok=esp335_camera_build(&axes,&camera);
-    } else camera_ok=0;
+        (void)esp335_camera_build(&axes,&old_matrix);
+    }
+    camera_ok=valid_viewport && g_scanner.bound &&
+              native_camera_eye(&camera.local_position);
     if (g_lua_ready && g_lua_gate &&
         (!g_lua_update_tick || (DWORD)(now-g_lua_update_tick)>=200u)) {
         g_lua_update_tick=now;
         if (esp335_lua_update(g_lua_gate,&g_scanner.snapshot,&camera,
             scan_ok?1u:0u,g_scanner.accepted_players,g_scanner.accepted_npcs,
-            camera_ok?1u:0u)) ++g_lua_updates;
+            camera_ok?1u:0u,project_native,NULL)) ++g_lua_updates;
         else ++g_lua_update_errors;
     }
     write_diag(scan_ok);
