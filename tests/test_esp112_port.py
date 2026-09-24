@@ -1,5 +1,5 @@
-"""The 112-style rewrite uses a separate native device-domain conversion and
-OS pixel labels; legacy 335 Lua/D3D renderers are not part of the new build."""
+"""The 112-style ESP has one verified D3D9 frame backend and GDI fallback.
+Legacy 335 Lua and dummy-vtable renderer are not part of the new build."""
 import shutil
 import sys
 import subprocess
@@ -63,6 +63,25 @@ class PortTests(unittest.TestCase):
         self.assertIn("esp112_overlay_finish_frame(&g_overlay,visible_mask)",src)
         self.assertNotIn("esp112_overlay_hide_unused(&g_overlay,drawn)",src)
         self.assertIn("SWP_NOZORDER",ui)
+    def test_single_frame_owner_and_fallback(self):
+        host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
+        hook=(ROOT/"src/PlayerESP112Port/esp112_frame_hook.c").read_text()
+        render=(ROOT/"src/PlayerESP112Port/esp112_frame_draw.c").read_text()
+        self.assertIn("esp112_frame_install(g_game_hwnd,game_frame,NULL)",host)
+        self.assertIn("esp112_frame_uninstall();",host)
+        self.assertIn("drive(device);",host)
+        self.assertIn("drive(NULL);",host)
+        self.assertIn("g_frame_candidates>=3u",host)
+        self.assertIn("esp112_overlay_hide_unused(&g_overlay,0u)",host)
+        self.assertIn("g_frame_drawn_labels+=esp112_frame_draw(device,frame_labels,frame_count)",host)
+        self.assertNotIn("esp112_overlay_show(&g_overlay",(host.split("if (device) {")[1]).split("continue;")[0])
+        self.assertIn("MH_CreateHook",hook)
+        self.assertIn("MH_RemoveHook",hook)
+        self.assertIn("matches_game_device(device)",hook)
+        self.assertNotIn("SetWindowsHookEx",hook)
+        self.assertIn("D3DSBT_ALL",render)
+        self.assertIn("IDirect3DStateBlock9_Apply(state)",render)
+        self.assertNotIn("CreateWindowExA",render)
     def test_os_overlay_not_lua(self):
         g=(ROOT/"src/PlayerESP112Port/esp112_overlay.c").read_text()
         self.assertIn("CreateWindowExA",g)

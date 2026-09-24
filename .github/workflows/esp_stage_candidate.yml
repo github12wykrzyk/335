@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/PlayerESP/**'
       - 'src/PlayerESP112Port/**'
+      - 'src/ThirdParty/MinHook/**'
       - 'tests/test_esp112_port.py'
       - 'tests/esp112_geometry_harness.c'
       - 'tools/stage_esp_candidate.py'

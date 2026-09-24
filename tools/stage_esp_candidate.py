@@ -29,6 +29,20 @@ SOURCE = [
     "src/PlayerESP112Port/esp112_slots.h",
     "src/PlayerESP112Port/esp112_motion.c",
     "src/PlayerESP112Port/esp112_motion.h",
+    "src/PlayerESP112Port/esp112_frame_hook.c",
+    "src/PlayerESP112Port/esp112_frame_hook.h",
+    "src/PlayerESP112Port/esp112_frame_draw.c",
+    "src/PlayerESP112Port/esp112_frame_draw.h",
+    "src/ThirdParty/MinHook/src/buffer.c",
+    "src/ThirdParty/MinHook/src/buffer.h",
+    "src/ThirdParty/MinHook/src/hook.c",
+    "src/ThirdParty/MinHook/src/trampoline.c",
+    "src/ThirdParty/MinHook/src/trampoline.h",
+    "src/ThirdParty/MinHook/src/hde/hde32.c",
+    "src/ThirdParty/MinHook/src/hde/hde32.h",
+    "src/ThirdParty/MinHook/src/hde/table32.h",
+    "src/ThirdParty/MinHook/src/hde/pstdint.h",
+    "src/ThirdParty/MinHook/include/MinHook.h",
     "src/PlayerESP112Port/esp112_host335.c",
 ]
 BUILD = [name for name in SOURCE if name.endswith(".c")]
@@ -43,6 +57,8 @@ def esp_contract():
             {"id": "wow12340:0x004f6d20-native-w2s", "mode": "observe"},
             {"id": "wow12340:0x0047bff0-native-ddc", "mode": "observe"},
             {"id": "win32:layered-label-overlay", "mode": "exclusive"},
+            {"id": "win32:d3d9-endscene-vtable-owner", "mode": "exclusive"},
+            {"id": "win32:d3d9-endscene-code-detour", "mode": "exclusive"},
             {"id": "logical:render", "mode": "exclusive"},
             {"id": "logical:input", "mode": "observe"},
             {"id": "win32:WH_GETMESSAGE", "mode": "chain",
@@ -54,7 +70,7 @@ def esp_contract():
             "toolchain": "msvc_x86",
             "sources": BUILD,
             "include_dirs": ["src/PlayerESP", "src/PlayerESP112Port"],
-            "libraries": ["Advapi32.lib", "User32.lib", "Gdi32.lib"],
+            "libraries": ["Advapi32.lib", "User32.lib", "Gdi32.lib", "d3d9.lib"],
             "cflags": ["/TC", "/Brepro"],
             "ldflags": [],
         },
@@ -84,10 +100,10 @@ def prepare_registration(runtime, registry, index, dll_sha, loot_sha=None):
             registry["modules"][1].get("component") != "PlayerESP"):
             raise ValueError("existing ESP registration diverged; refusing overwrite")
         runtime["files"][2]["sha256"] = dll_sha
-        runtime["files"][2]["version"] = "0.4.0-112-gdi-rebuild-test"
+        runtime["files"][2]["version"] = "0.5.0-112-single-frame-test"
         runtime["files"][2]["canonical_source"]="src/PlayerESP112Port/esp112_host335.c"
         runtime["files"][2]["depends_on"]=[]
-        runtime["release_id"] = "feature-player-esp-12340-112-gdi-rebuild-test"
+        runtime["release_id"] = "feature-player-esp-12340-112-single-frame-test"
         registry["modules"][1] = esp_contract()
         index["modules"][1]["source"]="src/PlayerESP112Port/esp112_host335.c"
         index["modules"][1]["docs"]="src/PlayerESP112Port/README.md"
@@ -114,12 +130,12 @@ def prepare_registration(runtime, registry, index, dll_sha, loot_sha=None):
     registry["modules"].append(esp_contract())
     runtime["files"].append({
         "component": "PlayerESP", "path": "runtime/PlayerESP335.dll",
-        "version": "0.4.0-112-gdi-rebuild-test",
+        "version": "0.5.0-112-single-frame-test",
         "sha256": dll_sha, "arch": "x86",
         "canonical_source": "src/PlayerESP112Port/esp112_host335.c",
         "depends_on": [], "kind": "dll",
     })
-    runtime["release_id"] = "feature-player-esp-12340-112-gdi-rebuild-test"
+    runtime["release_id"] = "feature-player-esp-12340-112-single-frame-test"
     runtime["compatibility_sets"] = [{
         "id": "client12340-autoloot-player-esp-test",
         "components": ["Client12340", "AutoLoot", "PlayerESP"],
@@ -184,7 +200,7 @@ def main():
         raise ValueError("hook/module ownership conflict: " + "; ".join(errors))
     print("ESP_STAGE: real Windows PE32 x86 DLL sha256=",
           compiled["binary_sha256"])
-    print("ESP_STAGE: clean 112 GDI/12340 native W2S+DDC; no Lua/D3D ESP hooks; gameplay unverified")
+    print("ESP_STAGE: single owner frame-matched D3D9, exact 12340 native W2S, fail-closed GDI fallback; gameplay unverified")
 
 if __name__ == "__main__":
     sys.exit(main())
