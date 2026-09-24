@@ -1,4 +1,4 @@
-/* The ONLY PlayerESP D3D9 hook owner. Legacy GDI is fallback. */
+/* The ONLY PlayerESP D3D9 Present hook owner. Legacy GDI is fallback. */
 #ifndef ESP112_FRAME_HOOK_H
 #define ESP112_FRAME_HOOK_H
 #define WIN32_LEAN_AND_MEAN
@@ -11,4 +11,6 @@ void esp112_frame_uninstall(void);
 int esp112_frame_installed(void);
 unsigned esp112_frame_callbacks(void);
 unsigned esp112_frame_rejected(void);
+unsigned esp112_frame_scene_failures(void);
+unsigned esp112_frame_submitted(void);
 #endif

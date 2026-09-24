@@ -69,6 +69,8 @@ static DWORD g_last_frame_ms,g_last_frame_install_ms;
 static unsigned g_frame_mode,g_frame_candidates,g_frame_renders;
 static unsigned g_frame_install_attempts,g_frame_install_errors,g_frame_foreign_thread;
 static unsigned g_frame_fallbacks,g_frame_drawn_labels;
+static unsigned g_frame_draw_failures,g_frame_draw_fail_streak,g_frame_disabled;
+static DWORD g_frame_retry_after_ms;
 static unsigned g_timer_wakeups,g_debug_pairs;
 static DWORD g_worst_tick_gap,g_last_cadence_report;
 static unsigned g_last_cadence_ticks,g_last_cadence_scans,g_last_cadence_timers;
@@ -420,11 +422,15 @@ static void diagnostic(void) {
         "\"rejected_callbacks\":%u,\"render_frames\":%u,"
         "\"rendered_labels\":%u,\"foreign_thread\":%u,"
         "\"install_attempts\":%u,\"install_errors\":%u,"
-        "\"fallbacks\":%u}\n",
+        "\"fallbacks\":%u,\"scene_failures\":%u,"
+        "\"scene_submitted\":%u,\"draw_failures\":%u,"
+        "\"frame_disabled\":%u}\n",
         g_frame_mode,esp112_frame_installed(),
         esp112_frame_callbacks(),esp112_frame_rejected(),
         g_frame_renders,g_frame_drawn_labels,g_frame_foreign_thread,
-        g_frame_install_attempts,g_frame_install_errors,g_frame_fallbacks);
+        g_frame_install_attempts,g_frame_install_errors,g_frame_fallbacks,
+        esp112_frame_scene_failures(),esp112_frame_submitted(),
+        g_frame_draw_failures,g_frame_disabled);
     if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
     if (g_probe_ready) {
         n=_snprintf_s(line,sizeof(line),_TRUNCATE,
@@ -485,6 +491,7 @@ static void drive(IDirect3DDevice9 *device) {
         if (g_frame_mode) {
             g_frame_mode=0u;
             g_frame_candidates=0u;
+            g_frame_retry_after_ms=now;
             ++g_frame_fallbacks;
             g_last_scan=0u;
         }
@@ -665,8 +672,20 @@ static void drive(IDirect3DDevice9 *device) {
         ++drawn;
     }
     if (device) {
-        g_frame_drawn_labels+=esp112_frame_draw(device,frame_labels,frame_count);
+        unsigned painted=esp112_frame_draw(device,frame_labels,frame_count);
+        g_frame_drawn_labels+=painted;
         ++g_frame_renders;
+        if (frame_count && !painted) {
+            ++g_frame_draw_failures;
+            if (++g_frame_draw_fail_streak>=3u) {
+                /* Never oscillate between a broken D3D renderer and GDI
+                 * on alternate frames. One failure latch per game session. */
+                g_frame_disabled=1u;
+                g_frame_mode=0u;
+                ++g_frame_fallbacks;
+                ensure_refresh_timer();
+            }
+        } else g_frame_draw_fail_streak=0u;
     } else esp112_overlay_finish_frame(&g_overlay,visible_mask);
     goto done;
 clear:
@@ -686,6 +705,7 @@ static void control(UINT message,WPARAM command,HWND hwnd) {
         g_enabled=0u;
         g_frame_mode=0u;
         g_frame_candidates=0u;
+        g_frame_disabled=1u;
         esp112_frame_uninstall();
         g_snapshot_valid=0u;
         g_snapshot_epoch=0u;
@@ -721,8 +741,8 @@ static void try_frame_install(void) {
     if (!esp112_frame_install(g_game_hwnd,game_frame,NULL))
         ++g_frame_install_errors;
 }
-/* ONLY callback of the single PlayerESP D3D9 owner. This code runs during
- * the game EndScene, after the engine updated camera and before presentation.
+/* ONLY callback of the single PlayerESP D3D9 owner. This code runs
+ * between a successful BeginScene/EndScene pair immediately before Present.
  * Fail closed on a separate render thread (native object manager access).
  * For an unknown D3D device we retain the previous working GDI backend. */
 static void game_frame(IDirect3DDevice9 *device,void *user) {
@@ -731,7 +751,7 @@ static void game_frame(IDirect3DDevice9 *device,void *user) {
     DWORD now;
     (void)user;
     if (!game_thread()) { ++g_frame_foreign_thread;return; }
-    if (!g_enabled || !g_visible || !g_game_hwnd ||
+    if (!g_enabled || !g_visible || !g_game_hwnd || g_frame_disabled ||
         GetAncestor(GetForegroundWindow(),GA_ROOT)!=g_game_hwnd ||
         FAILED(IDirect3DDevice9_GetViewport(device,&vp)) ||
         !get_viewport(&view) || vp.X!=0u || vp.Y!=0u ||
@@ -739,6 +759,8 @@ static void game_frame(IDirect3DDevice9 *device,void *user) {
         return;
     now=GetTickCount();
     /* Do not switch backends based on the dummy device or one stray frame. */
+    if (!g_frame_mode && g_frame_retry_after_ms &&
+        (DWORD)(now-g_frame_retry_after_ms)<10000u) return;
     if (!g_frame_mode && ++g_frame_candidates>=3u) {
         g_frame_mode=1u;
         stop_refresh_timer();

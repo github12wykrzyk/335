@@ -1,4 +1,4 @@
-/* One PlayerESP-owned D3D9 EndScene trampoline, no competing vtable patch.
+/* One PlayerESP-owned D3D9 Present trampoline, no competing vtable patch.
  * MinHook vendor code/terms under src/ThirdParty/MinHook.
  * Fail closed for foreign entry-point jumps, nonmatching WoW HWND,
  * unexpected device/viewport, and non-game render thread (host).
@@ -12,13 +12,15 @@
 #include "../ThirdParty/MinHook/include/MinHook.h"
 #include "esp112_frame_hook.h"
 #pragma comment(lib,"d3d9.lib")
-typedef HRESULT (STDMETHODCALLTYPE *Esp112EndScene)(IDirect3DDevice9 *);
-static Esp112EndScene g_original;
+typedef HRESULT (STDMETHODCALLTYPE *Esp112Present)(IDirect3DDevice9 *,
+    const RECT *,const RECT *,HWND,const RGNDATA *);
+static Esp112Present g_original;
 static void *g_target;
 static HWND g_window;
 static Esp112FrameCallback g_callback;
 static void *g_callback_user;
 static volatile LONG g_running,g_inside,g_callbacks,g_rejected;
+static volatile LONG g_begin_failures,g_scene_submitted;
 static int matches_game_device(IDirect3DDevice9 *device) {
     D3DDEVICE_CREATION_PARAMETERS cp;
     D3DVIEWPORT9 vp;
@@ -34,18 +36,29 @@ static int matches_game_device(IDirect3DDevice9 *device) {
         pid!=GetCurrentProcessId()) return 0;
     return parent==g_window;
 }
-static HRESULT STDMETHODCALLTYPE hooked_end_scene(IDirect3DDevice9 *device) {
-    Esp112EndScene original=g_original;
+/* Present runs at the back-buffer boundary: no later game EndScene can
+ * overwrite our label batch in that same device::Present.
+ * Per the D3D9 contract, rendering is wrapped in a non-nested
+ * BeginScene/EndScene pair. When BeginScene fails, leave game state alone.
+ */
+static HRESULT STDMETHODCALLTYPE hooked_present(IDirect3DDevice9 *device,
+    const RECT *source,const RECT *dest,HWND override,const RGNDATA *dirty) {
+    Esp112Present original=g_original;
     if (!original) return D3DERR_INVALIDCALL;
     if (InterlockedCompareExchange(&g_running,0,0) &&
         InterlockedCompareExchange(&g_inside,1,0)==0) {
         if (matches_game_device(device)) {
-            InterlockedIncrement(&g_callbacks);
-            if (g_callback) g_callback(device,g_callback_user);
+            if (SUCCEEDED(IDirect3DDevice9_BeginScene(device))) {
+                InterlockedIncrement(&g_callbacks);
+                if (g_callback) g_callback(device,g_callback_user);
+                if (SUCCEEDED(IDirect3DDevice9_EndScene(device)))
+                    InterlockedIncrement(&g_scene_submitted);
+                else InterlockedIncrement(&g_begin_failures);
+            } else InterlockedIncrement(&g_begin_failures);
         } else InterlockedIncrement(&g_rejected);
         InterlockedExchange(&g_inside,0);
     }
-    return original(device);
+    return original(device,source,dest,override,dirty);
 }
 static int safe_entry(void *entry) {
     MEMORY_BASIC_INFORMATION memory;
@@ -89,7 +102,7 @@ int esp112_frame_install(HWND hwnd,Esp112FrameCallback callback,void *ctx) {
         IDirect3D9_Release(api);
         return 0;
     }
-    target=(*(void ***)dummy)[42]; /* IDirect3DDevice9::EndScene */
+    target=(*(void ***)dummy)[17]; /* IDirect3DDevice9::Present */
     IDirect3DDevice9_Release(dummy);
     IDirect3D9_Release(api);
     if (!safe_entry(target)) return 0;
@@ -98,7 +111,7 @@ int esp112_frame_install(HWND hwnd,Esp112FrameCallback callback,void *ctx) {
     g_window=hwnd;
     g_callback=callback;
     g_callback_user=ctx;
-    status=MH_CreateHook(target,(void *)hooked_end_scene,
+    status=MH_CreateHook(target,(void *)hooked_present,
                          (void **)&g_original);
     if (status!=MH_OK) goto fail;
     g_target=target;
@@ -130,4 +143,10 @@ unsigned esp112_frame_callbacks(void) {
 }
 unsigned esp112_frame_rejected(void) {
     return (unsigned)InterlockedCompareExchange(&g_rejected,0,0);
+}
+unsigned esp112_frame_scene_failures(void) {
+    return (unsigned)InterlockedCompareExchange(&g_begin_failures,0,0);
+}
+unsigned esp112_frame_submitted(void) {
+    return (unsigned)InterlockedCompareExchange(&g_scene_submitted,0,0);
 }
