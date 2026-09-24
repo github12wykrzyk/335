@@ -5,7 +5,9 @@
 typedef struct {
     PpTarget t[4]; size_t n;
     PpResult result;
-    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[20], cast_ok;
+    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[32], cast_ok;
+    PpGuid local_range_guid;
+    unsigned local_range_count;
     uint32_t last_attempt, expected_result_attempt;
     uint32_t end_attempt_id; PpGuid end_guid; unsigned end_count;
 } Stub;
@@ -14,7 +16,7 @@ static size_t scan(void *p,PpTarget *out,size_t cap) {
     memcpy(out,s->t,n*sizeof(*out));++s->scans;return n;
 }
 static int can_cast(void *p){return ((Stub *)p)->permitted;}
-static int cast(void *p,PpGuid g,uint32_t attempt){Stub *s=(Stub *)p;s->last_attempt=attempt;if (!s->cast_ok)return 0;if(s->cast_n<16)s->casted[s->cast_n++]=g;return 1;}
+static int cast(void *p,PpGuid g,uint32_t attempt){Stub *s=(Stub *)p;s->last_attempt=attempt;if (s->local_range_guid.lo==g.lo && s->local_range_guid.hi==g.hi){++s->local_range_count;return PP_CAST_LOCAL_RANGE;}if (!s->cast_ok)return 0;if(s->cast_n<16)s->casted[s->cast_n++]=g;return 1;}
 static void end_attempt(void *p,PpGuid g,uint32_t attempt){
  Stub *s=(Stub*)p;s->end_guid=g;s->end_attempt_id=attempt;++s->end_count;
 }
@@ -220,4 +222,30 @@ static int test_reset_and_refusal_release_only_own_nonce(void){
  CHECK(s.end_count==3u && s.end_guid.lo==102u && !e.active_valid);
  return 0;
 }
-int main(void){if(test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+
+static int test_local_out_of_range_skips_to_next_guid_same_pulse(void){
+ Stub s;PpEngine e;init(&s);s.local_range_guid.lo=102u;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ pp_tick(&e,100u);
+ CHECK(s.local_range_count==1u && s.cast_n==1u && s.casted[0].lo==101u);
+ CHECK(s.events[PP_EVENT_LOCAL_RANGE_REJECT]==1u && s.events[PP_EVENT_RETRY]==0u);
+ CHECK(e.history[0].attempts==0u || e.history[1].attempts==0u);
+ CHECK(e.active_valid && e.casts==1u && s.end_count==1u);
+ /* A rejected old GUID must not consume the server retry budget. */
+ s.result=PP_RESULT_SUCCESS;pp_tick(&e,101u);
+ CHECK(s.cast_n==1u && e.successes==1u);
+ pp_tick(&e,350u);CHECK(s.local_range_count==2u && s.cast_n==1u);
+ return 0;
+}
+static int test_local_out_of_range_has_bounded_pulse_work(void){
+ Stub s;PpEngine e;init(&s);s.n=4u;
+ s.t[2].guid.lo=103u;s.t[2].eligible=1u;s.t[2].distance_sq=2.0f;
+ s.t[3].guid.lo=104u;s.t[3].eligible=1u;s.t[3].distance_sq=3.0f;
+ CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
+ /* Only one GUID is locally rejected in this stub: one real cast maximum. */
+ s.local_range_guid.lo=102u;pp_tick(&e,20u);
+ CHECK(s.local_range_count==1u && s.cast_n==1u && s.casted[0].lo==103u);
+ CHECK(s.events[PP_EVENT_CAST]==1u);
+ return 0;
+}
+int main(void){if(test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

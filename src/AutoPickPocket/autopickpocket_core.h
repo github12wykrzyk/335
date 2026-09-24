@@ -14,6 +14,9 @@ extern "C" {
 #define PP_QUEUE_TTL_MS 160u
 #define PP_RESULT_TIMEOUT_MS 900u
 #define PP_RETRY_DELAY_MS 800u
+#define PP_LOCAL_RANGE_BACKOFF_MS 250u
+#define PP_LOCAL_FAILOVER_LIMIT 4u
+#define PP_CAST_LOCAL_RANGE (-1) /* no packet submitted: try another GUID */
 #define PP_TIMEOUT_DELAY_MS 3000u
 #define PP_MAX_ATTEMPTS_PER_GUID 3u
 
@@ -67,7 +70,8 @@ typedef struct {
     size_t (*scan)(void *ctx, PpTarget *out, size_t cap);
     /* Game-thread only: class, learned spell, usable state and stealth checks. */
     int (*can_cast)(void *ctx);
-    /* Cast on EXACT GUID without stealing user's target. 1 = submitted only. */
+    /* 1=submitted, PP_CAST_LOCAL_RANGE=local preflight missed range,
+     * 0=other refused submission. No return value implies spell success. */
     int (*cast_on_guid)(void *ctx, PpGuid target, uint32_t attempt_id);
     /* Correlate exact GUID and attempt to an authoritative result. */
     PpResult (*result)(void *ctx, PpGuid target, uint32_t attempt_id);

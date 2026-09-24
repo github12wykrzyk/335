@@ -164,6 +164,8 @@ void pp_tick(PpEngine *engine, uint32_t now) {
     int found=0,has_prefetch=0;
     PpHistory *h;
     PpResult outcome;
+    int submit_status;
+    unsigned local_rejects;
     if (!engine || !engine->enabled) return;
     refresh_snapshot(engine,now); /* also while waiting for result */
     if (engine->active_valid) {
@@ -243,46 +245,58 @@ scan_next:
         idle_event(engine,PP_EVENT_NOT_CASTABLE,now);
         return;
     }
-    /* Select the nearest *unblocked* queued GUID and consume it. Keep
-     * blocked entries only until this snapshot expires; never retry a
-     * rejected GUID in a tight loop. */
-    for(i=0u;i<engine->queue_count;++i) {
-        PpTarget target=engine->queue[i];
-        if (!nonzero(target.guid) ||
-            !(target.distance_sq>=0.0f && target.distance_sq<FLT_MAX))
-            continue;
-        if (target.eligible==2u) {has_prefetch=1;continue;}
-        if (target.eligible!=1u)continue;
-        h=entry(engine,target.guid,0);
-        if (h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
-                  !deadline_reached(now,h->blocked_until_ms)))
-            continue;
-        if (!found || target.distance_sq<best.distance_sq) {
-            best=target;
-            found=1;
+    /* A LOCAL range precheck did not submit a packet. Try another GUID in
+     * this same game-thread pulse, without turning it into a server retry.
+     * Bound the work: each rejection can require a guarded object lookup. */
+    for(local_rejects=0u;local_rejects<PP_LOCAL_FAILOVER_LIMIT;++local_rejects) {
+        found=0;has_prefetch=0;
+        for(i=0u;i<engine->queue_count;++i) {
+            PpTarget target=engine->queue[i];
+            if (!nonzero(target.guid) ||
+                !(target.distance_sq>=0.0f && target.distance_sq<FLT_MAX))
+                continue;
+            if (target.eligible==2u) {has_prefetch=1;continue;}
+            if (target.eligible!=1u)continue;
+            h=entry(engine,target.guid,0);
+            if (h && (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
+                      !deadline_reached(now,h->blocked_until_ms)))
+                continue;
+            if (!found || target.distance_sq<best.distance_sq) {
+                best=target;
+                found=1;
+            }
         }
-    }
-    if (!found) {
-        idle_event(engine,has_prefetch ? PP_EVENT_PREFETCH_ONLY :
-                   PP_EVENT_ALL_BLOCKED,now);
-        return;
-    }
-    /* Snapshot is refreshed on a short cadence. History excludes this GUID
-     * after a submission; do not remove the snapshot's other candidates. */
-    h=entry(engine,best.guid,1);
-    ++h->attempts;
-    if (++engine->next_attempt_id==0u) ++engine->next_attempt_id;
-    engine->active_attempt_id=engine->next_attempt_id;
-    if (engine->api.cast_on_guid(engine->api.ctx,best.guid,engine->active_attempt_id)==1) {
-        engine->active=best.guid;
-        engine->active_valid=1u;
-        engine->started_ms=now;
-        ++engine->casts;
-        emit(engine,PP_EVENT_CAST,best.guid);
-    } else {
+        if (!found) {
+            idle_event(engine,has_prefetch ? PP_EVENT_PREFETCH_ONLY :
+                       PP_EVENT_ALL_BLOCKED,now);
+            return;
+        }
+        h=entry(engine,best.guid,1);
+        ++h->attempts;
+        if (++engine->next_attempt_id==0u) ++engine->next_attempt_id;
+        engine->active_attempt_id=engine->next_attempt_id;
+        submit_status=engine->api.cast_on_guid(engine->api.ctx,best.guid,
+                                               engine->active_attempt_id);
+        if (submit_status==1) {
+            engine->active=best.guid;
+            engine->active_valid=1u;
+            engine->started_ms=now;
+            ++engine->casts;
+            emit(engine,PP_EVENT_CAST,best.guid);
+            return; /* never submit two casts in one loader pulse */
+        }
         if (engine->api.end_attempt)
             engine->api.end_attempt(engine->api.ctx,best.guid,engine->active_attempt_id);
+        if (submit_status==PP_CAST_LOCAL_RANGE) {
+            /* No packet left the client: do not consume the GUID's server
+             * retry budget or leave a pending result observer armed. */
+            --h->attempts;
+            h->blocked_until_ms=now+PP_LOCAL_RANGE_BACKOFF_MS;
+            emit(engine,PP_EVENT_LOCAL_RANGE_REJECT,best.guid);
+            continue;
+        }
         failure(engine,best.guid,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
         ++engine->retries;
+        return; /* other errors may signal server cooldown; do not burst */
     }
 }

@@ -168,9 +168,7 @@ static int pp_cast(void *ctx,PpGuid guid,uint32_t attempt_id) {
     d2=dx*dx+dy*dy+dz*dz;
     if(d2>=0.0f && d2<FLT_MAX &&
        d2>PP12340_REACH*PP12340_REACH){
-        if(a->host.event)a->host.event(a->host.ctx,
-            PP_EVENT_LOCAL_RANGE_REJECT,guid,attempt_id);
-        return 0;
+        return PP_CAST_LOCAL_RANGE; /* core logs and tries another GUID */
     }
     if (!(d2>=0.0f && d2<=PP12340_REACH*PP12340_REACH && d2<FLT_MAX) ||
         pp_can_cast(a)!=1) return 0;
