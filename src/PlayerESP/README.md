@@ -28,3 +28,13 @@ Do wykonania przed aktywacją:
 
 Zasoby ConsoleXP są tylko referencją. Nie ładować ZIP, DLL, patchera ani
 nie podmieniać Wow.exe. Szczegóły: docs/CONSOLEXP_REFERENCE_ESP.md.
+
+## Etap 2 — skaner Object Manager
+
+`player_esp_scanner.c/.h` zawierają obserwator listy obiektów dla
+znanego układu 12340, z callbackami weryfikującymi SHA klienta, ABI,
+wątek gry, aktualny epoch świata, bezpieczne odczyty i metadane gracza.
+Skaner nie modyfikuje targetu/ruchu/EXE, nie instaluje hooków i nie
+przechowuje adresów obiektów w snapshotach. Przy błędzie unieważnia stan.
+Weryfikacja jest wykonywana na symulowanej pamięci; poprawność ABI
+na dokładnym `Wow.exe` i połączenie z loaderem pozostają do wykonania.

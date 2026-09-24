@@ -9,6 +9,8 @@ on:
       - 'tests/test_consolexp_reference_audit.py'
       - 'src/PlayerESP/**'
       - 'tests/player_esp_core_harness.c'
+      - 'tests/player_esp_scanner_harness.c'
+      - 'tests/test_player_esp_scanner.py'
       - 'tests/test_player_esp_core.py'
       - 'docs/CONSOLEXP_REFERENCE_ESP.md'
       - '.github/workflows/consolexp_reference_esp.yml'
@@ -27,7 +29,7 @@ jobs:
       - name: Validate uploaded archive identity and CRC without executing binaries
         run: python tools/audit_consolexp_reference.py --report dist/consolexp_reference_audit.json
       - name: Test reference safety and portable ESP core
-        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v
+        run: python -m unittest discover -s tests -p 'test_consolexp_reference_audit.py' -v && python -m unittest discover -s tests -p 'test_player_esp_core.py' -v && python -m unittest discover -s tests -p 'test_player_esp_scanner.py' -v
       - name: Publish inert reference inventory (not game package)
         uses: actions/upload-artifact@v4
         with:
