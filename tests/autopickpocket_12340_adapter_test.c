@@ -13,7 +13,7 @@ typedef struct {
     uint32_t thread,hash_ok,abi_ok,usable,eligible_a,eligible_b;
     uint64_t world;
     PpResult result;
-    unsigned casts,cast_spell,callbacks,events[16];
+    unsigned casts,cast_spell,callbacks,events[32];
     uint32_t last_attempt,expected_result_attempt;
     unsigned player_pos_calls,move_player_after_scan;
     unsigned eligible_calls;
@@ -172,11 +172,14 @@ static int test_moving_player_rechecked_before_cast(void){
     CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
     m.move_player_after_scan=1u;
     pp12340_tick(&a,0);
-    CHECK(m.player_pos_calls>=2u && m.casts==0u && a.engine.retries==1u);
-    /* Rejected GUID is backoff-limited; another eligible GUID can proceed. */
+    CHECK(m.player_pos_calls>=2u && m.casts==0u && a.engine.retries==0u);
+    CHECK(m.events[PP_EVENT_LOCAL_RANGE_REJECT]==2u && m.end_count==2u);
+    /* Neither failed the server cast: both GUIDs have a short local range
+     * backoff, but are eligible after we return to the encounter. */
     m.move_player_after_scan=0u;
-    pp12340_tick(&a,100);
-    CHECK(m.casts==1u && m.last_guid.lo==111u);
+    pp12340_tick(&a,100u);CHECK(m.casts==0u);
+    pp12340_tick(&a,250u);
+    CHECK(m.casts==1u && m.last_guid.lo==222u);
     return 0;
 }
 static int test_fail_closed_filter(void){
@@ -193,7 +196,10 @@ static int test_spatial_gate_avoids_distant_eligibility_calls(void){
  CHECK(pp12340_bind(&a,&h));pp12340_enable(&a,1);
  m.move_player_after_scan=1u; /* after player located: scan still near */
  pp12340_tick(&a,0u);
- CHECK(m.eligible_calls<=3u); /* only candidates within reach */
+ CHECK(m.eligible_calls<=2u+PP_LOCAL_FAILOVER_LIMIT);
+ /* A bounded same-pulse range retry must not revisit distant NPCs or
+  * submit a packet when the player has already sprinted out of range. */
+ CHECK(m.casts==0u && m.events[PP_EVENT_LOCAL_RANGE_REJECT]==2u);
  return 0;
 }
 static int test_cached_player_revalidates_and_resets(void){
