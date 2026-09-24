@@ -315,7 +315,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug",dir)<0)return;
     if(!CreateDirectoryW(path,NULL) && GetLastError()!=ERROR_ALREADY_EXISTS)
         return;
-    if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug\\AutoPickPocket.jsonl",dir)<0)
+    if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug\\AutoPickPocket.native.jsonl",dir)<0)
         return;
     file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|
           FILE_SHARE_DELETE,NULL,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
@@ -327,12 +327,12 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
         for(i=3u;i>0u;--i){
             if(i==1u){
                 if(swprintf_s(older,MAX_PATH,
-                    L"%ls\\.wow335_debug\\AutoPickPocket.jsonl",dir)<0)return;
+                    L"%ls\\.wow335_debug\\AutoPickPocket.native.jsonl",dir)<0)return;
             }else if(swprintf_s(older,MAX_PATH,
-                L"%ls\\.wow335_debug\\AutoPickPocket.%u.jsonl",dir,i-1u)<0)
+                L"%ls\\.wow335_debug\\AutoPickPocket.native.%u.jsonl",dir,i-1u)<0)
                 return;
             if(swprintf_s(newer,MAX_PATH,
-                L"%ls\\.wow335_debug\\AutoPickPocket.%u.jsonl",dir,i)<0)
+                L"%ls\\.wow335_debug\\AutoPickPocket.native.%u.jsonl",dir,i)<0)
                 return;
             (void)MoveFileExW(older,newer,
                 MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);
@@ -370,7 +370,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     default:break;
     }
     n=sprintf_s(line,sizeof(line),
-       "{\"module\":\"AutoPickPocket\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"pending_count\":%u}\n",
+       "{\"module\":\"AutoPickPocket\",\"variant\":\"native\",\"session_id\":\"%lu\",\"ms\":%lu,\"event\":%u,\"reason\":\"%s\",\"attempt\":%lu,\"guid_lo\":%lu,\"guid_hi\":%lu,\"scan_ms\":%lu,\"scan_candidates\":%lu,\"queue_depth\":%lu,\"queue_age_ms\":%lu,\"pulse_gap_ms\":%lu,\"cast_gap_ms\":%lu,\"result_wait_ms\":%lu,\"next_wait_ms\":%lu,\"pending_count\":%u}\n",
        (unsigned long)g_log_session,(unsigned long)now,(unsigned)kind,reason,
        (unsigned long)attempt_id,(unsigned long)guid.lo,(unsigned long)guid.hi,
        (unsigned long)g_adapter.last_scan_duration_ms,
