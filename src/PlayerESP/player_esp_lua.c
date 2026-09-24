@@ -101,6 +101,7 @@ static const char g_ui_init[] =
     "  end\n"
     " end\n"
     "end\n"
+    "ESP335HUD=e\n"
     "\n"
 ;
 int esp335_lua_create(Esp335LuaGate run) {
