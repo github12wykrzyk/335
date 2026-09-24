@@ -295,7 +295,10 @@ static int native_project(uint32_t world_frame,Esp335Vec3 world,
          * This is a material ABI difference from 112/5875, which needs
          * a second native DDC call. Calling it again double-multiplies
          * screen X/Y by 0xAC0CB4/0xAC0CB8 (observed in real logs).
-         * The already-converted coordinates are TOP-DOWN UI units. */
+         * The already-converted coordinates are BOTTOM-UP UI units.
+         * The portable viewport helper flips Y ONCE when converting to
+         * top-left Windows client pixels (verified from paired 0D70).
+         */
     } __except(EXCEPTION_EXECUTE_HANDLER) { return 0; }
     if (!read_float((uintptr_t)0x00AC0CB4u,&scale_x) ||
         !read_float((uintptr_t)0x00AC0CB8u,&scale_y) ||

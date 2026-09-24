@@ -1,7 +1,7 @@
 /* 12340-specific port of 112's native W2S + per-label Windows overlay.
  * Unlike 112, native 12340 WorldToScreen CALLS DdcToNdc internally.
  * Its raw output is already in native UI coordinate units. Do NOT call
- * native DDC again. Undo the UI scale and convert TOP-LEFT to client pixels.
+ * native DDC again. Undo the UI scale and convert bottom-left UI to top-left OS pixels.
  */
 #ifndef ESP112_GEOMETRY_335_H
 #define ESP112_GEOMETRY_335_H

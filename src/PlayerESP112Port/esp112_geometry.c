@@ -4,7 +4,8 @@
 /* 0x004F6D20 internally calls 0x0047BFF0 and emits UI coordinate units.
  * At 2560x1440, globals 0xAC0CB4=0.87158, 0xAC0CB8=0.49026,
  * so raw (0.18139,0.03538) is viewport (0.2081,0.0722), NOT
- * native DDC again (0.1581,0.01734), NOR bottom-up Y (0.9278). */
+ * native DDC again (0.1581,0.01734). Native Y is BOTTOM-UP;
+ * Windows screen/popup coordinates are TOP-DOWN. */
 int esp112_ui_to_client(float ux,float uy,float scalex,float scaley,
                          const Esp112Viewport *v,int *out_x,int *out_y) {
     float x,y;
@@ -18,7 +19,7 @@ int esp112_ui_to_client(float ux,float uy,float scalex,float scaley,
     if (!isfinite(x) || !isfinite(y) ||
         x<0.f || x>1.f || y<0.f || y>1.f) return 0;
     *out_x=(int)(x*(float)v->width+0.5f);
-    *out_y=(int)(y*(float)v->height+0.5f);
+    *out_y=(int)((1.f-y)*(float)v->height+0.5f);
     return 1;
 }
 int esp112_label_rect(int client_x,int client_y,const Esp112Viewport *v,

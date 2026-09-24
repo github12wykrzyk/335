@@ -37,12 +37,13 @@ class PortTests(unittest.TestCase):
         self.assertIn("ESP112_DIAG_PAIRS 6u",(ROOT/"src/PlayerESP112Port/esp112_overlay.h").read_text())
         self.assertIn("foot_window",overlay)
         self.assertIn("esp112_overlay_hide_foot(o,i);",overlay)
-    def test_no_second_native_ddc_or_bottom_up_y(self):
+    def test_native_single_ddc_and_bottom_up_y(self):
         host=(ROOT/"src/PlayerESP112Port/esp112_host335.c").read_text()
         geom=(ROOT/"src/PlayerESP112Port/esp112_geometry.c").read_text()
         self.assertIn("esp112_ui_to_client(screen_xyz[0],screen_xyz[1],scale_x,scale_y",host)
         self.assertNotIn("ddc(screen_xyz[0],screen_xyz[1]",host)
         self.assertNotIn("NativeDdcToNdc ddc=",host)
         self.assertIn("y=uy/scaley;",geom)
-        self.assertNotIn("1.f-ny",geom)
+        self.assertIn("(1.f-y)*(float)v->height",geom)
+        self.assertNotIn("*out_y=(int)(y*(float)v->height",geom)
 if __name__=="__main__":unittest.main()
