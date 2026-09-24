@@ -24,32 +24,43 @@ function Start-TestGame([string]$path) {
     return $p
 }
 try {
+    # Reflection does not unwrap PowerShell's PSObject to System.String automatically.
+    $checkArgs = [object[]]::new(2)
+    $checkArgs[0] = [string]$root
+    $checkArgs[1] = [string]''
+    $stopArgs = [object[]]::new(3)
+    $stopArgs[0] = [string]$root
+    $stopArgs[1] = [string]''
+    $stopArgs[2] = $null
     $game = Start-TestGame (Join-Path $root 'WoW.exe')
     $unrelated = Start-TestGame (Join-Path $other 'WoW.exe')
-    if (-not $running.Invoke($null, [object[]]@($root, $null))) {
+    if (-not $running.Invoke($null, $checkArgs)) {
         throw 'Did not detect the running game in selected directory'
     }
-    $task = $stop.Invoke($null, [object[]]@($root, $null, $null))
+    $task = $stop.Invoke($null, $stopArgs)
     $count = $task.GetAwaiter().GetResult()
     $game.Refresh()
     $unrelated.Refresh()
     if ($count -lt 1 -or -not $game.HasExited -or
-        $running.Invoke($null, [object[]]@($root, $null))) {
+        $running.Invoke($null, $checkArgs)) {
         throw 'Updater did not close selected WoW.exe and wait for exit'
     }
     if ($unrelated.HasExited) { throw 'Unrelated WoW installation was terminated' }
     $custom = Start-TestGame (Join-Path $root 'CustomClient.exe')
-    if (-not $running.Invoke($null, [object[]]@($root, 'CustomClient.exe'))) {
+    $checkArgs[1] = [string]'CustomClient.exe'
+    $stopArgs[1] = [string]'CustomClient.exe'
+    if (-not $running.Invoke($null, $checkArgs)) {
         throw 'Did not detect installed game with a custom executable name'
     }
-    $task = $stop.Invoke($null, [object[]]@($root, 'CustomClient.exe', $null))
+    $task = $stop.Invoke($null, $stopArgs)
     $count = $task.GetAwaiter().GetResult()
     $custom.Refresh()
     $unrelated.Refresh()
     if ($count -lt 1 -or -not $custom.HasExited -or $unrelated.HasExited) {
         throw 'Custom game shutdown or other-installation isolation failed'
     }
-    if ($stop.Invoke($null, [object[]]@($root, $null, $null)).GetAwaiter().GetResult() -ne 0) {
+    $stopArgs[1] = [string]''
+    if ($stop.Invoke($null, $stopArgs).GetAwaiter().GetResult() -ne 0) {
         throw 'Repeated shutdown should be a no-op'
     }
     Write-Host 'UPDATE_CLOSES_GAME: PASS x86 processes; WoW.exe, renamed exe, other installation isolated'
