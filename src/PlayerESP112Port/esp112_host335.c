@@ -24,6 +24,8 @@
 #include "esp112_overlay.h"
 #include "esp112_slots.h"
 #include "esp112_motion.h"
+#include "esp112_frame_hook.h"
+#include "esp112_frame_draw.h"
 #define ESP112_PROJECTION_INTERVAL_MS 16u
 #define ESP112_OBJECT_SCAN_INTERVAL_MS 50u
 #pragma comment(lib,"Advapi32.lib")
@@ -63,6 +65,10 @@ static uint64_t g_snapshot_epoch;
 static Esp112Slots g_slots;
 static Esp112Motion g_motion[ESP112_SLOT_COUNT];
 static UINT_PTR g_refresh_timer;
+static DWORD g_last_frame_ms,g_last_frame_install_ms;
+static unsigned g_frame_mode,g_frame_candidates,g_frame_renders;
+static unsigned g_frame_install_attempts,g_frame_install_errors,g_frame_foreign_thread;
+static unsigned g_frame_fallbacks,g_frame_drawn_labels;
 static unsigned g_timer_wakeups,g_debug_pairs;
 static DWORD g_worst_tick_gap,g_last_cadence_report;
 static unsigned g_last_cadence_ticks,g_last_cadence_scans,g_last_cadence_timers;
@@ -86,6 +92,7 @@ static unsigned g_pair_count;
 static int game_thread(void) {
     return g_game_tid && GetCurrentThreadId()==g_game_tid;
 }
+static void game_frame(IDirect3DDevice9 *device,void *user);
 /* Thread-owned WM_TIMER: no second client hook, no game-window timer ID,
  * no Win32 timer callback into a DLL after unhook. Timer messages are low
  * priority and therefore do not promise hard 60 FPS under game load. */
@@ -96,7 +103,7 @@ static void stop_refresh_timer(void) {
     }
 }
 static void ensure_refresh_timer(void) {
-    if (game_thread() && g_enabled && g_visible &&
+    if (game_thread() && g_enabled && g_visible && !g_frame_mode &&
         g_game_hwnd && !g_refresh_timer)
         g_refresh_timer=SetTimer(NULL,0u,ESP112_PROJECTION_INTERVAL_MS,NULL);
 }
@@ -406,6 +413,19 @@ static void diagnostic(void) {
         g_last_cadence_timers=g_timer_wakeups;
         g_worst_tick_gap=0u;
     }
+    n=_snprintf_s(line,sizeof(line),_TRUNCATE,
+        "{\"component\":\"PlayerESP\",\"backend\":\"112-gdi+d3d9\","
+        "\"probe\":\"frame_backend\",\"frame_active\":%u,"
+        "\"hook_installed\":%u,\"verified_callbacks\":%u,"
+        "\"rejected_callbacks\":%u,\"render_frames\":%u,"
+        "\"rendered_labels\":%u,\"foreign_thread\":%u,"
+        "\"install_attempts\":%u,\"install_errors\":%u,"
+        "\"fallbacks\":%u}\n",
+        g_frame_mode,esp112_frame_installed(),
+        esp112_frame_callbacks(),esp112_frame_rejected(),
+        g_frame_renders,g_frame_drawn_labels,g_frame_foreign_thread,
+        g_frame_install_attempts,g_frame_install_errors,g_frame_fallbacks);
+    if (n>0) WriteFile(file,line,(DWORD)n,&written,NULL);
     if (g_probe_ready) {
         n=_snprintf_s(line,sizeof(line),_TRUNCATE,
             "{\"component\":\"PlayerESP\",\"backend\":\"112-gdi\","
@@ -442,8 +462,10 @@ static void diagnostic(void) {
     }
     CloseHandle(file);
 }
-static void drive(void) {
+static void drive(IDirect3DDevice9 *device) {
     Esp112Candidate candidates[ESP335_MAX_PLAYERS];
+    Esp112FrameLabel frame_labels[ESP112_MAX_LABELS];
+    unsigned frame_count=0u;
     Esp112Viewport view;
     Esp335Vec3 eye;
     uint32_t world_frame;
@@ -454,7 +476,20 @@ static void drive(void) {
     int scan_ok;
     if (!game_thread() || !g_enabled || g_driving) return;
     now=GetTickCount();
-    if ((DWORD)(now-g_last_scan)<ESP112_PROJECTION_INTERVAL_MS) return;
+    if (device) {
+        /* Exact frame callback: never wait for WM_TIMER or apply old GDI
+         * smoothing to camera motion within this same render frame. */
+        g_last_frame_ms=now;
+    } else {
+        if (g_frame_mode && (DWORD)(now-g_last_frame_ms)<=2000u) return;
+        if (g_frame_mode) {
+            g_frame_mode=0u;
+            g_frame_candidates=0u;
+            ++g_frame_fallbacks;
+            g_last_scan=0u;
+        }
+        if ((DWORD)(now-g_last_scan)<ESP112_PROJECTION_INTERVAL_MS) return;
+    }
     if (g_last_scan) {
         DWORD gap=(DWORD)(now-g_last_scan);
         if (gap>g_worst_tick_gap) g_worst_tick_gap=gap;
@@ -469,7 +504,7 @@ static void drive(void) {
         esp112_overlay_hide_unused(&g_overlay,0u);
         goto done;
     }
-    ensure_refresh_timer();
+    if (!device) ensure_refresh_timer();
     if (!g_scanner.bound) {
         g_snapshot_valid=0u;
         if (!g_last_bind || (DWORD)(now-g_last_bind)>=5000u) {
@@ -550,15 +585,31 @@ static void drive(void) {
         }
     }
     qsort(candidates,n,sizeof(candidates[0]),candidate_cmp);
-    if (!g_overlay.atom && !esp112_overlay_init(&g_overlay,g_instance)) {
-        ++g_overlay_init_fail;goto clear;
+    if (!device) {
+        if (!g_overlay.atom && !esp112_overlay_init(&g_overlay,g_instance)) {
+            ++g_overlay_init_fail;goto clear;
+        }
+        if (g_overlay.atom && !g_overlay_binds) ++g_overlay_binds;
     }
-    if (g_overlay.atom && !g_overlay_binds) ++g_overlay_binds;
     for (i=0u;i<n && drawn<ESP112_MAX_LABELS;++i) {
         char title[96];
         int left,top,slot,smooth_left,smooth_top;
         COLORREF color;
         const Esp112Candidate *c=&candidates[i];
+        if (device) {
+            Esp112FrameLabel *label;
+            if (frame_count>=ESP112_MAX_LABELS) break;
+            label=&frame_labels[frame_count++];
+            memset(label,0,sizeof(*label));
+            label->client_x=(float)c->x;
+            label->client_y=(float)c->y;
+            label->guid=c->guid;label->kind=c->kind;
+            label->faction=c->faction;
+            label->health=c->hp;label->max_health=c->max_hp;
+            label->distance_yards=(unsigned)(c->distance+0.5f);
+            ++drawn;
+            continue;
+        }
         if (!esp112_label_rect(c->x,c->y,&view,&left,&top))
             continue;
         slot=esp112_slots_reserve(&g_slots,c->guid,visible_mask);
@@ -613,7 +664,10 @@ static void drive(void) {
         visible_mask|=1u<<(unsigned)slot;
         ++drawn;
     }
-    esp112_overlay_finish_frame(&g_overlay,visible_mask);
+    if (device) {
+        g_frame_drawn_labels+=esp112_frame_draw(device,frame_labels,frame_count);
+        ++g_frame_renders;
+    } else esp112_overlay_finish_frame(&g_overlay,visible_mask);
     goto done;
 clear:
     esp112_overlay_hide_unused(&g_overlay,0u);
@@ -630,6 +684,9 @@ static void control(UINT message,WPARAM command,HWND hwnd) {
     if (command==0u) {
         stop_refresh_timer();
         g_enabled=0u;
+        g_frame_mode=0u;
+        g_frame_candidates=0u;
+        esp112_frame_uninstall();
         g_snapshot_valid=0u;
         g_snapshot_epoch=0u;
         reset_guid_motion();
@@ -650,6 +707,48 @@ static void control(UINT message,WPARAM command,HWND hwnd) {
     }
     g_enabled=1u;
     ensure_refresh_timer();
+}
+static void try_frame_install(void) {
+    DWORD now;
+    if (!game_thread() || !g_enabled || !g_game_hwnd ||
+        esp112_frame_installed() || !GetModuleHandleW(L"d3d9.dll"))
+        return;
+    now=GetTickCount();
+    if (g_last_frame_install_ms &&
+        (DWORD)(now-g_last_frame_install_ms)<5000u) return;
+    g_last_frame_install_ms=now;
+    ++g_frame_install_attempts;
+    if (!esp112_frame_install(g_game_hwnd,game_frame,NULL))
+        ++g_frame_install_errors;
+}
+/* ONLY callback of the single PlayerESP D3D9 owner. This code runs during
+ * the game EndScene, after the engine updated camera and before presentation.
+ * Fail closed on a separate render thread (native object manager access).
+ * For an unknown D3D device we retain the previous working GDI backend. */
+static void game_frame(IDirect3DDevice9 *device,void *user) {
+    D3DVIEWPORT9 vp;
+    Esp112Viewport view;
+    DWORD now;
+    (void)user;
+    if (!game_thread()) { ++g_frame_foreign_thread;return; }
+    if (!g_enabled || !g_visible || !g_game_hwnd ||
+        GetAncestor(GetForegroundWindow(),GA_ROOT)!=g_game_hwnd ||
+        FAILED(IDirect3DDevice9_GetViewport(device,&vp)) ||
+        !get_viewport(&view) || vp.X!=0u || vp.Y!=0u ||
+        vp.Width!=(UINT)view.width || vp.Height!=(UINT)view.height)
+        return;
+    now=GetTickCount();
+    /* Do not switch backends based on the dummy device or one stray frame. */
+    if (!g_frame_mode && ++g_frame_candidates>=3u) {
+        g_frame_mode=1u;
+        stop_refresh_timer();
+        esp112_overlay_hide_unused(&g_overlay,0u);
+        g_last_scan=0u;
+        reset_guid_motion();
+    }
+    if (!g_frame_mode) return;
+    if (g_last_frame_ms && (DWORD)(now-g_last_frame_ms)<2u) return;
+    drive(device);
 }
 static void check_insert(const MSG *message,WPARAM mode) {
     if (!g_enabled || !g_game_hwnd || !message || mode!=PM_REMOVE ||
@@ -679,8 +778,11 @@ __declspec(dllexport) LRESULT CALLBACK W335_HookProc(int code,WPARAM w,LPARAM l)
             ++g_timer_wakeups;
         if (msg->message!=WM_QUIT) {
             control(msg->message,msg->wParam,msg->hwnd);
-            if (game_thread()) check_insert(msg,w);
-            drive();
+            if (game_thread()) {
+                check_insert(msg,w);
+                try_frame_install();
+            }
+            drive(NULL);
         }
     }
     return CallNextHookEx(NULL,code,w,l);
@@ -690,7 +792,8 @@ __declspec(dllexport) LRESULT CALLBACK W335_CallWndProc(int code,WPARAM w,LPARAM
         const CWPSTRUCT *msg=(const CWPSTRUCT *)l;
         if (msg->message!=WM_QUIT) {
             control(msg->message,msg->wParam,msg->hwnd);
-            drive();
+            try_frame_install();
+            drive(NULL);
         }
     }
     return CallNextHookEx(NULL,code,w,l);
