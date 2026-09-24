@@ -53,7 +53,9 @@ int esp335_scanner_collect(Esp335Scanner *s) {
         !read32(s, (uintptr_t)mgr + ESP335_MGR_FIRST, &obj)) goto invalid;
     esp335_reset(&next);
     if (!esp335_begin(&next, epoch)) goto invalid;
-    for (step = 0; obj; ++step) {
+    /* 12340 object-list termination may use a tagged odd sentinel (1),
+     * as well as NULL; never dereference the terminal node. */
+    for (step = 0; obj && !(obj & 1u); ++step) {
         uint32_t next_obj;
         uint64_t guid;
         if (step >= ESP335_MAX_SCAN ||

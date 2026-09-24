@@ -31,7 +31,7 @@ static int read32(void *v, uintptr_t a, uint32_t *n) {
     else if (a==ENEMY+ESP335_OBJ_GUID) *n=222u;
     else if (a==ENEMY+ESP335_OBJ_GUID+4u) *n=0;
     else if (a==ENEMY+ESP335_OBJ_TYPE) *n=ESP335_OBJ_PLAYER;
-    else if (a==ENEMY+ESP335_OBJ_NEXT) *n=0;
+    else if (a==ENEMY+ESP335_OBJ_NEXT) *n=1u; /* tagged end-of-list */
     else return 0;
     return 1;
 }
