@@ -30,14 +30,16 @@ class UniversalPPStack(unittest.TestCase):
         self.assertNotIn("0xF1,0x81,0xBE",host)
         self.assertIn('0x00632B50,"native_head","55 8b ec 56 8b f1 83 be 34 05 00 00 05"',audit)
 
-    def test_no_ack_packet_transport_has_one_way_correlated_native_fallback(self):
+    def test_packet_transport_never_calls_native_spell_cast_or_fallback(self):
         host=(ROOT/"src/AutoPickPocket/autopickpocket_win32_host.c").read_text()
         policy=(ROOT/"src/AutoPickPocket/autopickpocket_game_policies.c").read_text()
         self.assertIn("g_packet_nonce==attempt_id",host)
-        self.assertIn("PP_RESULT_TIMEOUT_MS-80u",host)
-        self.assertIn("packet_no_ack_native_fallback",host)
-        self.assertIn('g_last_submitted_native ? "native_fallback" : "packet"',host)
-        self.assertIn("PP_EVENT_PACKET_FALLBACK",host)
+        self.assertIn("((send_fn)PP335_SEND_VA)(&packet)",host)
+        self.assertIn('       "packet",0u,g_ui_count);',host)
+        for forbidden in ("native_fn", "using_native", "g_native_failover",
+                          "g_packet_unanswered", "packet_no_ack_native_fallback",
+                          "native_fallback", "PP_EVENT_PACKET_FALLBACK"):
+            self.assertNotIn(forbidden,host)
         self.assertIn("PP_RESULT_MONEY_SUCCESS",policy)
         self.assertIn("PLAYER_MONEY",policy)
 

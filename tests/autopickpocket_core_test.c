@@ -55,7 +55,8 @@ static int test_retry_and_timeout(void){
 static int test_unconfirmed_results_bounded(void){
  Stub s;PpEngine e;init(&s);s.n=1;CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
  pp_tick(&e,0);CHECK(s.cast_n==1);
- pp_tick(&e,1500);CHECK(e.timeouts==1);
+ pp_tick(&e,199);CHECK(e.timeouts==0 && e.active_valid);
+ pp_tick(&e,200);CHECK(e.timeouts==1);
  pp_tick(&e,4500);CHECK(s.cast_n==2);
  pp_tick(&e,6000);CHECK(e.timeouts==2);
  pp_tick(&e,9000);CHECK(s.cast_n==3);
@@ -200,7 +201,8 @@ static int test_timeout_releases_matching_attempt_before_next_guid(void){
  CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
  pp_tick(&e,10u);first=s.last_attempt;
  CHECK(s.cast_n==1u && s.casted[0].lo==102u && s.end_count==0u);
- pp_tick(&e,910u); /* exact core deadline; do not wait for policy's 1500 ms */
+ pp_tick(&e,209u);CHECK(e.timeouts==0u && s.cast_n==1u);
+ pp_tick(&e,210u); /* exact 200ms core deadline */
  CHECK(e.timeouts==1u && s.end_count==1u);
  CHECK(s.end_guid.lo==102u && s.end_attempt_id==first);
  CHECK(s.cast_n==2u && s.casted[1].lo==101u && s.last_attempt!=first);
@@ -281,39 +283,4 @@ static int test_motion_prefers_front_target_only_with_valid_direction(void){
        e.last_selection_forward==0u);
  return 0;
 }
-static int test_fast_release_requires_fresh_geometry_and_alternate_target(void) {
- Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
- pp_tick(&e,0u);CHECK(s.cast_n==1u && s.casted[0].lo==102u);
- s.t[1].eligible=2u;s.t[1].distance_sq=25.0f;
- pp_tick(&e,400u);CHECK(s.cast_n==1u && e.active_valid);
- pp_tick(&e,419u);CHECK(s.cast_n==1u && e.active_valid);
- pp_tick(&e,420u);
- CHECK(s.cast_n==2u && s.casted[1].lo==101u);
- CHECK(s.end_count==1u && s.end_guid.lo==102u);
- CHECK(s.events[PP_EVENT_FAST_RELEASE]==1u && s.events[PP_EVENT_SUCCESS]==0u);
- CHECK(e.timeouts==1u && e.successes==0u);
- return 0;
-}
-static int test_fast_release_does_not_guess_when_old_guid_missing(void) {
- Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
- pp_tick(&e,0u);CHECK(s.cast_n==1u);
- s.n=1u;s.t[0].guid.lo=101u;
- pp_tick(&e,420u);
- CHECK(e.active_valid && s.cast_n==1u && s.events[PP_EVENT_FAST_RELEASE]==0u);
- pp_tick(&e,559u);CHECK(e.active_valid && s.cast_n==1u);
- pp_tick(&e,560u);
- CHECK(s.cast_n==2u && s.casted[1].lo==101u);
- CHECK(s.events[PP_EVENT_TIMEOUT]==1u && s.events[PP_EVENT_FAST_RELEASE]==0u);
- CHECK(s.end_count==1u && e.successes==0u);
- return 0;
-}
-static int test_early_release_requires_available_other_target(void) {
- Stub s;PpEngine e;init(&s);CHECK(pp_init(&e,adapter(&s)));pp_enable(&e,1);
- pp_tick(&e,0u);s.n=1u;s.t[0].guid.lo=102u;
- s.t[0].eligible=2u;s.t[0].distance_sq=25.0f;
- pp_tick(&e,420u);CHECK(e.active_valid && s.events[PP_EVENT_FAST_RELEASE]==0u);
- pp_tick(&e,560u);
- CHECK(!e.active_valid && s.events[PP_EVENT_TIMEOUT]==1u && s.cast_n==1u);
- return 0;
-}
-int main(void){if(test_early_release_requires_available_other_target()||test_fast_release_does_not_guess_when_old_guid_missing()||test_fast_release_requires_fresh_geometry_and_alternate_target()||test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+int main(void){if(test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

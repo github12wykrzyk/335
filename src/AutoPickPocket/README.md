@@ -153,3 +153,18 @@ native fallback increases, revert to the preceding in-game-tested SHA.
 A GUID-correlated spell-921 `OUT_OF_RANGE` now blocks only that GUID for 200 ms and the engine tries another available, freshly validated GUID on the same pulse. A global UI range message **never** directly sets the GUID's `W335PP_FAIL`/`W335PP_E` or proves the server rejected that GUID. It can produce a separate `ui_range_local_distance_confirmed_not_server_guid` event only if the native 12340 scan also shows the outstanding exact GUID outside the 4-yard cast radius (yet within the 9-yard detection radius); otherwise the cast stays pending until a real result or the unchanged 900 ms timeout. On this guarded release the exact nonce is cancelled before the next target can be armed.
 
 The scanner samples the player's XY displacement between recent pulses (20-250 ms, plausible speed; teleport/unknown/stationary ignored). Targets **ahead** in the validated movement direction are preferred over nearer targets behind; all casts still require native same-GUID <=4 yd validation. The cast log includes `selection_forward` and `candidates_ready`. Tests cover the new short GUID-specific retry, stationary fallback, moving-target selection and UI/non-GUID attribution guard. A Sprint in-game report must check fresh sessions only and identify `packet` versus `native_fallback`; the mere UI hint is not a successful theft.
+
+## Packet-only 200ms experimental TEST (after report #19)
+
+This user-requested A/B candidate restores the earlier Sprint phase 2
+decision, result and queue logic from exact source commit 11b6927f,
+replacing only the 900ms unknown-result deadline with 200ms and removing
+the native cast path. The host submits Pick Pocket ONLY via the audited
+SendPacket ABI: missing acknowledgement never selects an alternate
+transport. A 200ms result deadline is an unverified and risky experiment:
+prior in-game sessions routinely observed wallet/loot signals 250-360ms
+after submission. A timed-out cast may have succeeded on the server;
+the engine must never classify an unknown result as confirmed failure
+or successful theft. On the next exact-SHA report compare packet-only
+casts, result_timeout counts, repeated GUIDs and actual gold changes.
+Do not promote this candidate to stable without in-game confirmation.

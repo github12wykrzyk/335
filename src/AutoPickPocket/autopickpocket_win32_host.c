@@ -36,8 +36,8 @@ static uint32_t g_last_cast_ms,g_last_result_ms,g_inflight_attempt;
 static uint32_t g_log_session;
 static unsigned g_ui_category,g_ui_count;
 static uint8_t g_packet_cast_count;
-static unsigned g_native_failover,g_packet_unanswered,g_last_submitted_native;
-static uint32_t g_packet_nonce,g_packet_started_ms;
+/* No alternate transport: every accepted cast must use SendPacket. */
+static uint32_t g_packet_nonce;
 static PpGuid g_packet_guid;
 static int valid_memory(const void *p,SIZE_T length) {
     MEMORY_BASIC_INFORMATION m;
@@ -279,48 +279,34 @@ static int usable(void *ctx,uint32_t spell_id) {
 }
 static int cast_guid(void *ctx,uintptr_t va,uint32_t spell,PpGuid target,uint32_t attempt_id) {
     typedef void (__cdecl *send_fn)(Pp335OutboundDataStore *);
-    typedef void (__cdecl *native_fn)(uint32_t,uint32_t,uint32_t,uint32_t,uint32_t);
     Pp335OutboundDataStore packet;
     uint8_t bytes[PP335_CAST_PACKET_CAP];
     size_t count=0u;
-    int submitted=0,using_native=(int)g_native_failover;
+    int submitted=0;
     (void)ctx;
     if(!is_game_thread() || va!=PP12340_CAST_GUID_VA ||
        spell!=PP335_PICK_POCKET_SPELL || (target.lo|target.hi)==0u ||
        !attempt_id || !g_policy.begin_attempt || !g_policy.end_attempt ||
        !g_policy.spell_usable ||
        g_policy.spell_usable(g_policy.context,spell)!=1)return 0;
-    if(!using_native){
-        if(!packet_sender_abi() || !packet_session_ready())return 0;
-        count=pp335_build_cast_packet(bytes,sizeof(bytes),
-                  ++g_packet_cast_count,target.lo,target.hi);
-        if(count<15u || count>sizeof(bytes))return 0;
-        memset(&packet,0,sizeof(packet));
-        packet.vtable=PP335_CDATASTORE_VTABLE;
-        packet.buffer=bytes;
-        packet.alloc=(uint32_t)sizeof(bytes);
-        packet.size=(uint32_t)count;
-    }
+    if(!packet_sender_abi() || !packet_session_ready())return 0;
+    count=pp335_build_cast_packet(bytes,sizeof(bytes),
+              ++g_packet_cast_count,target.lo,target.hi);
+    if(count<15u || count>sizeof(bytes))return 0;
+    memset(&packet,0,sizeof(packet));
+    packet.vtable=PP335_CDATASTORE_VTABLE;
+    packet.buffer=bytes;
+    packet.alloc=(uint32_t)sizeof(bytes);
+    packet.size=(uint32_t)count;
     if(g_policy.begin_attempt(g_policy.context,target,attempt_id)!=1)return 0;
-    if(using_native){
-        /* Audited five-argument GUID cast: never submit both paths. */
-        __try{
-            ((native_fn)va)(spell,0u,target.lo,target.hi,0u);
-            submitted=1;
-        }__except(EXCEPTION_EXECUTE_HANDLER){submitted=0;}
-    }else{
-        __try{
-            ((send_fn)PP335_SEND_VA)(&packet);
-            submitted=1;
-        }__except(EXCEPTION_EXECUTE_HANDLER){submitted=0;}
-        if(submitted){
-            g_packet_nonce=attempt_id;
-            g_packet_guid=target;
-            g_packet_started_ms=(uint32_t)GetTickCount();
-        }
-    }
-    if(submitted)g_last_submitted_native=(unsigned)using_native;
-    else g_policy.end_attempt(g_policy.context,target,attempt_id);
+    __try{
+        ((send_fn)PP335_SEND_VA)(&packet);
+        submitted=1;
+    }__except(EXCEPTION_EXECUTE_HANDLER){submitted=0;}
+    if(submitted){
+        g_packet_nonce=attempt_id;
+        g_packet_guid=target;
+    }else g_policy.end_attempt(g_policy.context,target,attempt_id);
     return submitted;
 }
 static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id);
@@ -333,26 +319,17 @@ static PpResult result(void *ctx,PpGuid guid,uint32_t attempt_id) {
        g_packet_guid.lo==guid.lo && g_packet_guid.hi==guid.hi &&
        outcome!=PP_RESULT_PENDING && outcome!=PP_RESULT_UI_RANGE_HINT){
         g_packet_nonce=0u;
-        g_packet_unanswered=0u;
     }
     return outcome;
 }
 static void end_attempt(void *ctx,PpGuid guid,uint32_t attempt_id) {
     (void)ctx;
     if(!is_game_thread())return;
-    /* Only submitted and timed-out exact GUID+nonce may trigger failover. */
-    if(!g_native_failover && g_packet_nonce==attempt_id &&
-       g_packet_guid.lo==guid.lo && g_packet_guid.hi==guid.hi){
-        if((uint32_t)(GetTickCount()-g_packet_started_ms)>=
-           PP_RESULT_TIMEOUT_MS-80u){
-            if(++g_packet_unanswered>=2u){
-                g_native_failover=1u;
-                g_packet_unanswered=2u;
-                event(NULL,PP_EVENT_PACKET_FALLBACK,guid,attempt_id);
-            }
-        }
+    /* Never use missing spell acknowledgement to change transport.
+     * Release only this exact nonce; the next cast stays packet-only. */
+    if(g_packet_nonce==attempt_id &&
+       g_packet_guid.lo==guid.lo && g_packet_guid.hi==guid.hi)
         g_packet_nonce=0u;
-    }
     if(g_policy.end_attempt)
         g_policy.end_attempt(g_policy.context,guid,attempt_id);
 }
@@ -383,7 +360,6 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
         g_inflight_attempt=attempt_id;
     } else if((kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
                kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
-               kind==PP_EVENT_FAST_RELEASE ||
                (kind==PP_EVENT_INELIGIBLE || kind==PP_EVENT_MONEY_SUCCESS ||
                 kind==PP_EVENT_OUT_OF_RANGE || kind==PP_EVENT_LINE_OF_SIGHT ||
                 kind==PP_EVENT_NOT_STEALTHED || kind==PP_EVENT_NOT_READY ||
@@ -440,11 +416,9 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_CAST_REJECTED: reason="cast_rejected_unknown";break;
     case PP_EVENT_PREFETCH_ONLY: reason="candidates_outside_cast_range";break;
     case PP_EVENT_LOCAL_RANGE_REJECT: reason="local_range_precheck_rejected";break;
-    case PP_EVENT_PACKET_FALLBACK: reason="packet_no_ack_native_fallback";break;
     case PP_EVENT_EMPTY: reason="no_pockets";break;
     case PP_EVENT_RETRY: reason="temporary_failure";break;
-    case PP_EVENT_TIMEOUT: reason="unconfirmed_result_560ms";break;
-    case PP_EVENT_FAST_RELEASE: reason="unconfirmed_early_release_old_guid_outside_range";break;
+    case PP_EVENT_TIMEOUT: reason="result_timeout";break;
     case PP_EVENT_INELIGIBLE: reason="permanent_failure";break;
     case PP_EVENT_GAVE_UP: reason="retry_budget_exhausted";break;
     case PP_EVENT_NOT_CASTABLE: reason="not_castable";break;
@@ -477,8 +451,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
        (unsigned long)next_wait,
        g_adapter.engine.last_selection_forward,
        g_adapter.engine.last_selection_ready,
-       g_last_submitted_native ? "native_fallback" : "packet",
-       g_packet_unanswered,g_ui_count);
+       "packet",0u,g_ui_count);
     if(n>0)WriteFile(file,line,(DWORD)n,&ignored,NULL);
     CloseHandle(file);
 }

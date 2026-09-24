@@ -162,33 +162,6 @@ static void refresh_snapshot(PpEngine *e,uint32_t now) {
     count=e->api.scan(e->api.ctx,e->queue,PP_SCAN_CAP);
     e->queue_count=count>PP_SCAN_CAP ? PP_SCAN_CAP : count;
 }
-/* Old result remains UNKNOWN: use a fresh native snapshot of exact GUID
- * outside cast radius and another ready, unblocked GUID as release evidence. */
-static int can_fast_release(const PpEngine *e,uint32_t now) {
-    size_t i;
-    unsigned old_outside=0u,other_ready=0u;
-    if((uint32_t)(now-e->queue_built_ms)>PP_SCAN_INTERVAL_MS)
-        return 0;
-    for(i=0u;i<e->queue_count;++i) {
-        const PpTarget *t=&e->queue[i];
-        if(same(t->guid,e->active)) {
-            if(t->eligible==2u)old_outside=1u;
-        } else if(t->eligible==1u && nonzero(t->guid)) {
-            unsigned n;
-            int blocked=0;
-            for(n=0u;n<PP_HISTORY_CAP;++n){
-                const PpHistory *h=&e->history[n];
-                if(h->present && same(h->guid,t->guid) &&
-                   (h->terminal || h->attempts>=PP_MAX_ATTEMPTS_PER_GUID ||
-                    !deadline_reached(now,h->blocked_until_ms))) {
-                    blocked=1;break;
-                }
-            }
-            if(!blocked)other_ready=1u;
-        }
-    }
-    return old_outside && other_ready;
-}
 void pp_tick(PpEngine *engine, uint32_t now) {
     PpTarget best = {0}; /* MSVC /W4: initialized even on the no-candidate path. */
     size_t i;
@@ -264,21 +237,9 @@ void pp_tick(PpEngine *engine, uint32_t now) {
         case PP_RESULT_PENDING: break;
         default: return; /* unknown result fails closed */
         }
-        if ((uint32_t)(now-engine->started_ms)>=PP_RESULT_EARLY_RELEASE_MS &&
-            can_fast_release(engine,now)) {
-            /* Cancels the exact nonce, never labels the prior GUID looted. */
-            if (engine->api.end_attempt)
-                engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
-            failure(engine,engine->active,now,PP_TIMEOUT_DELAY_MS,
-                    PP_EVENT_FAST_RELEASE);
-            ++engine->timeouts;
-            engine->active_valid=0u;
-            if (engine->probe_mode) {engine->enabled=0u;return;}
-            goto scan_next;
-        }
         if ((uint32_t)(now-engine->started_ms) < PP_RESULT_TIMEOUT_MS) return;
-        /* Maximum unknown-result wait is 560ms, never an invented success.
-         * Release exact nonce before attempting another GUID in this pulse. */
+        /* Experimental 200ms unknown-result deadline. The old spell is
+         * never counted as success and its exact nonce is cancelled. */
         if (engine->api.end_attempt)
             engine->api.end_attempt(engine->api.ctx,engine->active,engine->active_attempt_id);
         failure(engine,engine->active,now,PP_TIMEOUT_DELAY_MS,PP_EVENT_TIMEOUT);
