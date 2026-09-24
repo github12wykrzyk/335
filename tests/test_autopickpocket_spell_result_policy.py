@@ -98,7 +98,7 @@ class SpellAndResultTests(unittest.TestCase):
                       "return burst_result(guid,nonce,elapsed);",
                       "rec=_G.W335PP_BURST and _G.W335PP_BURST[dg]",
                       "_G.W335PP_BURST[_G.W335PP_G]={n=_G.W335PP_N",
-                      "t-rec.t>1.5","string.upper(src)==string.upper(UnitGUID('player'))",
+                      "t-rec.t>1.5","string.upper(src)~=string.upper(UnitGUID('player'))",
                       "rec.s='1'","rec.f=why=='U' and 'F' or why",
                       "_G.W335PP_BURST['0X%08lX%08lX']",
                       "r.n=='%lu'",
