@@ -35,8 +35,8 @@
     {
       "component": "SharedGUI",
       "path": "runtime/WoW335GUI.dll",
-      "version": "0.1.0-shared-gui-test",
-      "sha256": "858e54caf5140a252fd3fc27a22b5dba41940fcf8cf77ccefe76b5cfc10c5de5",
+      "version": "0.1.1-managed-dll-list-test",
+      "sha256": "31e9d7c6eff171d76e59d9aae2d533110b2f6fa4d1deb10554b832f55e2da7e8",
       "arch": "x86",
       "canonical_source": "src/SharedGUI/w335_gui_win32.c",
       "depends_on": [],
