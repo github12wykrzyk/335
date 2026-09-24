@@ -59,7 +59,8 @@ typedef enum {
     PP_EVENT_NOT_STEALTHED = 20, PP_EVENT_NOT_READY = 21,
     PP_EVENT_CAST_REJECTED = 22,
     PP_EVENT_PREFETCH_ONLY = 23,
-    PP_EVENT_LOCAL_RANGE_REJECT = 24
+    PP_EVENT_LOCAL_RANGE_REJECT = 24,
+    PP_EVENT_LUA_EPOCH = 25 /* Lua observer recreated, including /reload */
 } PpEvent;
 typedef struct {
     void *ctx;

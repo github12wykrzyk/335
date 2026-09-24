@@ -34,6 +34,8 @@ typedef struct {
     void (*after_cast_submitted)(void *,PpGuid target,uint32_t attempt_id);
     uint64_t (*world_token)(void *);
 } Pp335Policy;
+/* Internal game-thread diagnostic marker, never called from the Lua VM. */
+void PP335_LogLuaObserverEpoch(void);
 PP335_EXPORT int __stdcall PP335_BindOnGameThread(const Pp335Policy *policy);
 PP335_EXPORT void __stdcall PP335_EnableOnGameThread(int enable);
 PP335_EXPORT void __stdcall PP335_TickOnGameThread(uint32_t now_ms);

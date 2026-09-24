@@ -76,6 +76,7 @@ static int value(const char *key,char *out,size_t n){
     return ok;
 }
 static void clear(void);
+static int observer(void);
 
 /* Crash #5: WoW's Lua VM rejects an external DLL C function pointer.
  * Never register a native DLL callback in the client's Lua runtime.
@@ -112,6 +113,7 @@ static void drop_pending(PpGuid guid,uint32_t nonce){
  * loader ticks even if several different UI messages arrive in one pulse. */
 static void report_ui_observation(void){
     static unsigned long previous[6];
+    static char previous_boot[48];
     static const char *keys[6]={
         "W335PP_UI_R","W335PP_UI_L","W335PP_UI_S",
         "W335PP_UI_C","W335PP_UI_E","W335PP_UI_U"
@@ -121,12 +123,21 @@ static void report_ui_observation(void){
         "ui_not_stealthed_unattributed","ui_not_ready_unattributed",
         "ui_no_pockets_unattributed","ui_other_error_unattributed"
     };
-    char sequence[32],line[320];
+    char sequence[32],line[320],boot[48];
     unsigned long seen,delta;
     unsigned i;
     wchar_t dir[MAX_PATH],path[MAX_PATH],*slash;
     HANDLE file;DWORD written;int n;
-    if(!is_owner())return;
+    if(!is_owner() || !observer())return;
+    /* The Lua VM discards _G and its error counters during /reload. Keep
+     * native history, but begin a fresh observer epoch and reset only the
+     * per-category counter baselines; never invent old UI errors. */
+    if(value("W335PP_BOOT",boot,sizeof(boot)) && boot[0] &&
+       strcmp(previous_boot,boot)!=0){
+        memset(previous,0,sizeof(previous));
+        strcpy_s(previous_boot,sizeof(previous_boot),boot);
+        PP335_LogLuaObserverEpoch();
+    }
     if(!GetModuleFileNameW(NULL,dir,MAX_PATH))return;
     slash=wcsrchr(dir,L'\\');
     if(!slash)return;
@@ -160,7 +171,7 @@ static void report_ui_observation(void){
 static int observer(void){
     char flag[8];
     /* A GUID-scoped combat-log outcome is different from a UI error without a GUID. */
-    return run("if not _G.W335PP_F then\n local f=CreateFrame('Frame')\n if f then\n  local function category(m)\n   if not m then return 'U' end\n   if SPELL_FAILED_TARGET_NO_POCKETS and m==SPELL_FAILED_TARGET_NO_POCKETS then return 'E' end\n   if SPELL_FAILED_OUT_OF_RANGE and m==SPELL_FAILED_OUT_OF_RANGE or ERR_OUT_OF_RANGE and m==ERR_OUT_OF_RANGE or SPELL_FAILED_TOO_CLOSE and m==SPELL_FAILED_TOO_CLOSE then return 'R' end\n   if SPELL_FAILED_LINE_OF_SIGHT and m==SPELL_FAILED_LINE_OF_SIGHT or SPELL_FAILED_VISION_OBSCURED and m==SPELL_FAILED_VISION_OBSCURED then return 'L' end\n   if SPELL_FAILED_ONLY_STEALTHED and m==SPELL_FAILED_ONLY_STEALTHED or SPELL_FAILED_NOT_STEALTHED and m==SPELL_FAILED_NOT_STEALTHED then return 'S' end\n   if SPELL_FAILED_NOT_READY and m==SPELL_FAILED_NOT_READY or SPELL_FAILED_SPELL_IN_PROGRESS and m==SPELL_FAILED_SPELL_IN_PROGRESS then return 'C' end\n   return 'U'\n  end\n  f:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')\n  f:RegisterEvent('LOOT_OPENED')\n  f:RegisterEvent('PLAYER_MONEY')\n  f:RegisterEvent('UI_ERROR_MESSAGE')\n  f:SetScript('OnEvent',function(self,ev,...)\n   local n=_G.W335PP_N\n   if not n or n=='0' then return end\n   local t=GetTime()\n   if ev=='COMBAT_LOG_EVENT_UNFILTERED' then\n    local _,kind,src,_,_,dst,_,_,id=...\n    if id~=921 or not src or not dst or not UnitGUID('player') or string.upper(src)~=string.upper(UnitGUID('player')) then return end\n    local dg=string.upper(dst)\n    local rec=_G.W335PP_BURST and _G.W335PP_BURST[dg]\n    if not rec or t-rec.t>1.5 then return end\n    if kind=='SPELL_CAST_SUCCESS' then\n     rec.s='1'\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_S=n\n      local selected=UnitGUID and UnitGUID('target')\n      if selected and ClearTarget and string.upper(selected)==dg then ClearTarget() end\n     end\n    elseif kind=='SPELL_CAST_FAILED' then\n     local why=category(select(12,...))\n     rec.f=why=='U' and 'F' or why\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=rec.f\n     end\n    end\n   elseif ev=='LOOT_OPENED' then\n    if _G.W335PP_T and t-_G.W335PP_T<=1.5 then _G.W335PP_O=n end\n   elseif ev=='PLAYER_MONEY' then\n    if _G.W335PP_T and t-_G.W335PP_T<=0.4 and GetMoney and _G.W335PP_MB and _G.W335PP_MB>=0 then\n     local balance=GetMoney()\n     if balance>_G.W335PP_MB then\n      _G.W335PP_M=n\n      _G.W335PP_MD=tostring(balance-_G.W335PP_MB)\n     end\n    end\n   elseif ev=='UI_ERROR_MESSAGE' then\n    local why=category(select(1,...))\n    _G.W335PP_UI_SEQ=tostring(tonumber(_G.W335PP_UI_SEQ or '0')+1)\n    _G.W335PP_UI_KIND=why\n    local key='W335PP_UI_'..why\n    _G[key]=tostring(tonumber(_G[key] or '0')+1)\n    _G.W335PP_UI_TIME=t\n    if _G.W335PP_T and t-_G.W335PP_T<=0.8 and _G.W335PP_INFLIGHT=='1' and why~='U' then\n     if why=='E' then _G.W335PP_E=n\n     else\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=why\n     end\n    end\n   end\n  end)\n  _G.W335PP_F=f\n  _G.W335PP_INIT='1'\n end\nend") && value("W335PP_INIT",flag,sizeof(flag)) &&
+    return run("if not _G.W335PP_F then\n local f=CreateFrame('Frame')\n if f then\n  local function category(m)\n   if not m then return 'U' end\n   if SPELL_FAILED_TARGET_NO_POCKETS and m==SPELL_FAILED_TARGET_NO_POCKETS then return 'E' end\n   if SPELL_FAILED_OUT_OF_RANGE and m==SPELL_FAILED_OUT_OF_RANGE or ERR_OUT_OF_RANGE and m==ERR_OUT_OF_RANGE or SPELL_FAILED_TOO_CLOSE and m==SPELL_FAILED_TOO_CLOSE then return 'R' end\n   if SPELL_FAILED_LINE_OF_SIGHT and m==SPELL_FAILED_LINE_OF_SIGHT or SPELL_FAILED_VISION_OBSCURED and m==SPELL_FAILED_VISION_OBSCURED then return 'L' end\n   if SPELL_FAILED_ONLY_STEALTHED and m==SPELL_FAILED_ONLY_STEALTHED or SPELL_FAILED_NOT_STEALTHED and m==SPELL_FAILED_NOT_STEALTHED then return 'S' end\n   if SPELL_FAILED_NOT_READY and m==SPELL_FAILED_NOT_READY or SPELL_FAILED_SPELL_IN_PROGRESS and m==SPELL_FAILED_SPELL_IN_PROGRESS then return 'C' end\n   return 'U'\n  end\n  f:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')\n  f:RegisterEvent('LOOT_OPENED')\n  f:RegisterEvent('PLAYER_MONEY')\n  f:RegisterEvent('UI_ERROR_MESSAGE')\n  f:SetScript('OnEvent',function(self,ev,...)\n   local n=_G.W335PP_N\n   if not n or n=='0' then return end\n   local t=GetTime()\n   if ev=='COMBAT_LOG_EVENT_UNFILTERED' then\n    local _,kind,src,_,_,dst,_,_,id=...\n    if id~=921 or not src or not dst or not UnitGUID('player') or string.upper(src)~=string.upper(UnitGUID('player')) then return end\n    local dg=string.upper(dst)\n    local rec=_G.W335PP_BURST and _G.W335PP_BURST[dg]\n    if not rec or t-rec.t>1.5 then return end\n    if kind=='SPELL_CAST_SUCCESS' then\n     rec.s='1'\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_S=n\n      local selected=UnitGUID and UnitGUID('target')\n      if selected and ClearTarget and string.upper(selected)==dg then ClearTarget() end\n     end\n    elseif kind=='SPELL_CAST_FAILED' then\n     local why=category(select(12,...))\n     rec.f=why=='U' and 'F' or why\n     if rec.n==n and dg==_G.W335PP_G then\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=rec.f\n     end\n    end\n   elseif ev=='LOOT_OPENED' then\n    if _G.W335PP_T and t-_G.W335PP_T<=1.5 then _G.W335PP_O=n end\n   elseif ev=='PLAYER_MONEY' then\n    if _G.W335PP_T and t-_G.W335PP_T<=0.4 and GetMoney and _G.W335PP_MB and _G.W335PP_MB>=0 then\n     local balance=GetMoney()\n     if balance>_G.W335PP_MB then\n      _G.W335PP_M=n\n      _G.W335PP_MD=tostring(balance-_G.W335PP_MB)\n     end\n    end\n   elseif ev=='UI_ERROR_MESSAGE' then\n    local why=category(select(1,...))\n    _G.W335PP_UI_SEQ=tostring(tonumber(_G.W335PP_UI_SEQ or '0')+1)\n    _G.W335PP_UI_KIND=why\n    local key='W335PP_UI_'..why\n    _G[key]=tostring(tonumber(_G[key] or '0')+1)\n    _G.W335PP_UI_TIME=t\n    if _G.W335PP_T and t-_G.W335PP_T<=0.8 and _G.W335PP_INFLIGHT=='1' and why~='U' then\n     if why=='E' then _G.W335PP_E=n\n     else\n      _G.W335PP_FAIL=n\n      _G.W335PP_FAIL_CODE=why\n     end\n    end\n   end\n  end)\n  _G.W335PP_BOOT=tostring(GetTime())\n  _G.W335PP_F=f\n  _G.W335PP_INIT='1'\n end\nend") && value("W335PP_INIT",flag,sizeof(flag)) &&
            !strcmp(flag,"1");
 }
 static PpResult classify_failure(char code){
