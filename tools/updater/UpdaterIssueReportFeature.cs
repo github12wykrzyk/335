@@ -642,7 +642,11 @@ namespace WoW335Updater
                             if (string.IsNullOrWhiteSpace(reason)) reason = "<unspecified>";
                             var reasonKey = variant + "." + reason;
                             if (!reasons.ContainsKey(reasonKey)) reasons[reasonKey] = 0;
-                            ++reasons[reasonKey];
+                            // UI observer batches identical global messages between ticks.
+                            // Count observations, not just the single JSONL batch record.
+                            var multiplicity = reason.StartsWith("ui_", StringComparison.Ordinal)
+                                ? (int)Math.Max(1L, Math.Min(1000000L, GetLong(record, "count_since_poll"))) : 1;
+                            reasons[reasonKey] += multiplicity;
                             var session = GetString(record, "session_id");
                             if (string.IsNullOrWhiteSpace(session)) session = "legacy-session-unknown";
                             var group = variant + "/" + session;
@@ -653,7 +657,7 @@ namespace WoW335Updater
                                 sessionReasons.Add(group, counts);
                             }
                             if (!counts.ContainsKey(reason)) counts.Add(reason, 0);
-                            ++counts[reason];
+                            counts[reason] += multiplicity;
                             var guidLo = GetLong(record, "guid_lo");
                             var guidHi = GetLong(record, "guid_hi");
                             if (guidLo == 0 && guidHi == 0) continue;
@@ -693,8 +697,20 @@ namespace WoW335Updater
                     int wallet = v.ContainsKey("wallet_loot_signal") ? v["wallet_loot_signal"] : 0;
                     int confirmed = v.ContainsKey("verified_result") ? v["verified_result"] : 0;
                     int reload = v.ContainsKey("lua_observer_reinitialized") ? v["lua_observer_reinitialized"] : 0;
-                    sb.AppendLine("Session " + session.Key + ": casts=" + casts + "; wallet/loot signals=" + wallet
-                        + "; cast-only results=" + confirmed + "; Lua observer epochs=" + reload + ".");
+                    var separator = session.Key.IndexOf('/');
+                    var prefix = separator < 0 ? session.Key + ":" :
+                        session.Key.Substring(0, separator) + ":" + session.Key.Substring(separator + 1) + ":";
+                    var distinctLootGuids = walletGuids.Count(x => x.StartsWith(prefix, StringComparison.Ordinal));
+                    var distinctCastGuids = castGuids.Count(x => x.StartsWith(prefix, StringComparison.Ordinal));
+                    int uiRange = v.ContainsKey("ui_out_of_range_unattributed") ? v["ui_out_of_range_unattributed"] : 0;
+                    int castRange = v.ContainsKey("out_of_range") ? v["out_of_range"] : 0;
+                    sb.AppendLine("Session " + session.Key + ": casts=" + casts
+                        + "; distinct attempted GUID=" + distinctCastGuids
+                        + "; wallet/loot signals=" + wallet
+                        + "; distinct indicative loot GUID=" + distinctLootGuids
+                        + "; cast-only results=" + confirmed + "; Lua observer epochs=" + reload
+                        + "; UI out-of-range (unattributed)=" + uiRange
+                        + "; attempt out-of-range=" + castRange + ".");
                 }
                 sb.AppendLine("WARNING: verified_result verifies the cast, not inventory loot. "
                     + "wallet_loot_signal does not independently prove GUID attribution. "
