@@ -675,7 +675,7 @@ static void drive(IDirect3DDevice9 *device) {
         unsigned painted=esp112_frame_draw(device,frame_labels,frame_count);
         g_frame_drawn_labels+=painted;
         ++g_frame_renders;
-        if (frame_count && !painted) {
+        if (frame_count && !painted && !esp112_frame_draw_success()) {
             ++g_frame_draw_failures;
             if (++g_frame_draw_fail_streak>=3u) {
                 /* Never oscillate between a broken D3D renderer and GDI

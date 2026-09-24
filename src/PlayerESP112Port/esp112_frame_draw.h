@@ -11,7 +11,8 @@ typedef struct {
     unsigned kind,faction,health,max_health,distance_yards;
 } Esp112FrameLabel;
 /* A SINGLE state-isolated submission for all labels during game's
- * verified D3D9 EndScene. No cached D3DPOOL_DEFAULT resources, reset safe. */
+ * verified D3D9 Present. No cached D3DPOOL_DEFAULT resources, reset safe. */
 unsigned esp112_frame_draw(IDirect3DDevice9 *device,
                            const Esp112FrameLabel *labels,size_t count);
+unsigned esp112_frame_draw_success(void);
 #endif

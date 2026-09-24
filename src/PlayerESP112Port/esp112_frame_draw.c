@@ -14,6 +14,7 @@ static EspVertex vertices[VCAP];
 static size_t used;
 static IDirect3DDevice9 *current;
 static unsigned failed;
+static unsigned last_submit_ok;
 static int flush(void) {
     if (failed || !used) return failed?0:1;
     if (FAILED(IDirect3DDevice9_DrawPrimitiveUP(current,D3DPT_TRIANGLELIST,
@@ -119,6 +120,7 @@ unsigned esp112_frame_draw(IDirect3DDevice9 *device,
     D3DVIEWPORT9 vp;
     size_t i;
     unsigned drawn=0u;
+    last_submit_ok=0u;
     if (!device || (!labels && count) ||
         FAILED(IDirect3DDevice9_GetViewport(device,&vp)) ||
         vp.Width<64u || vp.Height<64u || vp.Width>16384u ||
@@ -176,8 +178,13 @@ unsigned esp112_frame_draw(IDirect3DDevice9 *device,
         ++drawn;
     }
     if (!flush()) drawn=0u;
-    if (FAILED(IDirect3DStateBlock9_Apply(state))) drawn=0u;
+    if (FAILED(IDirect3DStateBlock9_Apply(state))) {
+        drawn=0u;
+        failed=1u;
+    }
     IDirect3DStateBlock9_Release(state);
+    last_submit_ok=!failed;
     current=NULL;used=0u;
     return drawn;
 }
+unsigned esp112_frame_draw_success(void) {return last_submit_ok;}
