@@ -23,9 +23,11 @@ int main(void) {
     used=0u;
     assert(esp112_slots_reserve(&slots,0xabcdu,used)==a);
     used|=UINT32_C(1)<<a;
-    assert(esp112_slots_reserve(&slots,0x9999u,used)==b);
+    /* Spare slots are allocated before recycling an offscreen GUID. */
+    assert(esp112_slots_reserve(&slots,0x9999u,used)==3);
     assert(slots.guid[a]==0xabcdu);
-    assert(slots.guid[b]==0x9999u);
+    assert(slots.guid[b]==0xdef0u);
+    assert(slots.guid[3]==0x9999u);
     esp112_slots_reset(&slots);
     esp112_slots_next_frame(&slots);
     assert(esp112_slots_reserve(&slots,0xabcdu,0u)==0);
