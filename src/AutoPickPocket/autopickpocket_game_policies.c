@@ -110,10 +110,10 @@ static void report_ui_observation(void){
     if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug",dir)<0)return;
     if(!CreateDirectoryW(path,NULL) && GetLastError()!=ERROR_ALREADY_EXISTS)
         return;
-    if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug\\AutoPickPocket.jsonl",dir)<0)
+    if(swprintf_s(path,MAX_PATH,L"%ls\\.wow335_debug\\AutoPickPocket.packet.jsonl",dir)<0)
         return;
     n=sprintf_s(line,sizeof(line),
-        "{\"module\":\"AutoPickPocket\",\"ms\":%lu,"
+        "{\"module\":\"AutoPickPocket\",\"variant\":\"packet\",\"ms\":%lu,"
         "\"event\":25,\"reason\":\"%s\","
         "\"attempt\":0,\"guid_lo\":0,\"guid_hi\":0,"
         "\"guid_attribution\":\"none\","
