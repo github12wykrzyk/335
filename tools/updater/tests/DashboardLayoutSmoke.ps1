@@ -80,7 +80,7 @@ try {
     $expected=@('PP pakiety','PP natywny','main','work')
     for ($i=0; $i -lt 4; $i++) {
         if ($badges.Controls[$i].Controls[0].Text -notlike "$($expected[$i])*") {
-            throw "Incorrect CI status priority at $i: $($badges.Controls[$i].Controls[0].Text)"
+            throw "Incorrect CI status priority at ${i}: $($badges.Controls[$i].Controls[0].Text)"
         }
     }
     if ($menu.Items[0].Tag -ne 'feature/new-c') {
