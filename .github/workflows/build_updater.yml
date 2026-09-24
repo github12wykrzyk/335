@@ -110,6 +110,7 @@ jobs:
             tools\updater\UpdaterSafety.cs `
             tools\updater\UpdaterNetworkCompat.cs `
             tools\updater\UpdaterProcessGuard.cs `
+            tools\updater\UpdaterGameProcessGuard.cs `
             tools\updater\UpdaterRealmlistFeature.cs `
             tools\updater\UpdaterMaintenanceFeature.cs `
             tools\updater\UpdaterIssueReportFeature.cs `
@@ -205,6 +206,12 @@ jobs:
         run: |
           & "$env:windir\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File tools\updater\tests\AutoLootDiagSmoke.ps1 -UpdaterExe dist\WoW335Updater.exe -ExpectedSha '${{ github.sha }}'
           if ($LASTEXITCODE -ne 0) { throw "AutoLoot diagnostic updater smoke test failed" }
+
+      - name: Verify update closes the selected game only
+        shell: pwsh
+        run: |
+          & "$env:windir\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File tools\updater\tests\UpdateClosesGameSmoke.ps1 -UpdaterExe dist\WoW335Updater.exe
+          if ($LASTEXITCODE -ne 0) { throw "Game shutdown updater smoke test failed" }
 
       - name: Copy updater README
         shell: pwsh

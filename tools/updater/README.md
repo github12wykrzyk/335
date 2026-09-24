@@ -88,3 +88,14 @@ W remisie work/main/PP mają stałą kolejność, następnie nazwy alfabetycznie
 Usunięte branche znikają po kolejnym poprawnym odczycie listy GitHub.
 Zmiana sortowania nie przełącza wybranego brancha gry; wynik CI
 nie jest dowodem gotowej paczki ani działania w grze.
+
+## 0.3.19-335 — zamykanie WoW przed aktualizacją
+
+" Aktualizuj " i " Aktualizuj i uruchom " zamykają procesy gry uruchomione
+z wybranego katalogu przed pobieraniem i ponownie kontrolują je tuż przed
+instalacją. Najpierw używają normalnego zamknięcia okna (do 4 sekund);
+potem, gdy jest to konieczne, wymuszają zamknięcie i czekają na koniec
+procesu. Brak możliwości zamknięcia blokuje aktualizację. Inna
+instalacja WoW, updater i natywny loader nie są zamykane. Obsługiwany
+jest również EXE o nazwie zapisanej w lokalnym manifeście. Test CI
+uruchamia rzeczywiste procesy x86 w dwóch niezależnych katalogach.

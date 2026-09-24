@@ -319,11 +319,10 @@ namespace WoW335Updater
             try
             {
                 ValidateInputs();
-                if (IsGameRunning(gameDir.Text.Trim()))
-                    throw new InvalidOperationException("Gra działa z tego katalogu. Zamknij WoW przed aktualizacją.");
-
                 SaveConfig(false);
-                SetBusy(true, "Pobieranie najnowszej paczki...");
+                SetBusy(true, "Zamykanie uruchomionej gry...");
+                await CloseGameBeforeUpdatingAsync(gameDir.Text.Trim());
+                status.Text = "Pobieranie najnowszej paczki...";
                 lastRemote = await FindLatestPackageAsync();
                 Show335Remote(lastRemote.Branch, lastRemote.HeadSha, lastRemote.RunId);
                 Log("Pobieram artifact: " + lastRemote.ArtifactName);
@@ -338,6 +337,8 @@ namespace WoW335Updater
                     throw new InvalidOperationException("SHA256 wewnętrznej paczki nie zgadza się z candidate_metadata.json.");
 
                 Log("SHA256 paczki OK: " + gotPackageSha.Substring(0, 16) + "...");
+                // Guard again: WoW may have been reopened while downloading.
+                await CloseGameBeforeUpdatingAsync(gameDir.Text.Trim());
                 var result = ApplyPackage(innerBytes, lastRemote);
                 // The optional diagnostic addon is outside the game DLL manifest.
                 // Replace only an untouched updater-managed installation, with backup.
@@ -879,20 +880,18 @@ namespace WoW335Updater
             }
         }
 
-        private static bool IsGameRunning(string root)
+        private async Task CloseGameBeforeUpdatingAsync(string root)
         {
-            var fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            foreach (var process in Process.GetProcesses())
-            {
-                try
-                {
-                    var file = process.MainModule == null ? null : process.MainModule.FileName;
-                    if (!string.IsNullOrWhiteSpace(file) && Path.GetFullPath(file).StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)) return true;
-                }
-                catch { }
-                finally { process.Dispose(); }
-            }
-            return false;
+            var installedExeName = GetString(ReadInstalledState(), "exe_name");
+            var stopped = await GameProcessGuard.StopForUpdateAsync(root, installedExeName, Log);
+            if (stopped > 0) Log("Automatycznie zamknięto procesy gry: " + stopped + ".");
+            if (GameProcessGuard.IsRunning(root, installedExeName))
+                throw new InvalidOperationException("Gra nadal działa. Aktualizacja została wstrzymana.");
+        }
+
+        private bool IsGameRunning(string root)
+        {
+            return GameProcessGuard.IsRunning(root, GetString(ReadInstalledState(), "exe_name"));
         }
 
         private static void ReplaceFile(string temp, string destination)
