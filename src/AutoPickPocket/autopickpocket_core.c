@@ -198,6 +198,20 @@ void pp_tick(PpEngine *engine, uint32_t now) {
             engine->active_valid=0u;
             if (engine->probe_mode) {engine->enabled=0u;return;}
             goto scan_next;
+        case PP_RESULT_OUT_OF_RANGE:
+        case PP_RESULT_LINE_OF_SIGHT:
+        case PP_RESULT_NOT_STEALTHED:
+        case PP_RESULT_NOT_READY:
+        case PP_RESULT_CAST_REJECTED:
+            failure(engine,engine->active,now,PP_RETRY_DELAY_MS,
+                outcome==PP_RESULT_OUT_OF_RANGE ? PP_EVENT_OUT_OF_RANGE :
+                outcome==PP_RESULT_LINE_OF_SIGHT ? PP_EVENT_LINE_OF_SIGHT :
+                outcome==PP_RESULT_NOT_STEALTHED ? PP_EVENT_NOT_STEALTHED :
+                outcome==PP_RESULT_NOT_READY ? PP_EVENT_NOT_READY : PP_EVENT_CAST_REJECTED);
+            ++engine->retries;
+            engine->active_valid=0u;
+            if (engine->probe_mode) {engine->enabled=0u;return;}
+            goto scan_next;
         case PP_RESULT_RETRYABLE:
             failure(engine,engine->active,now,PP_RETRY_DELAY_MS,PP_EVENT_RETRY);
             ++engine->retries;
@@ -249,7 +263,7 @@ scan_next:
         }
     }
     if (!found) {
-        idle_event(engine,has_prefetch ? PP_EVENT_NO_CANDIDATES :
+        idle_event(engine,has_prefetch ? PP_EVENT_PREFETCH_ONLY :
                    PP_EVENT_ALL_BLOCKED,now);
         return;
     }
