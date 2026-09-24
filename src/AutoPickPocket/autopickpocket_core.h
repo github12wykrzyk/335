@@ -14,6 +14,9 @@ extern "C" {
 #define PP_QUEUE_TTL_MS 160u
 #define PP_RESULT_EARLY_RELEASE_MS 420u /* only when exact GUID leaves reach and another target is ready */
 #define PP_RESULT_TIMEOUT_MS 560u /* unknown is never reported as success */
+#if PP_RESULT_EARLY_RELEASE_MS >= PP_RESULT_TIMEOUT_MS
+#error PP fast release must precede the bounded unknown-result deadline
+#endif
 #define PP_RETRY_DELAY_MS 800u
 #define PP_RANGE_RETRY_DELAY_MS 200u /* correlated GUID or independently checked UI range hint */
 #define PP_LOCAL_RANGE_BACKOFF_MS 250u
