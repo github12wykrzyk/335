@@ -17,7 +17,7 @@ if (-not (Test-Path $cmd)) { throw 'x86 cmd.exe required for process smoke test'
 [IO.File]::Copy($cmd, (Join-Path $other 'WoW.exe'))
 $processes = New-Object 'System.Collections.Generic.List[System.Diagnostics.Process]'
 function Start-TestGame([string]$path) {
-    $p = Start-Process -FilePath $path -ArgumentList '/c ping -n 60 127.0.0.1 >nul' -WorkingDirectory (Split-Path $path) -WindowStyle Hidden -PassThru
+    $p = Start-Process -FilePath $path -ArgumentList '/c ping -n 60 127.0.0.1 >nul' -WorkingDirectory $env:RUNNER_TEMP -WindowStyle Hidden -PassThru
     $processes.Add($p)
     Start-Sleep -Milliseconds 250
     if ($p.HasExited) { throw "Test fixture exited prematurely: $path" }
@@ -61,6 +61,10 @@ finally {
             if (-not $p.HasExited) { $p.Kill(); $p.WaitForExit(5000) | Out-Null }
         } finally { $p.Dispose() }
     }
-    if (Test-Path $root) { Remove-Item -LiteralPath $root -Recurse -Force }
-    if (Test-Path $other) { Remove-Item -LiteralPath $other -Recurse -Force }
+    foreach ($folder in @($root, $other)) {
+        if (Test-Path $folder) {
+            try { Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction Stop }
+            catch { Write-Warning ("Fixture cleanup: " + $_.Exception.Message) }
+        }
+    }
 }
