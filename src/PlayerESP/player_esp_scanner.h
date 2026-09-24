@@ -15,6 +15,7 @@
 #define ESP335_OBJ_GUID ((uintptr_t)0x30u)
 #define ESP335_OBJ_NEXT ((uintptr_t)0x3Cu)
 #define ESP335_OBJ_PLAYER 4u
+#define ESP335_OBJ_NPC 3u
 
 typedef struct {
     void *context;
@@ -32,6 +33,8 @@ typedef struct {
     Esp335ScannerHost host;
     uint32_t game_thread;
     unsigned bound;
+    unsigned seen_players, seen_npcs, accepted_players, accepted_npcs;
+    unsigned position_failures, metadata_failures, scan_failures;
 } Esp335Scanner;
 
 int esp335_scanner_bind(Esp335Scanner *, const Esp335ScannerHost *);

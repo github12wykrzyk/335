@@ -6,7 +6,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ESP335_MAX_PLAYERS 256u
+#define ESP335_MAX_PLAYERS 512u
+#define ESP335_KIND_NPC 3u
+#define ESP335_KIND_PLAYER 4u
 #define ESP335_HORDE 1u
 #define ESP335_ALLIANCE 2u
 #define ESP335_BG_OPPONENT 2u
@@ -16,6 +18,7 @@ typedef struct { float x, y, z; } Esp335Vec3;
 typedef struct {
     uint64_t guid;
     Esp335Vec3 position;
+    unsigned kind;          /* 3 NPC, 4 Player; 0 legacy Player */
     unsigned faction;       /* 0 unknown, 1 Horde, 2 Alliance */
     unsigned relation;      /* 0 unknown, 1 friendly, 2 hostile */
     unsigned bg_team;       /* 0 unknown, 1 teammate, 2 opponent */
@@ -28,7 +31,8 @@ typedef struct {
     unsigned show_hostile;
     unsigned show_bg_opponents;
     float max_distance;     /* yards; 0 means no distance restriction */
-    unsigned show_all; /* when metadata are UNKNOWN, still display players */
+    unsigned show_all; /* player ALL; legacy value */
+    unsigned show_players, show_npc, show_npc_hostile, show_unknown;
 } Esp335Filter;
 
 typedef struct {
@@ -42,7 +46,7 @@ typedef struct {
 typedef struct {
     uint64_t guid, world_epoch;
     float screen_x, screen_y, depth, distance;
-    unsigned health, max_health, level, class_id;
+    unsigned health, max_health, level, class_id, kind;
 } Esp335Label;
 
 typedef struct {

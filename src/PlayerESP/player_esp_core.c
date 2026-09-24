@@ -22,6 +22,7 @@ int esp335_push(Esp335Core *core, const Esp335Player *p) {
     size_t i;
     if (!core || !core->frame_open || !p || !p->guid ||
         !finite3(p->position) || p->max_health < p->health ||
+        (p->kind && p->kind != ESP335_KIND_PLAYER && p->kind != ESP335_KIND_NPC) ||
         p->faction > ESP335_ALLIANCE || p->relation > ESP335_REL_HOSTILE ||
         p->bg_team > ESP335_BG_OPPONENT) return 0;
     for (i = 0; i < core->count; ++i) {
@@ -41,13 +42,22 @@ int esp335_eligible(const Esp335Player *p, const Esp335Filter *filter,
                     int in_bg) {
     unsigned faction_mask;
     if (!p || !filter || !p->guid) return 0;
+    if (p->kind == ESP335_KIND_NPC) {
+        return filter->show_npc ||
+            (filter->show_npc_hostile && p->relation == ESP335_REL_HOSTILE);
+    }
+    if (!filter->show_players && !filter->show_all &&
+        !filter->factions && !filter->show_hostile &&
+        !filter->show_bg_opponents) return 0;
     faction_mask = (p->faction == ESP335_HORDE) ? ESP335_HORDE :
                    (p->faction == ESP335_ALLIANCE) ? ESP335_ALLIANCE : 0u;
-    /* Opposing BG team is independent of faction or ordinary hostility. */
-    return filter->show_all || (in_bg && filter->show_bg_opponents &&
+    return filter->show_all ||
+           (in_bg && filter->show_bg_opponents &&
             p->bg_team == ESP335_BG_OPPONENT) ||
            (filter->show_hostile && p->relation == ESP335_REL_HOSTILE) ||
-           ((filter->factions & faction_mask) != 0u);
+           ((filter->factions & faction_mask) != 0u) ||
+           (filter->show_unknown && !faction_mask &&
+            p->relation == 0u && p->bg_team == 0u);
 }
 int esp335_project(const Esp335Camera *c, Esp335Vec3 p,
                    float *sx, float *sy, float *depth) {
@@ -101,6 +111,7 @@ size_t esp335_labels(const Esp335Core *core, const Esp335Camera *camera,
         out[n].max_health = p->max_health;
         out[n].level = p->level;
         out[n].class_id = p->class_id;
+        out[n].kind = p->kind ? p->kind : ESP335_KIND_PLAYER;
         ++n;
     }
     return n;

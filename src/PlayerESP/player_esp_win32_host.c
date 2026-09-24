@@ -129,7 +129,7 @@ static int metadata(void *ctx, uintptr_t object, Esp335Player *player) {
     if (!on_thread() || !player ||
         !read32(NULL, object + 0x08u, &desc) ||
         !read32(NULL, (uintptr_t)desc + 24u * 4u, &hp) ||
-        !read32(NULL, (uintptr_t)desc + 25u * 4u, &max_hp) ||
+        !read32(NULL, (uintptr_t)desc + 32u * 4u, &max_hp) ||
         !max_hp || hp > max_hp) return 0;
     player->health = hp;
     player->max_health = max_hp;

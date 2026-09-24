@@ -51,6 +51,8 @@ int esp335_scanner_collect(Esp335Scanner *s) {
         !read_guid(s, (uintptr_t)mgr + ESP335_MGR_LOCAL_GUID, &local_guid) ||
         !local_guid ||
         !read32(s, (uintptr_t)mgr + ESP335_MGR_FIRST, &obj)) goto invalid;
+    s->seen_players=s->seen_npcs=s->accepted_players=s->accepted_npcs=0;
+    s->position_failures=s->metadata_failures=0;
     esp335_reset(&next);
     if (!esp335_begin(&next, epoch)) goto invalid;
     /* 12340 object-list termination may use a tagged odd sentinel (1),
@@ -63,21 +65,26 @@ int esp335_scanner_collect(Esp335Scanner *s) {
             !read_guid(s, (uintptr_t)obj + ESP335_OBJ_GUID, &guid) ||
             !read32(s, (uintptr_t)obj + ESP335_OBJ_TYPE, &type))
             goto invalid;
-        if (guid && guid != local_guid && type == ESP335_OBJ_PLAYER) {
+        if (guid && guid != local_guid && (type == ESP335_OBJ_PLAYER || type == ESP335_OBJ_NPC)) {
             Esp335Player p;
+            if (type == ESP335_OBJ_PLAYER) ++s->seen_players;
+            else ++s->seen_npcs;
             Esp335Vec3 pos;
             memset(&p, 0, sizeof(p));
             if (s->host.position(s->host.context, obj, &pos) == 1) {
                 p.position = pos;
                 p.guid = guid;
+                p.kind = type;
                 /* Metadata callback must classify from the exact-client
                  * runtime, never guess faction from a cached appearance. */
                 if (s->host.player_metadata(s->host.context, obj, &p) == 1) {
-                    p.guid = guid; p.position = pos;
+                    p.guid = guid; p.position = pos; p.kind = type;
                     if (!esp335_push(&next, &p) &&
                         next.count < ESP335_MAX_PLAYERS) goto invalid;
-                }
-            }
+                    if (type == ESP335_OBJ_PLAYER) ++s->accepted_players;
+                    else ++s->accepted_npcs;
+                } else ++s->metadata_failures;
+            } else ++s->position_failures;
         }
         prev = obj;
         if (!read32(s, (uintptr_t)obj + ESP335_OBJ_NEXT, &next_obj))
@@ -90,6 +97,7 @@ int esp335_scanner_collect(Esp335Scanner *s) {
     s->snapshot = next; /* Publish only complete and coherent snapshots. */
     return 1;
 invalid:
+    ++s->scan_failures;
     esp335_reset(&s->snapshot); /* Never show a stale target after read failure. */
     return 0;
 }
