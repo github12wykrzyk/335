@@ -210,3 +210,34 @@ real successful robberies in burst mode. Compare actual in-game currency,
 server-correlated results, new pending/unknown counters, the lack of native
 fallback, and the observed inter-packet cadence for one exact candidate SHA.
 Do not infer in-game success from Windows x86 build or CI tests alone.
+
+## Range-exit stall remediation (report #21; isolated TEST)
+
+The exact-SHA in-game report #21 showed two repeated-GUID retry gaps of
+4188ms and 4094ms after unconfirmed results. The previously combined
+1600ms pending window and 2500ms unknown backoff could defer a GUID
+for over four seconds even when the player returned to cast range.
+
+A pending exact GUID confirmed by a fresh native scan outside the validated
+4yd radius is now released once at least 350ms has passed since submission,
+with its own nonce cancelled and only a 200ms GUID-local reentry backoff.
+The 350ms grace retains typical observed server ACKs (~170-313ms). No
+UI-only range message is attributed to a GUID, no attempt is declared
+successful or server-rejected merely because of geometry, and the
+number of actual packet submissions per GUID remains bounded.
+For targets still in cast reach or not independently rechecked out of
+range, unanswered result observation ends at 900ms and applies only a
+200ms GUID-local unknown backoff rather than 2500ms. Other ready GUIDs
+remain independent and require no waiting on these timers.
+
+Diagnostics distinguish pending_guid_left_range_nonblocking (observation),
+range_exit_cancelled_pending_short_backoff (nonce release) and
+burst_result_unknown_after_900ms (no conclusive server result). A late
+server result to an abandoned nonce cannot be counted as its success,
+and a reattempted identical GUID has limited ability to distinguish an
+extremely delayed old server combat-log event from a new one. If rapid
+retries cause duplicate casts or skipped loot in the exact candidate,
+restore the preceding SHA; no server cast success or real pocket loot
+is inferred from this source-only change. In-game testing must compare
+the interval from unconfirmed/out-of-range attempts to same-GUID reentry,
+as well as real wallet gain, fresh candidate availability and cast gaps.

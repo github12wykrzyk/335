@@ -238,18 +238,33 @@ static void burst_tick(PpEngine *e,uint32_t now) {
             p->valid=0u;--e->pending_count;
             continue;
         }
-        if(!p->outside_reported) {
-            for(j=0u;j<e->queue_count;++j)
-                if(same(e->queue[j].guid,p->guid) &&
-                   e->queue[j].eligible==2u){
-                    p->outside_reported=1u;
-                    emit(e,PP_EVENT_BURST_RANGE_EXIT,p->guid);
-                    break;
+        /* Current native geometry is per GUID; unlike UI_ERROR_MESSAGE it
+         * can justify releasing an unanswered attempt that left 4yd.
+         * Retain a short ACK grace, re-check the *current* snapshot and
+         * release the exact nonce without declaring cast failure/success.
+         * This never delays other GUIDs and has no 1.6+2.5s revisit lock. */
+        for(j=0u;j<e->queue_count;++j)
+            if(same(e->queue[j].guid,p->guid)){
+                if(e->queue[j].eligible==2u){
+                    if(!p->outside_reported){
+                        p->outside_reported=1u;
+                        emit(e,PP_EVENT_BURST_RANGE_EXIT,p->guid);
+                    }
+                    if((uint32_t)(now-p->started_ms)>=PP_BURST_RANGE_RELEASE_MS &&
+                       (uint32_t)(now-e->queue_built_ms)<=PP_SCAN_INTERVAL_MS){
+                        block(e,p->guid,now,PP_RANGE_RETRY_DELAY_MS,0);
+                        emit(e,PP_EVENT_BURST_RANGE_RELEASE,p->guid);
+                        if(e->api.end_attempt)
+                            e->api.end_attempt(e->api.ctx,p->guid,p->nonce);
+                        p->valid=0u;--e->pending_count;
+                    }
                 }
-        }
+                break;
+            }
+        if(!p->valid)continue;
         if((uint32_t)(now-p->started_ms)>=PP_BURST_OBSERVE_MS) {
             /* UNKNOWN, not a failed cast or a successfully looted NPC.
-             * Keep it away from immediate resend; do not block other GUIDs. */
+             * The short GUID backoff prevents a new multi-second lock. */
             block(e,p->guid,now,PP_BURST_UNKNOWN_BACKOFF_MS,0);
             ++e->timeouts;emit(e,PP_EVENT_BURST_EXPIRE,p->guid);
             if(e->api.end_attempt)

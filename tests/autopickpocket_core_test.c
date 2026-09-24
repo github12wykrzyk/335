@@ -5,7 +5,7 @@
 typedef struct {
     PpTarget t[4]; size_t n;
     PpResult result;
-    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[32], cast_ok;
+    PpGuid casted[16]; unsigned cast_n, permitted, scans, events[40], cast_ok;
     PpGuid local_range_guid;
     unsigned local_range_count;
     PpGuid burst_result_guid;
@@ -315,12 +315,14 @@ static int test_burst_unknown_is_not_false_success(void){
  e.burst_enabled=1u;pp_enable(&e,1);
  pp_tick(&e,0u);pp_tick(&e,80u);
  CHECK(e.pending_count==2u && e.successes==0u);
- pp_tick(&e,1599u);CHECK(e.timeouts==0u);
- pp_tick(&e,1680u);
+ pp_tick(&e,899u);CHECK(e.timeouts==0u);
+ pp_tick(&e,980u);
  CHECK(e.timeouts==2u && e.pending_count==0u &&
        s.events[PP_EVENT_BURST_EXPIRE]==2u && e.successes==0u);
  s.burst_result_guid.lo=102u;s.burst_result=PP_RESULT_SUCCESS;
- pp_tick(&e,1760u);CHECK(e.successes==0u && s.cast_n==2u);
+ pp_tick(&e,1000u);CHECK(e.successes==0u && s.cast_n==2u);
+ pp_tick(&e,1180u);CHECK(e.successes==0u && s.cast_n==3u);
+ CHECK(s.casted[2].lo==102u); /* no 2500ms lockout */
  return 0;
 }
 static int test_burst_disable_cancels_pending(void){
@@ -332,4 +334,36 @@ static int test_burst_disable_cancels_pending(void){
  pp_reset(&e);pp_tick(&e,280u);CHECK(s.cast_n==3u);
  return 0;
 }
-int main(void){if(test_burst_disable_cancels_pending()||test_burst_unknown_is_not_false_success()||test_burst_local_range_skips_unsubmitted_guid()||test_burst_sends_next_guid_before_first_result()||test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}
+static int test_burst_range_exit_releases_only_correlated_nonce(void){
+ Stub s;PpEngine e;init(&s);s.n=1u;
+ s.t[0].guid.lo=102u;s.t[0].eligible=1u;s.t[0].distance_sq=1.0f;
+ CHECK(pp_init(&e,adapter(&s)));e.burst_enabled=1u;pp_enable(&e,1);
+ pp_tick(&e,0u);CHECK(s.cast_n==1u && e.pending_count==1u);
+ s.t[0].eligible=2u;s.t[0].distance_sq=25.0f;
+ pp_tick(&e,80u);
+ CHECK(e.pending_count==1u && s.events[PP_EVENT_BURST_RANGE_EXIT]==1u);
+ pp_tick(&e,340u);
+ CHECK(e.pending_count==1u && s.end_count==0u);
+ pp_tick(&e,350u);
+ CHECK(e.pending_count==0u && s.end_count==1u);
+ CHECK(s.end_guid.lo==102u && s.events[PP_EVENT_BURST_RANGE_RELEASE]==1u);
+ CHECK(e.successes==0u && e.timeouts==0u);
+ s.t[0].eligible=1u;s.t[0].distance_sq=1.0f;
+ pp_tick(&e,549u);CHECK(s.cast_n==1u);
+ pp_tick(&e,550u);
+ CHECK(s.cast_n==2u && s.casted[1].lo==102u && e.successes==0u);
+ return 0;
+}
+static int test_burst_range_exit_ignores_unattributed_hint_in_range(void){
+ Stub s;PpEngine e;init(&s);s.n=1u;
+ s.t[0].guid.lo=102u;
+ CHECK(pp_init(&e,adapter(&s)));e.burst_enabled=1u;pp_enable(&e,1);
+ pp_tick(&e,0u);
+ s.result=PP_RESULT_UI_RANGE_HINT;
+ pp_tick(&e,350u);
+ CHECK(s.end_count==0u && e.pending_count==1u);
+ CHECK(s.events[PP_EVENT_BURST_RANGE_RELEASE]==0u);
+ CHECK(e.successes==0u);
+ return 0;
+}
+int main(void){if(test_burst_range_exit_ignores_unattributed_hint_in_range()||test_burst_range_exit_releases_only_correlated_nonce()||test_burst_disable_cancels_pending()||test_burst_unknown_is_not_false_success()||test_burst_local_range_skips_unsubmitted_guid()||test_burst_sends_next_guid_before_first_result()||test_motion_prefers_front_target_only_with_valid_direction()||test_guid_correlated_range_backoff_is_200ms()||test_guarded_ui_range_hint_moves_to_other_guid()||test_local_out_of_range_skips_to_next_guid_same_pulse()||test_local_out_of_range_has_bounded_pulse_work()||test_timeout_releases_matching_attempt_before_next_guid()||test_reset_and_refusal_release_only_own_nonce()||test_read_ahead_while_cast_pending_and_gcd()||test_prefetched_outside_range_never_submitted()||test_stale_queue_rebuilds_before_cast()||test_queue_dropped_on_disable_and_world_reset()||test_failed_or_timedout_npc_does_not_block_next_guid()||test_next_target_rescan_no_extra_tick()||test_selected_probe_is_single_shot()||test_probe_rejects_without_substituting()||test_session()||test_retry_and_timeout()||test_unconfirmed_results_bounded()||test_late_result_cannot_complete_new_attempt()||test_idle_diagnostics_are_sampled()||test_filter_and_wrap())return 1;puts("AutoPickPocket portable core tests: PASS");return 0;}

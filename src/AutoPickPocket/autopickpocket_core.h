@@ -15,9 +15,10 @@ extern "C" {
 #define PP_RESULT_TIMEOUT_MS 200u /* retained for the single-target probe only */
 #define PP_BURST_PENDING_CAP 32u
 #define PP_BURST_MIN_SEND_MS 80u /* one packet per pulse and bounded rate */
-#define PP_BURST_OBSERVE_MS 1600u /* asynchronous result window, never a send barrier */
+#define PP_BURST_OBSERVE_MS 900u /* independent asynchronous result window */
 #define PP_BURST_RESULT_POLL_MS 80u
-#define PP_BURST_UNKNOWN_BACKOFF_MS 2500u
+#define PP_BURST_RANGE_RELEASE_MS 350u /* allow typical late ACK before range-based release */
+#define PP_BURST_UNKNOWN_BACKOFF_MS 200u /* avoid multisecond UNKNOWN GUID lockout */
 #define PP_RETRY_DELAY_MS 800u
 #define PP_RANGE_RETRY_DELAY_MS 200u /* correlated GUID or independently checked UI range hint */
 #define PP_LOCAL_RANGE_BACKOFF_MS 250u
@@ -74,7 +75,8 @@ typedef enum {
     PP_EVENT_UI_RANGE_RECHECKED = 28, /* old single-target UI hint */
     PP_EVENT_BURST_EXPIRE = 29, /* result unknown, not failed theft */
     PP_EVENT_BURST_RANGE_EXIT = 30, /* exact pending GUID out of reach; never blocks next GUID */
-    PP_EVENT_WALLET_OBS = 31 /* global, unattributed positive wallet delta */
+    PP_EVENT_WALLET_OBS = 31, /* global, unattributed positive wallet delta */
+    PP_EVENT_BURST_RANGE_RELEASE = 32 /* geometry verified: cancel old pending nonce; short GUID backoff */
 } PpEvent;
 typedef struct {
     void *ctx;

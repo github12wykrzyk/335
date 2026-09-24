@@ -13,7 +13,7 @@ typedef struct {
     uint32_t thread,hash_ok,abi_ok,usable,eligible_a,eligible_b;
     uint64_t world;
     PpResult result;
-    unsigned casts,cast_spell,callbacks,events[32];
+    unsigned casts,cast_spell,callbacks,events[40];
     uint32_t last_attempt,expected_result_attempt;
     unsigned player_pos_calls,move_player_after_scan;
     unsigned eligible_calls;
@@ -284,8 +284,23 @@ static int test_unscoped_ui_hint_requires_native_same_guid_range(void){
        m.events[PP_EVENT_OUT_OF_RANGE]==0u);
  return 0;
 }
+static int test_default_burst_releases_range_exit_without_multisecond_penalty(void){
+ Mock m;Pp12340Adapter a;Pp12340Host h;defaults(&m);h=host(&m);
+ m.eligible_a=0u;
+ CHECK(pp12340_bind(&a,&h));CHECK(a.engine.burst_enabled==1u);
+ pp12340_enable(&a,1);pp12340_tick(&a,0u);
+ CHECK(m.casts==1u && m.last_guid.lo==222u);
+ m.npc_b_distance=5.0f;pp12340_tick(&a,80u);
+ CHECK(m.events[PP_EVENT_BURST_RANGE_EXIT]==1u && m.end_count==0u);
+ pp12340_tick(&a,350u);
+ CHECK(m.end_count==1u &&
+       m.events[PP_EVENT_BURST_RANGE_RELEASE]==1u);
+ m.npc_b_distance=2.0f;pp12340_tick(&a,550u);
+ CHECK(m.casts==2u && m.last_guid.lo==222u);
+ return 0;
+}
 int main(void){
-    if(test_motion_priority_and_world_reset()||test_unscoped_ui_hint_requires_native_same_guid_range()||test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
+    if(test_default_burst_releases_range_exit_without_multisecond_penalty()||test_motion_priority_and_world_reset()||test_unscoped_ui_hint_requires_native_same_guid_range()||test_native_bridge_releases_policy_before_next_cast()||test_detect_ahead_does_not_cast_beyond_native_range()||test_discover_new_npc_while_previous_result_pending()||test_cached_player_revalidates_and_resets()||test_borderline_range_is_skipped_before_native_cast()||test_spatial_gate_avoids_distant_eligibility_calls()||test_bind_guard()||test_scan_cast_history_world()||
        test_attempt_correlation()||test_silent_commands()||
        test_moving_player_rechecked_before_cast()||test_fail_closed_filter())return 1;
     puts("PP12340 native adapter mock: PASS");

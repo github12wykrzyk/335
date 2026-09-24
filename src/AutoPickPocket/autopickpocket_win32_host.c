@@ -372,7 +372,8 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
             }
     } else if(kind==PP_EVENT_SUCCESS || kind==PP_EVENT_EMPTY ||
               kind==PP_EVENT_RETRY || kind==PP_EVENT_TIMEOUT ||
-              kind==PP_EVENT_BURST_EXPIRE || kind==PP_EVENT_INELIGIBLE ||
+              kind==PP_EVENT_BURST_EXPIRE ||
+              kind==PP_EVENT_BURST_RANGE_RELEASE || kind==PP_EVENT_INELIGIBLE ||
               kind==PP_EVENT_MONEY_SUCCESS || kind==PP_EVENT_OUT_OF_RANGE ||
               kind==PP_EVENT_LINE_OF_SIGHT || kind==PP_EVENT_NOT_STEALTHED ||
               kind==PP_EVENT_NOT_READY || kind==PP_EVENT_CAST_REJECTED ||
@@ -435,8 +436,9 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_EMPTY: reason="no_pockets";break;
     case PP_EVENT_RETRY: reason="temporary_failure";break;
     case PP_EVENT_TIMEOUT: reason="result_timeout";break;
-    case PP_EVENT_BURST_EXPIRE: reason="burst_result_unknown_after_1600ms";break;
+    case PP_EVENT_BURST_EXPIRE: reason="burst_result_unknown_after_900ms";break;
     case PP_EVENT_BURST_RANGE_EXIT: reason="pending_guid_left_range_nonblocking";break;
+    case PP_EVENT_BURST_RANGE_RELEASE: reason="range_exit_cancelled_pending_short_backoff";break;
     case PP_EVENT_WALLET_OBS: reason="wallet_delta_unattributed";break;
     case PP_EVENT_INELIGIBLE: reason="permanent_failure";break;
     case PP_EVENT_GAVE_UP: reason="retry_budget_exhausted";break;
