@@ -58,3 +58,7 @@ Caution: faction is read from 12340 player race; it does not determine mixed-BG 
 ## TEST naprawczy: INSERT bez zależności od skanera
 
 Wcześniejszy błąd: `control` wstrzymywał GUI i render D3D9, jeśli `esp335_scanner_bind` nie przeszedł jednokrotnej weryfikacji. Teraz najpierw uruchamia się osobny interfejs D3D9, a skaner w razie błędu ponawia próbę co 5 sekund. GUI rysuje się także przy `scan_ok=0`. Diagnostyka `.wow335_debug/PlayerESP.jsonl` zawiera `render_attempts/render_failures/render_frames`, `init_attempts/sha_rejects/layout_rejects`, `hook_calls/insert_events/gui_open`. Ciągle nie ma dowodu poprawnego działania w grze; jeśli nie ma GUI, porównać ostatnie wiersze logu z tymi licznikami.
+
+## TEST fix Insert: polling na heartbeat
+
+Próba wciśnięcia Insert jest odczytywana niezależnie od WM_KEYUP za pomocą GetAsyncKeyState na wątku okna gry, gdy okno ma fokus; jeden key-down = jedno przełączenie, a WM_KEYUP obsługuje szybkie tapnięcie bez podwójnego toggla. GUI nadal rysuje się niezależnie od powodzenia skanera. W raporcie szukać insert_polls/gui_toggles/insert_events/render_frames/render_failures; brak wzrostu polls oznacza problem pulsu/fokusu, toggles bez render_frames oznacza osobny problem nakładki D3D9.

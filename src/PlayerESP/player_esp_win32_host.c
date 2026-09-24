@@ -31,6 +31,7 @@ static unsigned g_install_attempts, g_install_failures, g_bind_failed;
 static unsigned g_hook_calls, g_insert_events, g_gui_toggles, g_init_attempts;
 static unsigned g_sha_rejects, g_layout_rejects;
 static DWORD g_bind_try_ms;
+static unsigned g_prev_insert_down, g_key_toggled, g_insert_polls;
 static CRITICAL_SECTION g_frame_lock;
 static volatile LONG g_shared_ready, g_gui_open=1;
 static volatile LONG g_ui_flags=ESP335_GUI_DEFAULT;
@@ -319,12 +320,20 @@ static void input(MSG *msg, WPARAM remove_mode) {
     unsigned flags,bit;
     float x,y;
     if (!msg || !g_enabled || !on_thread() || remove_mode!=PM_REMOVE ||
-        !g_game_window || msg->hwnd!=g_game_window) return;
+        !g_game_window || !msg->hwnd ||
+        GetAncestor(msg->hwnd,GA_ROOT)!=g_game_window) return;
     if (msg->message==WM_KEYUP && msg->wParam==VK_INSERT) {
         ++g_insert_events;
-        ++g_gui_toggles;
-        InterlockedExchange(&g_gui_open,
-            InterlockedCompareExchange(&g_gui_open,0,0) ? 0 : 1);
+        /* Fallback for a short tap between 40ms polls; never toggle twice
+         * if the same keypress was already sampled through DirectInput-
+         * independent GetAsyncKeyState. */
+        if (!g_key_toggled) {
+            ++g_gui_toggles;
+            InterlockedExchange(&g_gui_open,
+                InterlockedCompareExchange(&g_gui_open,0,0) ? 0 : 1);
+        }
+        g_key_toggled=0u;
+        g_prev_insert_down=0u;
         msg->message=WM_NULL;
         return;
     }
@@ -347,6 +356,26 @@ static void input(MSG *msg, WPARAM remove_mode) {
     InterlockedExchange(&g_ui_flags,(LONG)flags);
     /* Native game must not click through our checkbox into the world. */
     msg->message=WM_NULL;
+}
+static void poll_insert(void) {
+    HWND foreground;
+    unsigned pressed;
+    if (!on_thread() || !g_enabled || !g_game_window) return;
+    foreground=GetForegroundWindow();
+    if (!foreground ||
+        GetAncestor(foreground,GA_ROOT)!=g_game_window) {
+        g_prev_insert_down=0u;
+        return;
+    }
+    ++g_insert_polls;
+    pressed=(GetAsyncKeyState(VK_INSERT) & 0x8000) ? 1u : 0u;
+    if (pressed && !g_prev_insert_down) {
+        ++g_gui_toggles;
+        g_key_toggled=1u;
+        InterlockedExchange(&g_gui_open,
+            InterlockedCompareExchange(&g_gui_open,0,0) ? 0 : 1);
+    }
+    g_prev_insert_down=pressed;
 }
 static void write_diag(int scan_ok) {
     wchar_t path[MAX_PATH], *slash;
@@ -378,7 +407,8 @@ static void write_diag(int scan_ok) {
         "\"camera_ok\":%u,\"camera_bad\":%u,"
         "\"markers\":%u,\"ui_flags\":%u,\"bind_failed\":%u,"
         "\"init_attempts\":%u,\"sha_rejects\":%u,\"layout_rejects\":%u,"
-        "\"hook_calls\":%u,\"insert_events\":%u,\"gui_open\":%u}\n",
+        "\"hook_calls\":%u,\"insert_events\":%u,"
+        "\"insert_polls\":%u,\"gui_toggles\":%u,\"gui_open\":%u}\n",
         scan_ok ? 1u : 0u,
         scan_ok ? (unsigned)g_scanner.snapshot.count : 0u,
         (unsigned __int64)g_scanner.snapshot.world_epoch,
@@ -391,7 +421,7 @@ static void write_diag(int scan_ok) {
         g_camera_ok,g_camera_bad,g_markers_rendered,
         (unsigned)InterlockedCompareExchange(&g_ui_flags,0,0),g_bind_failed,
         g_init_attempts,g_sha_rejects,g_layout_rejects,
-        g_hook_calls,g_insert_events,
+        g_hook_calls,g_insert_events,g_insert_polls,g_gui_toggles,
         (unsigned)InterlockedCompareExchange(&g_gui_open,0,0));
     if (length > 0) WriteFile(file, line, (DWORD)length, &written, NULL);
     CloseHandle(file);
@@ -406,6 +436,7 @@ static void drive(void) {
     if ((DWORD)(now-g_tick_ms)<40u) return;
     g_driving=1u;
     g_tick_ms=now;
+    poll_insert();
     scan_ok=g_scanner.bound ? esp335_scanner_collect(&g_scanner) : 0;
     camera_ok=g_scanner.bound ? read_camera_axes(&axes) : 0;
     if (scan_ok) ++g_scans_ok; else ++g_scans_failed;

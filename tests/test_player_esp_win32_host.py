@@ -20,6 +20,9 @@ class EspHostTests(unittest.TestCase):
         self.assertIn("render_attempts", source)
         self.assertIn("g_enabled=1u;\n    try_renderer();", source)
         self.assertIn("g_scanner.bound ? esp335_scanner_collect", source)
+        self.assertIn("GetAsyncKeyState(VK_INSERT)", source)
+        self.assertIn("poll_insert();", source)
+        self.assertIn("g_key_toggled=1u;", source)
     def test_non_pe_cannot_be_a_game_dll(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake = Path(tmp)/"PlayerESP335.dll"
