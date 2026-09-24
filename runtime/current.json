@@ -46,7 +46,7 @@
       "component": "PlayerESP",
       "path": "runtime/PlayerESP335.dll",
       "version": "0.6.0-shared-gui-test",
-      "sha256": "25ac2a45f5bb8946c5d97afeca3d1c633e547e84550e2d13c16d453d3bc059a4",
+      "sha256": "83ff8fdcf8ca9be622cccbe1952c851f5a74af81df3875fdfc41c6c1df666bae",
       "arch": "x86",
       "canonical_source": "src/PlayerESP112Port/esp112_host335.c",
       "depends_on": [
