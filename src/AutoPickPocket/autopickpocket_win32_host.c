@@ -345,14 +345,24 @@ static int send_heartbeat(PpGuid player,const float xyz[3],float facing,uint32_t
  * No client-side XYZ/target mutation or server success is inferred. */
 static void spoof_restore(PpEvent reason){
     Pp335SpoofHold saved;
+    uint64_t live_world=0u;
     if(!g_spoof_hold.active || !is_game_thread())return;
     saved=g_spoof_hold;
-    /* Never replay a previous player's movement across a world transition. */
-    if(saved.world!=g_adapter.current_world || !packet_session_ready()){
+    /* Check the current world BEFORE sending the old character's GUID.
+     * The adapter's cached world is not updated until pp12340_tick(). */
+    if(g_policy.world_token)
+        live_world=g_policy.world_token(g_policy.context);
+    if(!live_world || saved.world!=live_world ||
+       saved.world!=g_adapter.current_world){
         memset(&g_spoof_hold,0,sizeof(g_spoof_hold));
         g_spoof_restore_failed=1u;
-        event(NULL,PP_EVENT_SPOOF_RESTORE_ERROR,saved.target,saved.nonce);
+        event(NULL,PP_EVENT_SPOOF_WORLD_DROPPED,saved.target,saved.nonce);
         return;
+    }
+    if(!packet_session_ready()){
+        g_spoof_restore_failed=1u;
+        event(NULL,PP_EVENT_SPOOF_RESTORE_ERROR,saved.target,saved.nonce);
+        return; /* retry from the same world when connection is ready */
     }
     if(!send_heartbeat(saved.player,saved.real,saved.facing,
                        (uint32_t)GetTickCount())){
@@ -538,6 +548,7 @@ static void event(void *ctx,PpEvent kind,PpGuid guid,uint32_t attempt_id) {
     case PP_EVENT_SPOOF_RESTORE_LOOT: reason="spoof_restored_after_loot_or_result_unverified";break;
     case PP_EVENT_SPOOF_RESTORE_TIMEOUT: reason="spoof_restored_at_bounded_timeout_unverified";break;
     case PP_EVENT_SPOOF_RESTORE_ERROR: reason="spoof_restore_send_failed_disable_spoof";break;
+    case PP_EVENT_SPOOF_WORLD_DROPPED: reason="spoof_dropped_without_old_world_movement";break;
     case PP_EVENT_SUCCESS: reason="result_claim_requires_loot_confirmation";break;
     case PP_EVENT_MONEY_SUCCESS: reason="wallet_loot_guid_correlated_signal";break;
     case PP_EVENT_CAST_ACK: reason="cast_ack_guid_correlated_not_theft";break;

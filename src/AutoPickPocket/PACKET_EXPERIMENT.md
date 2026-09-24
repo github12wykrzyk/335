@@ -110,3 +110,25 @@ theft success. Actual inbound packet-hook ABI, server GUID-to-wallet
 transaction correlation, verified CMSG_LOOT_MONEY/CMSG_LOOT_RELEASE interception
 and in-game testing are outstanding. Never copy 5875 opcodes, DLLs or
 movement detours to 12340.
+
+## Exact-12340 loot ABI follow-up
+
+TrinityCore 3.3.5's `src/server/game/Server/Protocol/Opcodes.h`
+(https://github.com/TrinityCore/TrinityCore/blob/3.3.5/src/server/game/Server/Protocol/Opcodes.h)
+lists CMSG_LOOT_MONEY=0x15E, CMSG_LOOT_RELEASE=0x15F,
+SMSG_LOOT_RESPONSE=0x160 and MSG_MOVE_HEARTBEAT=0x0EE.
+Matching opcode numbers with 5875 does NOT establish matching native
+CDataStore structs, movement send/receive hooks, server-validated spoof,
+or money/release transaction acceptance. The exact pinned PE32 x86 client's
+read-only `audit_loot_12340.py` examines those opcode immediates,
+xrefs to the verified SendPacket function and references to the current
+LOOT_SOURCE variable. Its output nominates sites only; it never patches
+the EXE or claims an inbound-dispatch ABI was verified.
+
+Safety: a 750ms remote hold cannot send a previously cached player GUID
+into a new loading screen, new area, new instance or changed character:
+the live Lua world-token must still match the original hold at restoration.
+Otherwise the stale hold is discarded and future spoof disabled until
+the module is restarted. A missing network session during restoration
+also fails closed. Those guard paths are local correctness checks, not
+proof of success in-game.

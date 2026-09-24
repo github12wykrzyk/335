@@ -83,7 +83,8 @@ typedef enum {
     PP_EVENT_ACK_LOOT_UNKNOWN = 35, /* ACK observed, loot not correlated; do not retry same NPC */
     PP_EVENT_SPOOF_RESTORE_LOOT = 36, /* local loot-closed or result; not proof of theft */
     PP_EVENT_SPOOF_RESTORE_TIMEOUT = 37, /* bounded remote position hold elapsed */
-    PP_EVENT_SPOOF_RESTORE_ERROR = 38 /* restore send failed; future spoof disabled */
+    PP_EVENT_SPOOF_RESTORE_ERROR = 38, /* restore send failed; future spoof disabled */
+    PP_EVENT_SPOOF_WORLD_DROPPED = 39 /* world changed: do not send old character movement */
 } PpEvent;
 typedef struct {
     void *ctx;

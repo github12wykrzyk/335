@@ -2,9 +2,10 @@ name: Read-only packet ABI audit (exact 12340)
 on:
   workflow_dispatch:
   push:
-    branches: [feature/autopickpocket-packets-12340]
+    branches: [feature/autopickpocket-packets-12340, feature/autopickpocket-112-architecture-12340]
     paths:
       - tools/audit_pp_packet_12340.py
+      - src/AutoPickPocket/audit_loot_12340.py
       - src/AutoPickPocket/autopickpocket_win32_host.c
       - src/AutoPickPocket/autopickpocket_packet_12340.c
       - src/AutoPickPocket/autopickpocket_packet_12340.h
@@ -33,4 +34,10 @@ jobs:
           if errorlevel 1 exit /b 1
           python -c "import pathlib,struct; b=pathlib.Path('pp_codec_test_x86.exe').read_bytes(); off=struct.unpack_from('<I',b,0x3c)[0]; assert b[:2]==b'MZ' and b[off:off+4]==b'PE\x00\x00' and struct.unpack_from('<H',b,off+4)[0]==0x14c; print('PP_CODEC_WINDOWS_PE32_X86: PASS')"
       - name: Audit exact pinned client without patching
-        run: python tools/audit_pp_packet_12340.py
+        shell: pwsh
+        run: |
+          python tools/audit_pp_packet_12340.py > pp_packet_static_audit.log
+          if ($LASTEXITCODE -ne 0) { Get-Content pp_packet_static_audit.log -Tail 40; exit $LASTEXITCODE }
+          Write-Host 'PP_STATIC_PACKET_AUDIT: PASS'
+          python src/AutoPickPocket/audit_loot_12340.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
