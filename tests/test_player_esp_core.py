@@ -21,8 +21,8 @@ class PlayerESPCoreTests(unittest.TestCase):
                 compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
                 str(ROOT / "src/PlayerESP/player_esp_core.c"),
                 str(ROOT / "tests/player_esp_core_harness.c"),
-                "-lm", "-o", str(exe),
-            ], check=True, capture_output=True, text=True, timeout=60)
+                "-o", str(exe),
+            ] + (["-lm"] if sys.platform != "win32" else []), check=True, capture_output=True, text=True, timeout=60)
             run = subprocess.run([str(exe)], capture_output=True, text=True, timeout=30)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertIn("PLAYER_ESP_CORE: PASS", run.stdout)
