@@ -36,7 +36,7 @@
       "component": "PlayerESP",
       "path": "runtime/PlayerESP335.dll",
       "version": "0.5.0-112-single-frame-test",
-      "sha256": "6a69e6b32be50c996fa1b0a71763a942975713c11ecc9aecd3e6ae59b7b9fef3",
+      "sha256": "54ed8a4b40b1281024ec30e3809a30625a68abbe1598df50084ceee77297aed5",
       "arch": "x86",
       "canonical_source": "src/PlayerESP112Port/esp112_host335.c",
       "depends_on": [],
