@@ -51,6 +51,14 @@ int main(void) {
     assert(!esp335_eligible(&p, &filter, 0));
     p.relation=ESP335_REL_HOSTILE;
     assert(esp335_eligible(&p, &filter, 0));
+    p.kind=ESP335_KIND_NPC;
+    p.relation=0u;
+    filter.show_hostile=0u;filter.show_npc=1u;
+    assert(esp335_eligible(&p,&filter,0));
+    filter.show_npc=0u;filter.show_npc_hostile=1u;
+    assert(!esp335_eligible(&p,&filter,0));
+    p.relation=ESP335_REL_HOSTILE;
+    assert(esp335_eligible(&p,&filter,0));
     puts("PLAYER_ESP_CORE: PASS");
     return 0;
 }

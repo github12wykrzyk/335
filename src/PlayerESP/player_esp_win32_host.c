@@ -35,6 +35,7 @@ static Esp335Core g_frame_snapshot;
 static Esp335CameraAxes g_frame_axes;
 static DWORD g_frame_tick;
 static unsigned g_frame_camera_valid, g_frame_scan_valid;
+static unsigned g_frame_players, g_frame_npcs;
 
 
 static int on_thread(void) { return g_thread && GetCurrentThreadId() == g_thread; }
@@ -132,19 +133,40 @@ static int position(void *ctx, uintptr_t object, Esp335Vec3 *coords) {
         return _finite(coords->x) && _finite(coords->y) && _finite(coords->z);
     } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
+static unsigned faction_from_race(unsigned race) {
+    switch (race) {
+        case 1u: case 3u: case 4u: case 7u: case 11u:
+            return ESP335_ALLIANCE;
+        case 2u: case 5u: case 6u: case 8u: case 10u:
+            return ESP335_HORDE;
+        default: return 0u; /* custom race: unknown, not guessed */
+    }
+}
 static int metadata(void *ctx, uintptr_t object, Esp335Player *player) {
-    uint32_t desc, hp, max_hp;
+    uint32_t desc, hp, max_hp, bytes0=0u, level=0u, template_id=0u;
     (void)ctx;
     if (!on_thread() || !player ||
-        !read32(NULL, object + 0x08u, &desc) ||
-        !read32(NULL, (uintptr_t)desc + 24u * 4u, &hp) ||
-        !read32(NULL, (uintptr_t)desc + 32u * 4u, &max_hp) ||
-        !max_hp || hp > max_hp) return 0;
-    player->health = hp;
-    player->max_health = max_hp;
-    /* Unsupported classification remains UNKNOWN, never guessed. */
-    player->faction = player->relation = player->bg_team = 0u;
-    player->level = player->class_id = 0u;
+        !read32(NULL,object+0x08u,&desc) ||
+        !read32(NULL,(uintptr_t)desc+24u*4u,&hp) ||
+        !read32(NULL,(uintptr_t)desc+32u*4u,&max_hp) ||
+        !max_hp || hp>max_hp) return 0;
+    player->health=hp;
+    player->max_health=max_hp;
+    if (read32(NULL,(uintptr_t)desc+23u*4u,&bytes0)) {
+        if (player->kind==ESP335_KIND_PLAYER)
+            player->faction=faction_from_race(bytes0&0xffu);
+        player->class_id=(bytes0>>8u)&0xffu;
+    }
+    if (read32(NULL,(uintptr_t)desc+54u*4u,&level) &&
+        level>0u && level<=255u) player->level=level;
+    /* Server-owned BG team/reaction MUST NOT be inferred from player race.
+     * Player hostility remains UNKNOWN until runtime unit-reaction ABI is
+     * verified. NPC hostility recognizes only documented monster templates,
+     * never assumes all NPCs are hostile. */
+    if (player->kind==ESP335_KIND_NPC &&
+        read32(NULL,(uintptr_t)desc+55u*4u,&template_id) &&
+        (template_id==14u || template_id==16u))
+        player->relation=ESP335_REL_HOSTILE;
     return 1;
 }
 static uint64_t epoch(void *ctx) {
@@ -232,8 +254,8 @@ static void draw_frame(IDirect3DDevice9 *device, void *user) {
     last_frame=g_frame_tick;
     scan_ok=g_frame_scan_valid;
     camera_ok=g_frame_camera_valid;
-    players=g_scanner.accepted_players;
-    npcs=g_scanner.accepted_npcs;
+    players=g_frame_players;
+    npcs=g_frame_npcs;
     LeaveCriticalSection(&g_frame_lock);
     if ((flags & ESP335_GUI_ESP) && scan_ok && camera_ok &&
         frame.world_epoch && !frame.frame_open &&
@@ -380,6 +402,8 @@ static void drive(void) {
         g_frame_camera_valid=camera_ok?1u:0u;
         g_frame_scan_valid=scan_ok?1u:0u;
         g_frame_tick=now;
+        g_frame_players=g_scanner.accepted_players;
+        g_frame_npcs=g_scanner.accepted_npcs;
         LeaveCriticalSection(&g_frame_lock);
     }
     try_renderer();
